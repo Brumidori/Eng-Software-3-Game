@@ -97,3 +97,20 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# VS Code
+.vscode/
+
+# JetBrains IDEs (Rider, IntelliJ family)
+.idea/
+*.iml
+
+# Rider local settings
+*.sln.iml
+
+# Visual Studio Code workspace files
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
