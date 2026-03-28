@@ -1,6 +1,6 @@
 ﻿<Solution>
   <Project Path="PlayFab.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
   <Project Path="PlayFabEditorExtensions.csproj" />
   <Project Path="PlayFabSDKEditor.csproj" />
-  <Project Path="Assembly-CSharp.csproj" />
 </Solution>
