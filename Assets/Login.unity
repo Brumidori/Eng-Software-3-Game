@@ -266,6 +266,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1318080915}
   - component: {fileID: 1318080914}
+  - component: {fileID: 1318080916}
   m_Layer: 0
   m_Name: GameObject
   m_TagString: Untagged
@@ -300,6 +301,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1318080916
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1318080913}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 799b778398a474ebe8fe1403f7e2d385, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DeckService
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

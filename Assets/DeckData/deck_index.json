@@ -1,0 +1,17 @@
+{
+  "versao": 1,
+  "categorias": [
+    {
+      "nome": "Matemática",
+      "key": "cartas_matematica"
+    },
+    {
+      "nome": "Geografia",
+      "key": "cartas_geografia"
+    },
+    {
+      "nome": "História",
+      "key": "cartas_historia"
+    }
+  ]
+}

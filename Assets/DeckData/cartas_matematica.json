@@ -1,0 +1,36 @@
+{
+  "deck": [
+    {
+      "id": "mat_001",
+      "pergunta": "Qual é o resultado de 2 + 2?",
+      "alternativas": ["3", "4", "5", "6"],
+      "respostaCorreta": 1,
+      "categoria": "Matemática",
+      "dificuldade": "Fácil"
+    },
+    {
+      "id": "mat_002",
+      "pergunta": "Qual é o resultado de 15 × 3?",
+      "alternativas": ["35", "40", "45", "50"],
+      "respostaCorreta": 2,
+      "categoria": "Matemática",
+      "dificuldade": "Médio"
+    },
+    {
+      "id": "mat_003",
+      "pergunta": "Qual é a raiz quadrada de 144?",
+      "alternativas": ["10", "11", "12", "13"],
+      "respostaCorreta": 2,
+      "categoria": "Matemática",
+      "dificuldade": "Médio"
+    },
+    {
+      "id": "mat_004",
+      "pergunta": "Qual é o resultado de 7² - 3²?",
+      "alternativas": ["30", "35", "40", "45"],
+      "respostaCorreta": 2,
+      "categoria": "Matemática",
+      "dificuldade": "Difícil"
+    }
+  ]
+}

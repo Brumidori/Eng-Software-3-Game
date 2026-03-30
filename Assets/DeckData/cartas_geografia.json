@@ -1,0 +1,36 @@
+{
+  "deck": [
+    {
+      "id": "geo_001",
+      "pergunta": "Qual é a capital do Brasil?",
+      "alternativas": ["São Paulo", "Brasília", "Rio de Janeiro", "Salvador"],
+      "respostaCorreta": 1,
+      "categoria": "Geografia",
+      "dificuldade": "Fácil"
+    },
+    {
+      "id": "geo_002",
+      "pergunta": "Qual é o maior país da América do Sul?",
+      "alternativas": ["Argentina", "Brasil", "Colômbia", "Peru"],
+      "respostaCorreta": 1,
+      "categoria": "Geografia",
+      "dificuldade": "Fácil"
+    },
+    {
+      "id": "geo_003",
+      "pergunta": "Qual é o rio mais longo do mundo?",
+      "alternativas": ["Amazonas", "Nilo", "Yangtze", "Mississippi"],
+      "respostaCorreta": 1,
+      "categoria": "Geografia",
+      "dificuldade": "Médio"
+    },
+    {
+      "id": "geo_004",
+      "pergunta": "Qual é o continente mais populoso?",
+      "alternativas": ["África", "Europa", "Ásia", "América do Norte"],
+      "respostaCorreta": 2,
+      "categoria": "Geografia",
+      "dificuldade": "Médio"
+    }
+  ]
+}

@@ -1,141 +1,132 @@
-using System.Collections.Generic;
 using UnityEngine;
 using PlayFab;
-using PlayFab.ClientModels;
 
+/// <summary>
+/// Gerenciador centralizado de Decks para upload e validação
+/// Adicione este script em um GameObject para ter acesso via Inspector
+/// </summary>
 public class DeckManager : MonoBehaviour
 {
-    public static DeckManager Instance;
+    [SerializeField] private bool autoInitialize = true;
 
-    private void Awake()
+    private DeckUploader deckUploader;
+    private DeckValidator deckValidator;
+
+    private void Start()
     {
-        Instance = this;
-    }
-
-    private Dictionary<string, List<Carta>> decks = new Dictionary<string, List<Carta>>();
-    private DeckIndex deckIndex;
-
-    void Start()
-    {
-        Login();
-    }
-
-    void Login()
-    {
-       var request = new LoginWithCustomIDRequest
+        if (autoInitialize)
         {
-            CustomId = "test_user_123",
-            CreateAccount = false
-        };
-
-        PlayFabClientAPI.LoginWithCustomID(request, OnLoginSuccess, OnError);
-    }
-
-    void OnLoginSuccess(LoginResult result)
-    {
-        GetDeckIndex();
-    }
-
-    void GetDeckIndex()
-    {
-        PlayFabClientAPI.GetTitleData(new GetTitleDataRequest
-        {
-            Keys = new List<string> { "deck_index" }
-
-        }, result =>
-        {
-            if (result.Data.ContainsKey("deck_index"))
-            {
-                string json = result.Data["deck_index"];
-                deckIndex = JsonUtility.FromJson<DeckIndex>(json);
-
-                if (deckIndex == null || deckIndex.categorias == null)
-                {
-                    Debug.LogError("Falha ao desserializar DeckIndex!");
-                }
-            }
-            else
-            {
-                Debug.LogError("Índice de decks não encontrado no Title Data!");
-            }
-
-        }, OnError);
-    }
-
-    public void LoadDeck(string categoria)
-    {
-        if (deckIndex == null || deckIndex.categorias == null)
-        {
-            Debug.LogError("DeckIndex não carregado ainda!");
-            return;
+            InitializeServices();
         }
-
-        var cat = deckIndex.categorias.Find(c => c.nome == categoria);
-
-        if (cat == null)
-        {
-            Debug.LogError("Categoria não encontrada!");
-            return;
-        }
-
-        if (decks.ContainsKey(categoria))
-        {
-            Debug.Log("Deck já em cache");
-            return;
-        }
-
-        PlayFabClientAPI.GetTitleData(new GetTitleDataRequest
-        {
-            Keys = new List<string> { cat.key }
-
-        }, result =>
-        {
-            if (result.Data.ContainsKey(cat.key))
-            {
-                string json = result.Data[cat.key];
-                DeckWrapper wrapper = JsonUtility.FromJson<DeckWrapper>(json);
-
-                if (wrapper != null && wrapper.deck != null)
-                {
-                    decks[categoria] = wrapper.deck;
-                    Debug.Log($"Deck {categoria} carregado!");
-                }
-                else
-                {
-                    Debug.LogError($"Falha ao desserializar deck de {categoria}");
-                }
-            }
-            else
-            {
-                Debug.LogError($"Dados do deck {categoria} não encontrados!");
-            }
-
-        }, OnError);
     }
 
-    public Carta GetCarta(string categoria)
+    public void InitializeServices()
     {
-        if (!decks.ContainsKey(categoria))
-        {
-            Debug.LogError("Deck não carregado!");
-            return null;
-        }
-
-        var deck = decks[categoria];
+        Debug.Log("[DeckManager] Inicializando serviços...");
         
-        if (deck == null || deck.Count == 0)
+        PlayFabService playFabService = FindFirstObjectByType<PlayFabService>();
+        if (playFabService == null)
         {
-            Debug.LogError("Deck vazio!");
-            return null;
+            var playFabGO = new GameObject("PlayFabService");
+            playFabService = playFabGO.AddComponent<PlayFabService>();
         }
 
-        int index = Random.Range(0, deck.Count);
-
-        return deck[index];
+        playFabService.Initialize();
+        Debug.Log("[DeckManager] ✅ Serviços inicializados");
     }
 
-    void OnError(PlayFabError error)
+    /// <summary>
+    /// Faz upload de todos os decks
+    /// </summary>
+    public void UploadAllDecks()
     {
-        Debug.LogError(error.GenerateErrorReport());
+        if (!ValidateAuthentication()) return;
+        
+        Debug.Log("[DeckManager] 📤 Iniciando upload de todos os decks...");
+        DeckUploader.UploadAllDecks();
+    }
+
+    /// <summary>
+    /// Faz upload do índice
+    /// </summary>
+    public void UploadDeckIndex()
+    {
+        if (!ValidateAuthentication()) return;
+        
+        Debug.Log("[DeckManager] 📤 Fazendo upload do índice...");
+        DeckUploader.UploadDeckIndex();
+    }
+
+    /// <summary>
+    /// Faz upload de um deck específico
+    /// </summary>
+    public void UploadDeck(string categoria)
+    {
+        if (!ValidateAuthentication()) return;
+
+        if (string.IsNullOrEmpty(categoria))
+        {
+            Debug.LogError("[DeckManager] Categoria não pode estar vazia!");
+            return;
+        }
+        
+        Debug.Log($"[DeckManager] 📤 Fazendo upload de {categoria}...");
+        DeckUploader.UploadDeck(categoria.ToLower());
+    }
+
+    /// <summary>
+    /// Valida todos os decks
+    /// </summary>
+    public void ValidateAllDecks()
+    {
+        if (!ValidateAuthentication()) return;
+
+        if (deckValidator == null)
+        {
+            deckValidator = GetComponent<DeckValidator>();
+            if (deckValidator == null)
+            {
+                deckValidator = gameObject.AddComponent<DeckValidator>();
+            }
+        }
+
+        Debug.Log("[DeckManager] 🔍 Iniciando validação de todos os decks...");
+        deckValidator.ValidateAllDecks();
+    }
+
+    /// <summary>
+    /// Valida um deck específico
+    /// </summary>
+    public void ValidateDeck(string categoria)
+    {
+        if (!ValidateAuthentication()) return;
+
+        if (string.IsNullOrEmpty(categoria))
+        {
+            Debug.LogError("[DeckManager] Categoria não pode estar vazia!");
+            return;
+        }
+
+        if (deckValidator == null)
+        {
+            deckValidator = GetComponent<DeckValidator>();
+            if (deckValidator == null)
+            {
+                deckValidator = gameObject.AddComponent<DeckValidator>();
+            }
+        }
+
+        Debug.Log($"[DeckManager] 🔍 Validando {categoria}...");
+        deckValidator.ValidateSingleDeck(categoria.ToLower());
+    }
+
+    private bool ValidateAuthentication()
+    {
+        if (!PlayFabSettings.staticPlayer.IsEntityLoggedIn())
+        {
+            Debug.LogError("[DeckManager] ❌ Não está autenticado no PlayFab! Clique em 'Initialize Services' primeiro.");
+            return false;
+        }
+        return true;
     }
 }

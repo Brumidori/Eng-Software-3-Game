@@ -110,14 +110,14 @@ public class CardTester : MonoBehaviour
     void CarregarCategoria(string categoria)
     {
         Debug.Log($"Carregando categoria: {categoria}");
-        DeckManager.Instance.LoadDeck(categoria);
+        DeckService.Instance.LoadDeck(categoria);
 
         Invoke(nameof(ExibirCarta), 1f);
     }
 
     void ExibirCarta()
     {
-        cartaAtual = DeckManager.Instance.GetCarta(categoriaAtual);
+        cartaAtual = DeckService.Instance.GetRandomCarta(categoriaAtual);
 
         if (cartaAtual != null)
         {

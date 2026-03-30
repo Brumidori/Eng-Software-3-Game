@@ -1,0 +1,36 @@
+{
+  "deck": [
+    {
+      "id": "hist_001",
+      "pergunta": "Em que ano foi a Proclamação da República no Brasil?",
+      "alternativas": ["1880", "1889", "1900", "1910"],
+      "respostaCorreta": 1,
+      "categoria": "História",
+      "dificuldade": "Médio"
+    },
+    {
+      "id": "hist_002",
+      "pergunta": "Qual imperador fundou o Brasil Império?",
+      "alternativas": ["Dom João VI", "Dom Pedro I", "Dom Pedro II", "Dom João IV"],
+      "respostaCorreta": 1,
+      "categoria": "História",
+      "dificuldade": "Médio"
+    },
+    {
+      "id": "hist_003",
+      "pergunta": "Em qual ano terminou a escravidão no Brasil?",
+      "alternativas": ["1878", "1885", "1888", "1890"],
+      "respostaCorreta": 2,
+      "categoria": "História",
+      "dificuldade": "Fácil"
+    },
+    {
+      "id": "hist_004",
+      "pergunta": "Quem foi o primeiro presidente da República Brasileira?",
+      "alternativas": ["Deodoro da Fonseca", "Floriano Peixoto", "Prudente de Morais", "Campos Sales"],
+      "respostaCorreta": 0,
+      "categoria": "História",
+      "dificuldade": "Difícil"
+    }
+  ]
+}
