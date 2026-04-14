@@ -2,6 +2,10 @@ using UnityEngine;
 
 public static class PlayFabConfig
 {
+    private const string PersistentCustomIdKey = "PlayFab_TestCustomId";
+    private const string DevelopmentTitleId = "1B1155";
+    private const string FixedTestUserId = "test_user_123";
+
     /// <summary>
     /// Define o ambiente de execução (Desenvolvimento, Staging, Produção)
     /// </summary>
@@ -16,10 +20,10 @@ public static class PlayFabConfig
     {
         return CurrentEnv switch
         {
-            Environment.Development => "15571",      // Dev
+            Environment.Development => DevelopmentTitleId, // Dev
             Environment.Staging => "12345",          // Staging (configure depois)
             Environment.Production => "54321",       // Produção (configure depois)
-            _ => "15571"
+            _ => DevelopmentTitleId
         };
     }
 
@@ -28,11 +32,31 @@ public static class PlayFabConfig
     /// </summary>
     public static string GetTestUserId()
     {
-        return $"test_user_{System.DateTime.Now.Ticks}";
+        if (!PlayerPrefs.HasKey(PersistentCustomIdKey) || PlayerPrefs.GetString(PersistentCustomIdKey) != FixedTestUserId)
+        {
+            PlayerPrefs.SetString(PersistentCustomIdKey, FixedTestUserId);
+            PlayerPrefs.Save();
+        }
+
+        return FixedTestUserId;
     }
 
     /// <summary>
     /// Define se deve criar conta automaticamente
     /// </summary>
     public static bool GetCreateAccountFlag() => true;
+
+    /// <summary>
+    /// Limpa o ID persistido para cenários de teste controlados.
+    /// </summary>
+    public static void ResetTestUserId()
+    {
+        if (!PlayerPrefs.HasKey(PersistentCustomIdKey))
+        {
+            return;
+        }
+
+        PlayerPrefs.DeleteKey(PersistentCustomIdKey);
+        PlayerPrefs.Save();
+    }
 }

@@ -6,6 +6,18 @@ using UnityEngine;
 /// </summary>
 public class PlayFabLogin : MonoBehaviour
 {
+    private void OnEnable()
+    {
+        PlayFabService.OnLoginSuccess += OnPlayFabLoginSuccess;
+        PlayFabService.OnLoginFailure += OnPlayFabLoginFailure;
+    }
+
+    private void OnDisable()
+    {
+        PlayFabService.OnLoginSuccess -= OnPlayFabLoginSuccess;
+        PlayFabService.OnLoginFailure -= OnPlayFabLoginFailure;
+    }
+
     private void Start()
     {
         // Verificar se PlayFabService existe, se não, criar um novo GameObject com o serviço
@@ -15,8 +27,25 @@ public class PlayFabLogin : MonoBehaviour
             playFabServiceGO.AddComponent<PlayFabService>();
         }
 
-        // Inicializar o PlayFab através do serviço centralizado
-        PlayFabService.Instance.Initialize();
-        Debug.Log("[PlayFabLogin] PlayFab inicializado com sucesso!");
+        if (PlayFabService.Instance.IsLoggedIn())
+        {
+            Debug.Log("[PlayFabLogin] Sessao PlayFab ja autenticada.");
+        }
+        else
+        {
+            // Inicializar o PlayFab e aguardar callback de login para seguir
+            PlayFabService.Instance.Initialize();
+            Debug.Log("[PlayFabLogin] Inicializacao do PlayFab iniciada. Aguardando autenticacao.");
+        }
+    }
+
+    private void OnPlayFabLoginSuccess()
+    {
+        Debug.Log("[PlayFabLogin] Login PlayFab confirmado.");
+    }
+
+    private void OnPlayFabLoginFailure(PlayFab.PlayFabError error)
+    {
+        Debug.LogError("[PlayFabLogin] Login PlayFab falhou.");
     }
 }

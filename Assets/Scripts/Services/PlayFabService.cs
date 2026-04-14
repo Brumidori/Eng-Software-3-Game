@@ -11,6 +11,8 @@ using System;
 public class PlayFabService : MonoBehaviour
 {
     public static PlayFabService Instance { get; private set; }
+    public static IPlayFabClientFacade Client { get; private set; } = new PlayFabClientFacade();
+    public string CurrentCustomId { get; private set; }
 
     public static event Action OnLoginSuccess;
     public static event Action<PlayFabError> OnLoginFailure;
@@ -47,13 +49,15 @@ public class PlayFabService : MonoBehaviour
     /// <param name="customId">ID customizado do usuário</param>
     public void LoginWithCustomId(string customId)
     {
+        CurrentCustomId = customId;
+
         var request = new LoginWithCustomIDRequest
         {
             CustomId = customId,
             CreateAccount = PlayFabConfig.GetCreateAccountFlag()
         };
 
-        PlayFabClientAPI.LoginWithCustomID(request,
+        Client.LoginWithCustomID(request,
             OnLoginSuccessCallback,
             OnLoginFailureCallback);
 
@@ -62,7 +66,7 @@ public class PlayFabService : MonoBehaviour
 
     private void OnLoginSuccessCallback(LoginResult result)
     {
-        Debug.Log("[PlayFabService] ✅ Login realizado com sucesso!");
+        Debug.Log($"[PlayFabService] ✅ Login realizado com sucesso para CustomId '{CurrentCustomId}'!");
         OnLoginSuccess?.Invoke();
     }
 
