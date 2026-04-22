@@ -6,6 +6,9 @@ using UnityEngine;
 /// </summary>
 public class PlayFabLogin : MonoBehaviour
 {
+    [SerializeField] private bool autoLoginWithTestUser = true;
+    [SerializeField] private bool disableAutoLoginWhenLoginUiDetected = true;
+
     private void OnEnable()
     {
         PlayFabService.OnLoginSuccess += OnPlayFabLoginSuccess;
@@ -33,10 +36,27 @@ public class PlayFabLogin : MonoBehaviour
         }
         else
         {
-            // Inicializar o PlayFab e aguardar callback de login para seguir
-            PlayFabService.Instance.Initialize();
-            Debug.Log("[PlayFabLogin] Inicializacao do PlayFab iniciada. Aguardando autenticacao.");
+            bool loginUiDetected = disableAutoLoginWhenLoginUiDetected && HasLoginUiInScene();
+
+            if (loginUiDetected)
+            {
+                PlayFabService.Instance.Initialize(false);
+                Debug.Log("[PlayFabLogin] UI de login detectada. Login automatico por Custom ID foi desativado nesta cena.");
+                return;
+            }
+
+            PlayFabService.Instance.Initialize(autoLoginWithTestUser);
+            Debug.Log("[PlayFabLogin] Inicializacao do PlayFab iniciada.");
         }
+    }
+
+    private static bool HasLoginUiInScene()
+    {
+        var loginInput = GameObject.Find("loginInput");
+        var passwordInput = GameObject.Find("senhaInput");
+        var loginButton = GameObject.Find("loginBtn");
+
+        return loginInput != null && passwordInput != null && loginButton != null;
     }
 
     private void OnPlayFabLoginSuccess()

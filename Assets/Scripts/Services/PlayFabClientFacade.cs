@@ -9,6 +9,11 @@ public sealed class PlayFabClientFacade : IPlayFabClientFacade
         PlayFabClientAPI.LoginWithCustomID(request, successCallback, errorCallback);
     }
 
+    public void LoginWithEmailAddress(LoginWithEmailAddressRequest request, Action<LoginResult> successCallback, Action<PlayFabError> errorCallback)
+    {
+        PlayFabClientAPI.LoginWithEmailAddress(request, successCallback, errorCallback);
+    }
+
     public void GetTitleData(GetTitleDataRequest request, Action<GetTitleDataResult> successCallback, Action<PlayFabError> errorCallback)
     {
         PlayFabClientAPI.GetTitleData(request, successCallback, errorCallback);

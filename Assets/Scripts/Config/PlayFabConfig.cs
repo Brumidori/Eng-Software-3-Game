@@ -3,8 +3,8 @@ using UnityEngine;
 public static class PlayFabConfig
 {
     private const string PersistentCustomIdKey = "PlayFab_TestCustomId";
-    private const string DevelopmentTitleId = "1B1155";
-    private const string FixedTestUserId = "test_user_123";
+    private const string DevelopmentTitleId = "15571";
+    private const string FixedTestUserId = "teste_user_456";
 
     /// <summary>
     /// Define o ambiente de execução (Desenvolvimento, Staging, Produção)

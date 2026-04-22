@@ -140,25 +140,89 @@ public class DeckService : MonoBehaviour
     {
         var cat = deckIndex.categorias.Find(c => c.nome == categoria);
 
+        if (cat == null)
+        {
+            Debug.LogError($"[DeckService] ❌ Categoria '{categoria}' nao encontrada no indice atual.");
+            return;
+        }
+
         if (result.Data.ContainsKey(cat.key))
         {
             string json = result.Data[cat.key];
-            DeckWrapper wrapper = JsonUtility.FromJson<DeckWrapper>(json);
+            DeckSchemaV2 deckPayload = JsonUtility.FromJson<DeckSchemaV2>(json);
 
-            if (wrapper != null && wrapper.deck != null)
+            if (deckPayload != null && deckPayload.questions != null)
             {
-                decksCache[categoria] = wrapper.deck;
-                Debug.Log($"[DeckService] ✅ Deck '{categoria}' carregado com {wrapper.deck.Count} cartas");
+                var cartas = ConvertToLegacyCards(deckPayload, categoria);
+                decksCache[categoria] = cartas;
+                Debug.Log($"[DeckService] ✅ Deck '{categoria}' carregado com {cartas.Count} cartas");
             }
             else
             {
-                Debug.LogError($"[DeckService] ❌ Falha ao desserializar deck de '{categoria}'");
+                Debug.LogError($"[DeckService] ❌ Falha ao desserializar deck '{categoria}' no schema novo. Verifique payload em '{cat.key}'.");
             }
         }
         else
         {
             Debug.LogError($"[DeckService] ❌ Dados do deck '{categoria}' não encontrados!");
         }
+    }
+
+    private static List<Carta> ConvertToLegacyCards(DeckSchemaV2 deckPayload, string categoriaFallback)
+    {
+        var cartas = new List<Carta>();
+
+        if (deckPayload.questions == null)
+        {
+            return cartas;
+        }
+
+        for (int i = 0; i < deckPayload.questions.Count; i++)
+        {
+            var question = deckPayload.questions[i];
+            if (question == null || question.options == null || question.options.Count == 0)
+            {
+                continue;
+            }
+
+            var alternativas = new List<string>();
+            var respostaCorreta = -1;
+
+            for (int j = 0; j < question.options.Count; j++)
+            {
+                var option = question.options[j];
+                if (option == null)
+                {
+                    alternativas.Add(string.Empty);
+                    continue;
+                }
+
+                alternativas.Add(option.text ?? string.Empty);
+
+                if (option.is_correct && respostaCorreta < 0)
+                {
+                    respostaCorreta = j;
+                }
+            }
+
+            if (respostaCorreta < 0)
+            {
+                Debug.LogWarning($"[DeckService] Pergunta '{question.id}' ignorada: nenhuma opcao correta encontrada.");
+                continue;
+            }
+
+            cartas.Add(new Carta
+            {
+                id = question.id,
+                pergunta = question.text,
+                alternativas = alternativas,
+                respostaCorreta = respostaCorreta,
+                categoria = string.IsNullOrWhiteSpace(deckPayload.theme) ? categoriaFallback : deckPayload.theme,
+                dificuldade = "Medio"
+            });
+        }
+
+        return cartas;
     }
 
     /// <summary>

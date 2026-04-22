@@ -5,6 +5,7 @@ using PlayFab.ClientModels;
 public interface IPlayFabClientFacade
 {
     void LoginWithCustomID(LoginWithCustomIDRequest request, Action<LoginResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
+    void LoginWithEmailAddress(LoginWithEmailAddressRequest request, Action<LoginResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
     void GetTitleData(GetTitleDataRequest request, Action<GetTitleDataResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
     void GetUserData(GetUserDataRequest request, Action<GetUserDataResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
     void UpdateUserData(UpdateUserDataRequest request, Action<UpdateUserDataResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);

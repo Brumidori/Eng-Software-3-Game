@@ -13,6 +13,7 @@ public class PlayFabService : MonoBehaviour
     public static PlayFabService Instance { get; private set; }
     public static IPlayFabClientFacade Client { get; private set; } = new PlayFabClientFacade();
     public string CurrentCustomId { get; private set; }
+    public string CurrentEmail { get; private set; }
 
     public static event Action OnLoginSuccess;
     public static event Action<PlayFabError> OnLoginFailure;
@@ -33,14 +34,24 @@ public class PlayFabService : MonoBehaviour
     /// <summary>
     /// Inicializa o PlayFab com as configurações centralizadas
     /// </summary>
-    public void Initialize()
+    public void Initialize(bool autoLoginWithTestUser = true)
     {
-        // Configurar Title ID baseado no ambiente
+        ConfigureTitleId();
+
+        if (!autoLoginWithTestUser)
+        {
+            Debug.Log("[PlayFabService] Inicializado sem login automatico. Aguardando login manual.");
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Aplica configuracoes basicas do SDK PlayFab sem autenticar o jogador.
+    /// </summary>
+    public void ConfigureTitleId()
+    {
         PlayFabSettings.staticSettings.TitleId = PlayFabConfig.GetTitleId();
         Debug.Log($"[PlayFabService] TitleId configurado: {PlayFabConfig.GetTitleId()} (Ambiente: {PlayFabConfig.CurrentEnv})");
-
-        // Fazer login
-        LoginWithCustomId(PlayFabConfig.GetTestUserId());
     }
 
     /// <summary>
@@ -49,7 +60,9 @@ public class PlayFabService : MonoBehaviour
     /// <param name="customId">ID customizado do usuário</param>
     public void LoginWithCustomId(string customId)
     {
+        ConfigureTitleId();
         CurrentCustomId = customId;
+        CurrentEmail = null;
 
         var request = new LoginWithCustomIDRequest
         {
@@ -64,9 +77,49 @@ public class PlayFabService : MonoBehaviour
         Debug.Log($"[PlayFabService] Tentando login com ID: {customId}");
     }
 
+    /// <summary>
+    /// Faz login com Email + Senha.
+    /// </summary>
+    public void LoginWithEmail(string email, string password, Action<bool> callback = null)
+    {
+        ConfigureTitleId();
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            Debug.LogWarning("[PlayFabService] Login com email/senha ignorado: campos vazios.");
+            callback?.Invoke(false);
+            return;
+        }
+
+        CurrentEmail = email.Trim();
+        CurrentCustomId = null;
+
+        var request = new LoginWithEmailAddressRequest
+        {
+            Email = CurrentEmail,
+            Password = password
+        };
+
+        Client.LoginWithEmailAddress(
+            request,
+            result =>
+            {
+                OnLoginSuccessCallback(result);
+                callback?.Invoke(true);
+            },
+            error =>
+            {
+                OnLoginFailureCallback(error);
+                callback?.Invoke(false);
+            });
+
+        Debug.Log($"[PlayFabService] Tentando login com email: {CurrentEmail}");
+    }
+
     private void OnLoginSuccessCallback(LoginResult result)
     {
-        Debug.Log($"[PlayFabService] ✅ Login realizado com sucesso para CustomId '{CurrentCustomId}'!");
+        var identifier = !string.IsNullOrEmpty(CurrentEmail) ? CurrentEmail : CurrentCustomId;
+        Debug.Log($"[PlayFabService] Login realizado com sucesso para '{identifier}'!");
         OnLoginSuccess?.Invoke();
     }
 
