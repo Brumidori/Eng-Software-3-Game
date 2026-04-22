@@ -184,6 +184,11 @@ MonoBehaviour:
   createSceneName: DeckAdminCreate
   editSceneName: DeckAdminEdit
   deleteSceneName: DeckAdminDelete
+  uiScaleBoost: 3
+  maxUiScale: 3
+  topMargin: 34
+  sideMargin: 18
+  bottomMargin: 18
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
