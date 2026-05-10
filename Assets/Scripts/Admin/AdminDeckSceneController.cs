@@ -257,7 +257,6 @@ public class AdminDeckSceneController : MonoBehaviour
         GUILayout.Space(8);
 
         DrawNavButton("Editar Decks", catalogSceneName);
-        DrawNavButton("Criar deck", createSceneName);
 
         GUILayout.Space(12);
         if (GUILayout.Button("Voltar para Login", buttonStyle))
@@ -309,7 +308,15 @@ public class AdminDeckSceneController : MonoBehaviour
             {
                 var item = catalogItems[i];
                 GUILayout.BeginVertical(GUI.skin.box);
+                GUILayout.BeginHorizontal();
                 GUILayout.Label(item.nome, labelStyle);
+                GUILayout.FlexibleSpace();
+                var statusColor = item.ativo ? new Color(0.2f, 0.7f, 0.3f) : new Color(0.6f, 0.6f, 0.6f);
+                var prevColor = GUI.color;
+                GUI.color = statusColor;
+                GUILayout.Label(item.ativo ? "● Ativo" : "● Inativo", smallButtonStyle, GUILayout.Width(80));
+                GUI.color = prevColor;
+                GUILayout.EndHorizontal();
                 GUILayout.Space(4);
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Editar", smallButtonStyle, GUILayout.Width(90)))
@@ -318,10 +325,15 @@ public class AdminDeckSceneController : MonoBehaviour
                     LoadSceneSafe(editSceneName);
                 }
                 GUILayout.Space(6);
-                if (GUILayout.Button("Excluir", smallButtonStyle, GUILayout.Width(90)))
+                if (GUILayout.Button(item.ativo ? "Desativar" : "Ativar", smallButtonStyle, GUILayout.Width(90)))
                 {
-                    SceneTransferState.PendingKey = item.key;
-                    LoadSceneSafe(deleteSceneName);
+                    var toggleKey = item.key;
+                    SetStatus("Atualizando status...", false);
+                    AdminDeckCloudScriptService.Instance.ToggleDeck(toggleKey, result =>
+                    {
+                        SetStatus(result.success ? "Status atualizado." : "Falha: " + result.error, !result.success);
+                        if (result.success) LoadCatalog();
+                    });
                 }
                 GUILayout.EndHorizontal();
                 GUILayout.EndVertical();
@@ -971,10 +983,15 @@ public class AdminDeckSceneController : MonoBehaviour
             return;
         }
 
+        var ativo = true;
+        if (map.TryGetValue("ativo", out var ativoObj) && ativoObj is bool ativoBool)
+            ativo = ativoBool;
+
         entries.Add(new DeckCatalogItem
         {
             nome = nome,
-            key = key
+            key = key,
+            ativo = ativo
         });
     }
 
@@ -1042,5 +1059,6 @@ public class AdminDeckSceneController : MonoBehaviour
     {
         public string nome;
         public string key;
+        public bool ativo = true;
     }
 }

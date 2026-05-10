@@ -1,7 +1,7 @@
 public static class DebugConfig
 {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-    public static bool SkipLogin = true;
+    public static bool SkipLogin = false;
     public static string SkipLoginTargetScene = "DeckAdminMenu";
 
     // Credenciais de uma conta admin real para testes sem passar pelo login

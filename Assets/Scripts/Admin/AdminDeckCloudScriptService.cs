@@ -13,6 +13,7 @@ public class AdminDeckCloudScriptService : MonoBehaviour
     private const string FnUpdateDeck = "DeckAdminUpdateDeck";
     private const string FnDeleteDeck = "DeckAdminDeleteDeck";
     private const string FnValidateDeckPayload = "DeckAdminValidateDeckPayload";
+    private const string FnToggleDeck = "DeckAdminToggleDeck";
 
     public static AdminDeckCloudScriptService Instance { get; private set; }
 
@@ -31,6 +32,11 @@ public class AdminDeckCloudScriptService : MonoBehaviour
     public void ListCatalog(Action<CloudScriptEnvelope> callback)
     {
         Execute(FnListCatalog, new Dictionary<string, object>(), callback);
+    }
+
+    public void ToggleDeck(string key, Action<CloudScriptEnvelope> callback)
+    {
+        Execute(FnToggleDeck, new Dictionary<string, object> { { "key", key } }, callback);
     }
 
     public void GetDeck(string key, Action<CloudScriptEnvelope> callback)
