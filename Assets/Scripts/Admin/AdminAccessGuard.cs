@@ -39,11 +39,17 @@ public class AdminAccessGuard : MonoBehaviour
 
     private void HandleRoleValidated(UserRole _)
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (DebugConfig.SkipLogin) return;
+#endif
         ValidateCurrentRole();
     }
 
     private void HandleRoleValidationFailed(string reason)
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (DebugConfig.SkipLogin) return;
+#endif
         RedirectToLogin(string.IsNullOrWhiteSpace(reason) ? "Falha ao validar acesso admin." : reason);
     }
 
