@@ -36,8 +36,8 @@ public class AdminDeckSceneController : MonoBehaviour
     [SerializeField] private string deleteSceneName = DeleteSceneDefault;
 
     [Header("Layout")]
-    [SerializeField, Range(1f, 3f)] private float uiScaleBoost = 4f;
-    [SerializeField, Range(1f, 3f)] private float maxUiScale = 10f;
+    [SerializeField, Range(0.5f, 3f)] private float uiScaleBoost = 1f;
+    [SerializeField, Range(0.5f, 3f)] private float maxUiScale = 2f;
     [SerializeField] private float topMargin = 34f;
     [SerializeField] private float sideMargin = 18f;
     [SerializeField] private float bottomMargin = 18f;
@@ -71,6 +71,7 @@ public class AdminDeckSceneController : MonoBehaviour
 
     private void Awake()
     {
+        EnsureCamera();
         EnsureServices();
         EnsureDraft();
     }
@@ -1006,6 +1007,18 @@ public class AdminDeckSceneController : MonoBehaviour
         }
 
         SceneManager.LoadScene(sceneName);
+    }
+
+    private void EnsureCamera()
+    {
+        if (Camera.main != null) return;
+        var camGO = new GameObject("Main Camera");
+        camGO.tag = "MainCamera";
+        var cam = camGO.AddComponent<Camera>();
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = Color.black;
+        cam.depth = -1;
+        camGO.AddComponent<AudioListener>();
     }
 
     private void EnsureServices()
