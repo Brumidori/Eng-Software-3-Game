@@ -117,7 +117,7 @@ public class LoginScreenHandler : MonoBehaviour
     {
         EnsurePlayFabService();
         EnsureAuthorizationService();
-        PlayFabService.Instance.Initialize(false);
+        PlayFabService.Instance.Initialize();
 
         SetFeedback(string.Empty, false);
         SetInteractable(true);
@@ -159,14 +159,32 @@ public class LoginScreenHandler : MonoBehaviour
 
     private void HandleRoleValidated(UserRole role)
     {
-        SetInteractable(true);
-        SetFeedback(role == UserRole.Admin ? "Perfil admin validado." : "Perfil de usuario validado.", false);
+        SetInteractable(false);
 
         var targetScene = ResolveTargetScene(role);
         if (string.IsNullOrWhiteSpace(targetScene))
         {
+            SetInteractable(true);
             SetFeedback("Cena de destino nao configurada.", true);
             return;
+        }
+
+        StartCoroutine(RedirectWithFeedback(role, targetScene));
+    }
+
+    private System.Collections.IEnumerator RedirectWithFeedback(UserRole role, string targetScene)
+    {
+        if (role == UserRole.Admin)
+        {
+            SetFeedback("Perfil admin validado.", false);
+            yield return new UnityEngine.WaitForSeconds(0.8f);
+            SetFeedback("Redirecionando para o painel admin...", false);
+            yield return new UnityEngine.WaitForSeconds(1.2f);
+        }
+        else
+        {
+            SetFeedback("Login realizado com sucesso!", false);
+            yield return new UnityEngine.WaitForSeconds(1f);
         }
 
         Debug.Log($"[LoginScreenHandler] Redirecionando role '{role}' para cena '{targetScene}'.");
@@ -184,11 +202,24 @@ public class LoginScreenHandler : MonoBehaviour
         SetInteractable(true);
 
         if (clearPasswordOnFailure && senhaInput != null)
-        {
             senhaInput.text = string.Empty;
-        }
 
         SetFeedback(BuildFriendlyError(error), true);
+        StartCoroutine(RestoreFocusNextFrame());
+    }
+
+    private System.Collections.IEnumerator RestoreFocusNextFrame()
+    {
+        yield return null;
+
+        var target = (loginInput != null && string.IsNullOrWhiteSpace(loginInput.text))
+            ? loginInput
+            : senhaInput;
+
+        if (target == null) yield break;
+
+        target.ActivateInputField();
+        target.Select();
     }
 
     private string BuildFriendlyError(PlayFabError error)

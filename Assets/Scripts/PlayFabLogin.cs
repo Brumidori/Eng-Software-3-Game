@@ -6,7 +6,6 @@ using UnityEngine;
 /// </summary>
 public class PlayFabLogin : MonoBehaviour
 {
-    [SerializeField] private bool autoLoginWithTestUser = true;
     [SerializeField] private bool disableAutoLoginWhenLoginUiDetected = true;
 
     private void OnEnable()
@@ -40,12 +39,12 @@ public class PlayFabLogin : MonoBehaviour
 
             if (loginUiDetected)
             {
-                PlayFabService.Instance.Initialize(false);
+                PlayFabService.Instance.Initialize();
                 Debug.Log("[PlayFabLogin] UI de login detectada. Login automatico por Custom ID foi desativado nesta cena.");
                 return;
             }
 
-            PlayFabService.Instance.Initialize(autoLoginWithTestUser);
+            PlayFabService.Instance.Initialize();
             Debug.Log("[PlayFabLogin] Inicializacao do PlayFab iniciada.");
         }
     }

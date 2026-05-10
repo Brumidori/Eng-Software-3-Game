@@ -19,6 +19,9 @@ public class AdminAccessGuard : MonoBehaviour
 
     private void Start()
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (DebugConfig.SkipLogin) return;
+#endif
         if (AuthorizationService.Instance == null)
         {
             RedirectToLogin("Servico de autorizacao indisponivel.");
