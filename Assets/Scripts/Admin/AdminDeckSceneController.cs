@@ -43,6 +43,7 @@ public class AdminDeckSceneController : MonoBehaviour
     [SerializeField] private float bottomMargin = 18f;
 
     private readonly List<DeckCatalogItem> catalogItems = new List<DeckCatalogItem>();
+    private float currentOuterWidth;
     private Vector2 menuScroll;
     private Vector2 catalogScroll;
     private Vector2 editorScroll;
@@ -197,6 +198,7 @@ public class AdminDeckSceneController : MonoBehaviour
         var outerX = leftSafeInset + sideMargin;
         var outerY = topSafeInset + topMargin;
         var outerWidth = logicalWidth - leftSafeInset - rightSafeInset - (sideMargin * 2f);
+        currentOuterWidth = outerWidth;
         var outerHeight = logicalHeight - topSafeInset - topMargin - bottomMargin;
         var outer = new Rect(outerX, outerY, Mathf.Max(120f, outerWidth), Mathf.Max(160f, outerHeight));
         GUILayout.BeginArea(outer);
@@ -254,7 +256,7 @@ public class AdminDeckSceneController : MonoBehaviour
         GUILayout.Label("Navegação", labelStyle);
         GUILayout.Space(8);
 
-        DrawNavButton("Catálogo", catalogSceneName);
+        DrawNavButton("Editar Decks", catalogSceneName);
         DrawNavButton("Criar deck", createSceneName);
 
         GUILayout.Space(12);
@@ -281,15 +283,18 @@ public class AdminDeckSceneController : MonoBehaviour
     private void DrawCatalog()
     {
         GUILayout.BeginVertical(sectionStyle, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-        if (GUILayout.Button("Atualizar catalogo", buttonStyle))
-        {
-            LoadCatalog();
-        }
 
+        var btnWidth = Mathf.Max(120f, currentOuterWidth * 0.6f);
+        GUILayout.BeginHorizontal();
+        GUILayout.FlexibleSpace();
+        GUILayout.BeginVertical(GUILayout.Width(btnWidth));
+        if (GUILayout.Button("Atualizar catalogo", buttonStyle))
+            LoadCatalog();
         if (GUILayout.Button("Menu", buttonStyle))
-        {
             LoadSceneSafe(menuSceneName);
-        }
+        GUILayout.EndVertical();
+        GUILayout.FlexibleSpace();
+        GUILayout.EndHorizontal();
 
         GUILayout.Space(8);
 
@@ -304,18 +309,21 @@ public class AdminDeckSceneController : MonoBehaviour
             {
                 var item = catalogItems[i];
                 GUILayout.BeginVertical(GUI.skin.box);
-                GUILayout.Label(item.nome + "  -  " + item.key, labelStyle);
-                if (GUILayout.Button("Abrir edicao", smallButtonStyle))
+                GUILayout.Label(item.nome, labelStyle);
+                GUILayout.Space(4);
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("Editar", smallButtonStyle, GUILayout.Width(90)))
                 {
                     SceneTransferState.PendingKey = item.key;
                     LoadSceneSafe(editSceneName);
                 }
-
-                if (GUILayout.Button("Excluir", smallButtonStyle))
+                GUILayout.Space(6);
+                if (GUILayout.Button("Excluir", smallButtonStyle, GUILayout.Width(90)))
                 {
                     SceneTransferState.PendingKey = item.key;
                     LoadSceneSafe(deleteSceneName);
                 }
+                GUILayout.EndHorizontal();
                 GUILayout.EndVertical();
                 GUILayout.Space(6);
             }
@@ -327,29 +335,21 @@ public class AdminDeckSceneController : MonoBehaviour
 
     private void DrawEditor(bool createMode, bool loadByKeyVisible)
     {
+        if (GUILayout.Button("Voltar ao Menu", smallButtonStyle, GUILayout.ExpandWidth(false)))
+        {
+            LoadSceneSafe(menuSceneName);
+        }
+
+        GUILayout.Space(6);
         editorScroll = GUILayout.BeginScrollView(editorScroll, GUILayout.ExpandHeight(true));
 
         GUILayout.BeginVertical(sectionStyle, GUILayout.ExpandWidth(true));
         GUILayout.Label(createMode ? "Novo deck" : "Editar deck", labelStyle);
         GUILayout.Space(8);
 
-        GUILayout.Label("Key do deck", labelStyle);
-        currentKey = GUILayout.TextField(currentKey ?? string.Empty, textFieldStyle);
-
-        GUILayout.Label("Nome da categoria", labelStyle);
-        categoryName = GUILayout.TextField(categoryName ?? string.Empty, textFieldStyle);
-
-        GUILayout.Label("deck_id", labelStyle);
-        currentDeck.deck_id = GUILayout.TextField(currentDeck.deck_id ?? string.Empty, textFieldStyle);
-
-        GUILayout.Label("Tema", labelStyle);
-        currentDeck.theme = GUILayout.TextField(currentDeck.theme ?? string.Empty, textFieldStyle);
+        GUILayout.Label(currentDeck.theme ?? string.Empty, titleStyle);
 
         GUILayout.Space(8);
-        if (loadByKeyVisible && GUILayout.Button("Carregar deck pela key", buttonStyle))
-        {
-            LoadDeckByKey(currentKey);
-        }
 
         if (GUILayout.Button("Adicionar pergunta", buttonStyle))
         {
@@ -373,10 +373,6 @@ public class AdminDeckSceneController : MonoBehaviour
             }
         }
 
-        if (GUILayout.Button("Menu", buttonStyle))
-        {
-            LoadSceneSafe(menuSceneName);
-        }
         GUILayout.EndVertical();
 
         GUILayout.Space(10);
@@ -413,28 +409,11 @@ public class AdminDeckSceneController : MonoBehaviour
         }
         GUILayout.EndHorizontal();
 
-        GUILayout.Label("ID", labelStyle);
-        question.id = GUILayout.TextField(question.id ?? string.Empty, textFieldStyle);
-
         GUILayout.Label("Texto", labelStyle);
         question.text = GUILayout.TextArea(question.text ?? string.Empty, textAreaStyle, GUILayout.MinHeight(70));
 
-        GUILayout.Label("Tempo limite (segundos)", labelStyle);
-        var timeValue = GUILayout.TextField(question.time_limit.ToString(), textFieldStyle);
-        if (int.TryParse(timeValue, out var parsedTime) && parsedTime >= 1)
-        {
-            question.time_limit = parsedTime;
-        }
-
         GUILayout.Space(6);
-        GUILayout.BeginHorizontal();
         GUILayout.Label("Opcoes", labelStyle);
-        GUILayout.FlexibleSpace();
-        if (GUILayout.Button("Adicionar opcao", smallButtonStyle, GUILayout.Width(130)))
-        {
-            AddOption(questionIndex);
-        }
-        GUILayout.EndHorizontal();
 
         for (var i = 0; i < question.options.Count; i++)
         {
@@ -458,18 +437,12 @@ public class AdminDeckSceneController : MonoBehaviour
         GUILayout.Label("Opcao " + (optionIndex + 1), labelStyle);
         option.text = GUILayout.TextField(option.text ?? string.Empty, textFieldStyle, GUILayout.ExpandWidth(true));
 
-        var corrected = GUILayout.Toggle(option.is_correct, "Correta", smallButtonStyle);
+        var corrected = GUILayout.Toggle(option.is_correct, "Correta");
         if (corrected && !option.is_correct)
         {
             SetCorrectOption(questionIndex, optionIndex);
         }
 
-        if (GUILayout.Button("Remover", smallButtonStyle))
-        {
-            RemoveOption(questionIndex, optionIndex);
-            GUILayout.EndVertical();
-            return;
-        }
         GUILayout.EndVertical();
     }
 
@@ -583,7 +556,7 @@ public class AdminDeckSceneController : MonoBehaviour
             case SceneMode.Create:
                 return "Preencha os campos para gerar um novo deck sem editar JSON.";
             case SceneMode.Edit:
-                return "Carregue um deck existente pela key e altere os campos desejados.";
+                return "Alteracoes nao salvas serao descartadas.";
             case SceneMode.Delete:
                 return "Exclusao controlada com confirmacao manual da key.";
             default:
@@ -634,14 +607,16 @@ public class AdminDeckSceneController : MonoBehaviour
 
             if (result.raw != null)
             {
+                var keys = string.Join(", ", result.raw.Keys);
+                Debug.Log($"[DeckEdit] Chaves recebidas do CloudScript: [{keys}]");
+
                 if (result.raw.TryGetValue("nome", out var nomeObj) && nomeObj != null)
-                {
                     categoryName = nomeObj.ToString();
-                }
 
                 if (result.raw.TryGetValue("deckJson", out var deckJsonObj) && deckJsonObj != null)
                 {
-                    var deckJson = deckJsonObj.ToString();
+                    Debug.Log($"[DeckEdit] deckJson tipo={deckJsonObj.GetType().Name} valor={deckJsonObj}");
+                    var deckJson = deckJsonObj is string s ? s : PlayFab.Json.PlayFabSimpleJson.SerializeObject(deckJsonObj);
                     if (!string.IsNullOrWhiteSpace(deckJson))
                     {
                         LoadDraftFromJson(deckJson);
@@ -650,6 +625,10 @@ public class AdminDeckSceneController : MonoBehaviour
                     }
                 }
             }
+            else
+            {
+                Debug.LogWarning("[DeckEdit] result.raw e null.");
+            }
 
             SetStatus("Deck carregado sem payload utilizavel.", true);
         });
@@ -657,9 +636,11 @@ public class AdminDeckSceneController : MonoBehaviour
 
     private void LoadDraftFromJson(string deckJson)
     {
+        Debug.Log($"[DeckEdit] Tentando parsear JSON: {deckJson}");
         var deck = JsonUtility.FromJson<DeckSchemaV2>(deckJson);
-        if (deck == null)
+        if (deck == null || (string.IsNullOrEmpty(deck.deck_id) && string.IsNullOrEmpty(deck.theme) && (deck.questions == null || deck.questions.Count == 0)))
         {
+            Debug.LogError($"[DeckEdit] Parse falhou ou retornou deck vazio. JSON recebido: {deckJson}");
             SetStatus("Nao foi possivel interpretar o JSON do deck.", true);
             return;
         }

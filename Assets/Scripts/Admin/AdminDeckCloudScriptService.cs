@@ -188,7 +188,15 @@ public class AdminDeckCloudScriptService : MonoBehaviour
             raw = rawForUi
         });
 
-        Debug.Log($"[AdminDeckCloudScriptService] {functionName} => success={success}");
+        if (success)
+            Debug.Log($"[AdminDeckCloudScriptService] {functionName} => success=True");
+        else
+        {
+            var errorMsg   = rawError   != null ? rawError.ToString()   : "(sem campo error)";
+            var detailsMsg = rawDetails != null ? PlayFab.Json.PlayFabSimpleJson.SerializeObject(rawDetails) : "(sem details)";
+            var allKeys    = string.Join(", ", resultMap.Keys);
+            Debug.LogWarning($"[AdminDeckCloudScriptService] {functionName} => success=False | error='{errorMsg}' | details={detailsMsg} | chaves={allKeys}");
+        }
     }
 
     private static bool TryGetFunctionResultMap(object functionResult, out IDictionary<string, object> resultMap)
