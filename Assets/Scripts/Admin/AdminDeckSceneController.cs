@@ -354,6 +354,7 @@ public class AdminDeckSceneController : MonoBehaviour
         if (GUILayout.Button("Adicionar pergunta", buttonStyle))
         {
             AddQuestion();
+            questionScroll = new Vector2(0, float.MaxValue);
         }
 
         if (GUILayout.Button("Validar", buttonStyle))
