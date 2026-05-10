@@ -256,8 +256,6 @@ public class AdminDeckSceneController : MonoBehaviour
 
         DrawNavButton("Catálogo", catalogSceneName);
         DrawNavButton("Criar deck", createSceneName);
-        DrawNavButton("Editar deck", editSceneName);
-        DrawNavButton("Excluir deck", deleteSceneName);
 
         GUILayout.Space(12);
         if (GUILayout.Button("Voltar para Login", buttonStyle))

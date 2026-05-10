@@ -34,15 +34,10 @@ public class PlayFabService : MonoBehaviour
     /// <summary>
     /// Inicializa o PlayFab com as configurações centralizadas
     /// </summary>
-    public void Initialize(bool autoLoginWithTestUser = true)
+    public void Initialize()
     {
         ConfigureTitleId();
-
-        if (!autoLoginWithTestUser)
-        {
-            Debug.Log("[PlayFabService] Inicializado sem login automatico. Aguardando login manual.");
-            return;
-        }
+        Debug.Log("[PlayFabService] Inicializado. Aguardando login manual.");
     }
 
     /// <summary>
