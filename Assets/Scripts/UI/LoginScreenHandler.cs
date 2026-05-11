@@ -1,5 +1,6 @@
 using PlayFab;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -18,14 +19,18 @@ public class LoginScreenHandler : MonoBehaviour
     [SerializeField] private InputField loginInput;
     [SerializeField] private InputField senhaInput;
     [SerializeField] private Button loginBtn;
+    [SerializeField] private Button btnRegistro;
     [SerializeField] private Text feedbackText;
+    [SerializeField] private FeedbackPopup feedbackPopup;
+
 
     [Header("Comportamento")]
     [SerializeField] private bool autoFindElementsByName = true;
     [SerializeField] private bool clearPasswordOnFailure = true;
     [SerializeField] private string nextSceneOnSuccess = string.Empty;
-    [SerializeField] private string userSuccessScene = "LoginSuccess";
+    [SerializeField] private string userSuccessScene = "HomeScreen";
     [SerializeField] private string adminSuccessScene = "DeckAdminMenu";
+    [SerializeField] private string registerScene = "Register";
 
     private static bool sceneHookRegistered;
 
@@ -90,9 +95,10 @@ public class LoginScreenHandler : MonoBehaviour
     private void OnEnable()
     {
         if (loginBtn != null)
-        {
             loginBtn.onClick.AddListener(HandleLoginButtonClick);
-        }
+
+        if (btnRegistro != null)
+            btnRegistro.onClick.AddListener(HandleRegistroButtonClick);
 
         PlayFabService.OnLoginSuccess += HandleLoginSuccess;
         PlayFabService.OnLoginFailure += HandleLoginFailure;
@@ -103,9 +109,10 @@ public class LoginScreenHandler : MonoBehaviour
     private void OnDisable()
     {
         if (loginBtn != null)
-        {
             loginBtn.onClick.RemoveListener(HandleLoginButtonClick);
-        }
+
+        if (btnRegistro != null)
+            btnRegistro.onClick.RemoveListener(HandleRegistroButtonClick);
 
         PlayFabService.OnLoginSuccess -= HandleLoginSuccess;
         PlayFabService.OnLoginFailure -= HandleLoginFailure;
@@ -119,8 +126,16 @@ public class LoginScreenHandler : MonoBehaviour
         EnsureAuthorizationService();
         PlayFabService.Instance.Initialize();
 
+        if (feedbackPopup == null)
+            feedbackPopup = FindFirstObjectByType<FeedbackPopup>();
+
         SetFeedback(string.Empty, false);
         SetInteractable(true);
+    }
+
+    private void HandleRegistroButtonClick()
+    {
+        SceneManager.LoadScene(registerScene);
     }
 
     public void HandleLoginButtonClick()
@@ -245,21 +260,27 @@ public class LoginScreenHandler : MonoBehaviour
 
     private void SetInteractable(bool interactable)
     {
-        if (loginBtn != null)
-        {
-            loginBtn.interactable = interactable;
-        }
+        if (loginInput != null) loginInput.interactable = interactable;
+        if (senhaInput != null) senhaInput.interactable = interactable;
+        if (loginBtn != null)   loginBtn.interactable   = interactable;
+
+        if (interactable)
+            EventSystem.current?.SetSelectedGameObject(null);
     }
 
     private void SetFeedback(string message, bool isError)
     {
+        if (feedbackPopup != null)
+        {
+            if (string.IsNullOrEmpty(message)) { feedbackPopup.Hide(); return; }
+            feedbackPopup.Show(message, isError);
+            return;
+        }
+
         if (feedbackText == null)
         {
             if (!string.IsNullOrEmpty(message))
-            {
-                Debug.Log(isError ? $"[LoginScreenHandler] {message}" : $"[LoginScreenHandler] {message}");
-            }
-
+                Debug.Log($"[LoginScreenHandler] {message}");
             return;
         }
 
@@ -291,9 +312,14 @@ public class LoginScreenHandler : MonoBehaviour
         {
             var loginButtonGo = GameObject.Find(LoginButtonObjectName);
             if (loginButtonGo != null)
-            {
                 loginBtn = loginButtonGo.GetComponent<Button>();
-            }
+        }
+
+        if (btnRegistro == null)
+        {
+            var registroGo = GameObject.Find("btnRegistro");
+            if (registroGo != null)
+                btnRegistro = registroGo.GetComponent<Button>();
         }
     }
 

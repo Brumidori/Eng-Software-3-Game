@@ -11,7 +11,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Login.unity
     guid: ac413f1d0d5e79e49872c91440c604bc
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/LoginSuccess.unity
     guid: 5f4f7b7cb9db4a548d9069c5ac5760d4
   - enabled: 1
@@ -19,16 +19,22 @@ EditorBuildSettings:
     guid: 40d4e9bc7a4d4cf3af6b3b41f4a3d111
   - enabled: 1
     path: Assets/Scenes/DeckAdminCatalog.unity
-    guid: 9d1d52c2f0b64d60a27db5e2c71d8134
+    guid: c9333792c213ac343a440cf499f2e2f9
   - enabled: 1
     path: Assets/Scenes/DeckAdminCreate.unity
-    guid: 7d8c8d91fdf6477d8bcf0b3da6d49d45
+    guid: c199e20f6666c0f4a84d75e6164f258a
   - enabled: 1
     path: Assets/Scenes/DeckAdminEdit.unity
-    guid: 6b60f8d8b6d44c9fbec8e93b7a77dcd0
+    guid: 0726a09c560ff84479252b38209ad566
   - enabled: 1
     path: Assets/Scenes/DeckAdminDelete.unity
-    guid: 2d6a1d7a7dc54f4eb2d1c4a2de7d1e33
+    guid: 34fbc9f5999d17e408f44789d60e1f1e
+  - enabled: 1
+    path: Assets/Scenes/Register.unity
+    guid: 08fba833323dc40789eedfc7cbcfaa7f
+  - enabled: 1
+    path: Assets/Scenes/HomeScreen.unity
+    guid: 6a210ec897e024ee692f7e37c96e2934
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   m_UseUCBPForAssetBundles: 0
