@@ -19,4 +19,5 @@ public interface IPlayFabClientFacade
     void GetCatalogItems(GetCatalogItemsRequest request, Action<GetCatalogItemsResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
     void GetStoreItems(GetStoreItemsRequest request, Action<GetStoreItemsResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
     void ExecuteCloudScript(ExecuteCloudScriptRequest request, Action<ExecuteCloudScriptResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
+    void RegisterPlayFabUser(RegisterPlayFabUserRequest request, Action<RegisterPlayFabUserResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
 }

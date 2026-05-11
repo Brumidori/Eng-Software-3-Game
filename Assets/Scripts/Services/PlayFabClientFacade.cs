@@ -78,4 +78,9 @@ public sealed class PlayFabClientFacade : IPlayFabClientFacade
     {
         PlayFabClientAPI.ExecuteCloudScript(request, successCallback, errorCallback);
     }
+
+    public void RegisterPlayFabUser(RegisterPlayFabUserRequest request, Action<RegisterPlayFabUserResult> successCallback, Action<PlayFabError> errorCallback)
+    {
+        PlayFabClientAPI.RegisterPlayFabUser(request, successCallback, errorCallback);
+    }
 }

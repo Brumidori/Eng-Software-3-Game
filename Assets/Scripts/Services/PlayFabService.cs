@@ -17,6 +17,8 @@ public class PlayFabService : MonoBehaviour
 
     public static event Action OnLoginSuccess;
     public static event Action<PlayFabError> OnLoginFailure;
+    public static event Action OnRegisterSuccess;
+    public static event Action<PlayFabError> OnRegisterFailure;
 
     private void Awake()
     {
@@ -109,6 +111,39 @@ public class PlayFabService : MonoBehaviour
             });
 
         Debug.Log($"[PlayFabService] Tentando login com email: {CurrentEmail}");
+    }
+
+    /// <summary>
+    /// Registra um novo usuário com nickname, email e senha.
+    /// Após o registro, o PlayFab já faz o login automaticamente.
+    /// </summary>
+    public void RegisterWithEmail(string username, string email, string password)
+    {
+        ConfigureTitleId();
+        CurrentEmail = email.Trim();
+        CurrentCustomId = null;
+
+        var request = new RegisterPlayFabUserRequest
+        {
+            Username = username.Trim(),
+            Email = CurrentEmail,
+            Password = password,
+            RequireBothUsernameAndEmail = true
+        };
+
+        Client.RegisterPlayFabUser(request,
+            result =>
+            {
+                Debug.Log($"[PlayFabService] Registro realizado com sucesso. PlayFabId: {result.PlayFabId}");
+                OnRegisterSuccess?.Invoke();
+            },
+            error =>
+            {
+                Debug.LogError($"[PlayFabService] Erro no registro: {error.GenerateErrorReport()}");
+                OnRegisterFailure?.Invoke(error);
+            });
+
+        Debug.Log($"[PlayFabService] Tentando registrar usuario: {username.Trim()} / {CurrentEmail}");
     }
 
     private void OnLoginSuccessCallback(LoginResult result)
