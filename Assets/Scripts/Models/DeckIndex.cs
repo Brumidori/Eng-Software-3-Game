@@ -12,4 +12,5 @@ public class CategoriaInfo
 {
     public string nome;
     public string key;
+    public bool ativo = true;
 }
