@@ -18,7 +18,7 @@ public class RegisterScreenHandler : MonoBehaviour
 
     [Header("Cenas")]
     [SerializeField] private string loginScene = "Login";
-    [SerializeField] private string successScene = "LoginSuccess";
+    [SerializeField] private string successScene = "HomeScreen";
 
     private bool _isSubmitting;
     private bool _registrationSucceeded;
@@ -200,7 +200,7 @@ public class RegisterScreenHandler : MonoBehaviour
     {
         SetFeedback("Conta criada com sucesso!", false);
         yield return new WaitForSeconds(1f);
-        SceneManager.LoadScene(successScene);
+        SceneManager.LoadScene("HomeScreen");
     }
 
     private void HandleVoltarButtonClick()
