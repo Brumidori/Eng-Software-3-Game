@@ -580,25 +580,46 @@ public class AdminDeckSceneController : MonoBehaviour
     private void LoadCatalog()
     {
         SetStatus("Carregando catalogo...", false);
-        AdminDeckCloudScriptService.Instance.ListCatalog(result =>
+
+        if (PlayFabService.Instance == null || !PlayFabService.Instance.IsLoggedIn())
         {
-            if (!result.success)
-            {
-                SetStatus("Falha ao listar catalogo: " + result.error, true);
-                return;
-            }
+            SetStatus("Sessao PlayFab nao autenticada.", true);
+            return;
+        }
 
-            catalogItems.Clear();
-            if (result.raw != null && result.raw.TryGetValue("deckIndex", out var indexObj) && indexObj is IDictionary<string, object> deckIndex)
+        PlayFabService.Client.GetTitleData(
+            new PlayFab.ClientModels.GetTitleDataRequest
             {
-                if (deckIndex.TryGetValue("categorias", out var categoriasObj))
+                Keys = new List<string> { "deck_index" }
+            },
+            result =>
+            {
+                if (!result.Data.ContainsKey("deck_index"))
                 {
-                    ExtractCatalogEntries(categoriasObj, catalogItems);
+                    SetStatus("deck_index nao encontrado no TitleData.", true);
+                    return;
                 }
-            }
 
-            SetStatus("Catalogo carregado com sucesso.", false);
-        });
+                var index = JsonUtility.FromJson<DeckIndex>(result.Data["deck_index"]);
+                catalogItems.Clear();
+
+                if (index?.categorias != null)
+                {
+                    foreach (var cat in index.categorias)
+                    {
+                        catalogItems.Add(new DeckCatalogItem
+                        {
+                            nome  = cat.nome,
+                            key   = cat.key,
+                            ativo = cat.ativo
+                        });
+                    }
+                }
+
+                SetStatus($"Catalogo carregado: {catalogItems.Count} decks.", false);
+            },
+            error => SetStatus("Falha ao carregar catalogo: " + error.GenerateErrorReport(), true)
+        );
     }
 
     private void LoadDeckByKey(string key)
@@ -609,42 +630,36 @@ public class AdminDeckSceneController : MonoBehaviour
             return;
         }
 
-        SetStatus("Carregando deck...", false);
-        AdminDeckCloudScriptService.Instance.GetDeck(key, result =>
+        if (PlayFabService.Instance == null || !PlayFabService.Instance.IsLoggedIn())
         {
-            if (!result.success)
+            SetStatus("Sessao PlayFab nao autenticada.", true);
+            return;
+        }
+
+        SetStatus($"Buscando deck '{key}'...", false);
+        Debug.Log($"[DeckEdit] Buscando TitleData sem filtro para inspecionar chaves disponíveis...");
+
+        // Busca sem filtro de Keys para listar tudo disponível — ajuda a diagnosticar
+        PlayFabService.Client.GetTitleData(
+            new PlayFab.ClientModels.GetTitleDataRequest(),
+            result =>
             {
-                SetStatus("Falha ao carregar deck: " + result.error, true);
-                return;
-            }
+                var available = result.Data != null ? string.Join(", ", result.Data.Keys) : "(nenhuma)";
+                Debug.Log($"[DeckEdit] Chaves disponíveis no TitleData: [{available}]");
 
-            if (result.raw != null)
-            {
-                var keys = string.Join(", ", result.raw.Keys);
-                Debug.Log($"[DeckEdit] Chaves recebidas do CloudScript: [{keys}]");
-
-                if (result.raw.TryGetValue("nome", out var nomeObj) && nomeObj != null)
-                    categoryName = nomeObj.ToString();
-
-                if (result.raw.TryGetValue("deckJson", out var deckJsonObj) && deckJsonObj != null)
+                if (result.Data == null || !result.Data.ContainsKey(key))
                 {
-                    Debug.Log($"[DeckEdit] deckJson tipo={deckJsonObj.GetType().Name} valor={deckJsonObj}");
-                    var deckJson = deckJsonObj is string s ? s : PlayFab.Json.PlayFabSimpleJson.SerializeObject(deckJsonObj);
-                    if (!string.IsNullOrWhiteSpace(deckJson))
-                    {
-                        LoadDraftFromJson(deckJson);
-                        SetStatus("Deck carregado com sucesso.", false);
-                        return;
-                    }
+                    SetStatus($"Key '{key}' nao encontrada. Disponiveis: {available}", true);
+                    return;
                 }
-            }
-            else
-            {
-                Debug.LogWarning("[DeckEdit] result.raw e null.");
-            }
 
-            SetStatus("Deck carregado sem payload utilizavel.", true);
-        });
+                var json = result.Data[key];
+                Debug.Log($"[DeckEdit] TitleData[{key}] ({json?.Length ?? 0} chars): {json?[..Mathf.Min(120, json.Length)]}");
+                LoadDraftFromJson(json);
+                SetStatus("Deck carregado com sucesso.", false);
+            },
+            error => SetStatus("Falha ao carregar deck: " + error.GenerateErrorReport(), true)
+        );
     }
 
     private void LoadDraftFromJson(string deckJson)
