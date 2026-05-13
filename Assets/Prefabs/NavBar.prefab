@@ -180,6 +180,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuItemHover
   tab: 2
+  targetScene: HomeScreen
+  defaultSprite: {fileID: 21300000, guid: a46a206f27e524e38baa18a6c5b5fca3, type: 3}
+  hoverSprite: {fileID: 7649882976228931000, guid: d7b54eb4d32d2442d85e13f5dfd9ea9b, type: 3}
+  currentSprite: {fileID: 21300000, guid: 2f3dbb180d9b546ed8cc0fb9b72235e8, type: 3}
 --- !u!114 &3982787519907245824
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -305,6 +309,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuItemHover
   tab: 3
+  targetScene: 
+  defaultSprite: {fileID: 21300000, guid: 00d3961a9ff3e4612a97ededd954927b, type: 3}
+  hoverSprite: {fileID: 21300000, guid: 3fa76d0644c7c419c8313fc9490101bc, type: 3}
+  currentSprite: {fileID: 21300000, guid: 4705d1421b6844e8aa8a408a02a5df79, type: 3}
 --- !u!114 &7249910732455231036
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -611,6 +619,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuItemHover
   tab: 1
+  targetScene: 
+  defaultSprite: {fileID: 21300000, guid: 6ad8b786457ef4d0f806eeb74e12baf6, type: 3}
+  hoverSprite: {fileID: -1317948474848665188, guid: 111125d39ea804f3689de42d3fbd513b, type: 3}
+  currentSprite: {fileID: 21300000, guid: fa328f2c5deb140f68a888f6864ae573, type: 3}
 --- !u!114 &2844582018794459592
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -842,6 +854,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuItemHover
   tab: 4
+  targetScene: Config
+  defaultSprite: {fileID: 21300000, guid: fbf47f67ee8b749e89b48ca2443afc9d, type: 3}
+  hoverSprite: {fileID: 21300000, guid: 88e79e632cbc844fe8d604ec00d193c1, type: 3}
+  currentSprite: {fileID: 21300000, guid: ff7a3fa73dd87460ca00bc63cc7f4a1f, type: 3}
 --- !u!114 &3989582719537408500
 MonoBehaviour:
   m_ObjectHideFlags: 0
