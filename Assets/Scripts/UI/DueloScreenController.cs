@@ -22,14 +22,38 @@ public class DueloScreenController : MonoBehaviour
     [SerializeField] private Button btnEntrar;
 
     [Header("Cenas")]
-    [SerializeField] private string cenaPublica  = "DueloPublico";
+    [SerializeField] private string cenaPublica  = "MatchMaking";
     [SerializeField] private string cenaPrivada  = "DueloPrivado";
+
+    [Header("Visual Selecao")]
+    [SerializeField] private Color corSelecionada = new Color(0.204f, 0.596f, 0.859f, 1f); // #3498DB
+    [SerializeField] private Color corNormal = Color.white;
 
     private DuelMode _modo = DuelMode.None;
     private string   _codigoSala = string.Empty;
 
-    private const float AlphaAtivo    = 1f;
-    private const float AlphaInativo  = 0.5f;
+    private Image _imgCardPublica;
+    private Image _imgCardPrivada;
+
+    private const float AlphaAtivo   = 1f;
+    private const float AlphaInativo = 0.75f;
+
+    private void Awake()
+    {
+        if (cardSalaPublica != null) _imgCardPublica = cardSalaPublica.GetComponent<Image>();
+        if (cardSalaPrivada != null) _imgCardPrivada = cardSalaPrivada.GetComponent<Image>();
+
+        NeutralizeSelectedColor(btnSelecionarPublico);
+        NeutralizeSelectedColor(btnCriarPrivado);
+    }
+
+    private static void NeutralizeSelectedColor(Button btn)
+    {
+        if (btn == null) return;
+        ColorBlock cb = btn.colors;
+        cb.selectedColor = cb.normalColor;
+        btn.colors = cb;
+    }
 
     private void Start()
     {
@@ -96,8 +120,6 @@ public class DueloScreenController : MonoBehaviour
 
     private void OnIniciarDueloClick()
     {
-        if (!PodeIniciar()) return;
-
         if (_modo == DuelMode.Public)
         {
             SceneManager.LoadScene(cenaPublica);
@@ -111,24 +133,33 @@ public class DueloScreenController : MonoBehaviour
         }
     }
 
-    // --- logica de estado ---
-
-    private bool PodeIniciar()
-    {
-        if (_modo == DuelMode.Public)  return true;
-        if (_modo == DuelMode.Private) return !string.IsNullOrWhiteSpace(_codigoSala);
-        return false;
-    }
+    // --- visual ---
 
     private void AtualizarVisual()
     {
-        bool publicoAtivo  = _modo == DuelMode.Public;
-        bool privadoAtivo  = _modo == DuelMode.Private;
+        bool publicoAtivo = _modo == DuelMode.Public;
+        bool privadoAtivo = _modo == DuelMode.Private;
+        bool nenhum       = _modo == DuelMode.None;
 
-        if (cardPublicaGroup != null) cardPublicaGroup.alpha = publicoAtivo ? AlphaAtivo : (_modo == DuelMode.None ? AlphaAtivo : AlphaInativo);
-        if (cardPrivadaGroup != null) cardPrivadaGroup.alpha = privadoAtivo ? AlphaAtivo : (_modo == DuelMode.None ? AlphaAtivo : AlphaInativo);
+        // Alpha: selecionado fica cheio, outro dimma — ambos sempre clicáveis
+        if (cardPublicaGroup != null)
+        {
+            cardPublicaGroup.alpha          = publicoAtivo || nenhum ? AlphaAtivo : AlphaInativo;
+            cardPublicaGroup.interactable   = true;
+            cardPublicaGroup.blocksRaycasts = true;
+        }
+        if (cardPrivadaGroup != null)
+        {
+            cardPrivadaGroup.alpha          = privadoAtivo || nenhum ? AlphaAtivo : AlphaInativo;
+            cardPrivadaGroup.interactable   = true;
+            cardPrivadaGroup.blocksRaycasts = true;
+        }
+
+        // Cor: selecionado → #3498DB, demais → branco
+        if (_imgCardPublica != null) _imgCardPublica.color = publicoAtivo ? corSelecionada : corNormal;
+        if (_imgCardPrivada != null) _imgCardPrivada.color = privadoAtivo ? corSelecionada : corNormal;
 
         if (btnIniciarDuelo != null)
-            btnIniciarDuelo.interactable = PodeIniciar();
+            btnIniciarDuelo.interactable = publicoAtivo;
     }
 }
