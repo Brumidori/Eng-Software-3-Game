@@ -83,3 +83,101 @@ handlers.EconomyGetBalance = function (args, context) {
         balance: balance
     };
 };
+
+/**
+ * PurchaseItemSecure - Server-authoritative purchase handler
+ * 
+ * Valida saldo suficiente, subtrai moeda virtual e retorna novo saldo.
+ * 
+ * Args:
+ * - itemId (required): ID do item a ser comprado
+ * - virtualCurrency (required): Código da moeda (ex: "DA")
+ * - price (required): Preço do item
+ * - storeId (optional): ID da loja (usado apenas para logging/auditoria)
+ * 
+ * Returns:
+ * - success: true se compra realizada com sucesso
+ * - error: mensagem de erro se falhar
+ * - itemId: ID do item comprado
+ * - currencyCode: Moeda utilizada
+ * - priceDeducted: Preço debitado
+ * - newBalance: Novo saldo de moeda após compra
+ * - operation: "purchase"
+ */
+handlers.PurchaseItemSecure = function (args, context) {
+    var itemId = args && args.itemId ? String(args.itemId) : null;
+    var virtualCurrency = args && args.virtualCurrency ? String(args.virtualCurrency) : null;
+    var price = args && args.price ? parseInt(args.price, 10) : 0;
+    var storeId = args && args.storeId ? String(args.storeId) : "store_default";
+
+    // Validações de entrada
+    if (!itemId) {
+        return { success: false, error: "itemId is required" };
+    }
+
+    if (!virtualCurrency) {
+        return { success: false, error: "virtualCurrency is required" };
+    }
+
+    if (!price || price <= 0) {
+        return { success: false, error: "price must be > 0" };
+    }
+
+    // Obter saldo atual
+    var inventory = server.GetUserInventory({ PlayFabId: currentPlayerId });
+    var currentBalance = inventory.VirtualCurrency && inventory.VirtualCurrency[virtualCurrency]
+        ? inventory.VirtualCurrency[virtualCurrency]
+        : 0;
+
+    // Validar saldo suficiente
+    if (currentBalance < price) {
+        return {
+            success: false,
+            error: "insufficient_balance",
+            itemId: itemId,
+            currencyCode: virtualCurrency,
+            price: price,
+            currentBalance: currentBalance
+        };
+    }
+
+    // Validar se item existe no catálogo ou store
+    var catalogItems = server.GetCatalogItems({ CatalogVersion: "mainCatalog" });
+    var itemFound = false;
+
+    if (catalogItems && catalogItems.Catalog) {
+        for (var i = 0; i < catalogItems.Catalog.length; i++) {
+            if (catalogItems.Catalog[i].ItemId === itemId) {
+                itemFound = true;
+                break;
+            }
+        }
+    }
+
+    if (!itemFound) {
+        return {
+            success: false,
+            error: "item_not_found",
+            itemId: itemId
+        };
+    }
+
+    // Subtrair moeda virtual
+    var subtractResult = server.SubtractUserVirtualCurrency({
+        PlayFabId: currentPlayerId,
+        VirtualCurrency: virtualCurrency,
+        Amount: price
+    });
+
+    var newBalance = subtractResult.Balance !== undefined ? subtractResult.Balance : (currentBalance - price);
+
+    return {
+        success: true,
+        operation: "purchase",
+        itemId: itemId,
+        currencyCode: virtualCurrency,
+        priceDeducted: price,
+        newBalance: newBalance,
+        storeId: storeId
+    };
+};

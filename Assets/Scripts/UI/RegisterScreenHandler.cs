@@ -172,13 +172,39 @@ public class RegisterScreenHandler : MonoBehaviour
     {
         _isSubmitting = false;
         _registrationSucceeded = true;
-        SetFeedback("Conta criada! Validando perfil...", false);
-        EnsureAuthorizationService();
-        AuthorizationService.Instance.ValidatePlayerRole();
+        SetFeedback("Conta criada! Concedendo decks iniciais...", false);
+        EnsureStarterDeckGrantService();
+
+        StarterDeckGrantService.Instance.GrantStarterDecks(result =>
+        {
+            if (result == null || !result.Success)
+            {
+                _registrationSucceeded = false;
+                _isSubmitting = false;
+                SetInteractable(true);
+                SetFeedback(result != null && !string.IsNullOrWhiteSpace(result.Error)
+                    ? result.Error
+                    : "Nao foi possivel conceder os decks iniciais.", true);
+                return;
+            }
+
+            if (InventoryService.Instance != null)
+            {
+                InventoryService.Instance.LoadInventory();
+            }
+
+            SetFeedback(result.AlreadyGranted
+                ? "Decks iniciais ja confirmados. Validando perfil..."
+                : "Decks iniciais concedidos. Validando perfil...", false);
+
+            EnsureAuthorizationService();
+            AuthorizationService.Instance.ValidatePlayerRole();
+        });
     }
 
     private void HandleRegisterFailure(PlayFabError error)
     {
+        _registrationSucceeded = false;
         _isSubmitting = false;
         SetInteractable(true);
         SetFeedback(BuildFriendlyError(error), true);
@@ -200,7 +226,8 @@ public class RegisterScreenHandler : MonoBehaviour
     {
         SetFeedback("Conta criada com sucesso!", false);
         yield return new WaitForSeconds(1f);
-        SceneManager.LoadScene("HomeScreen");
+        var targetScene = string.IsNullOrWhiteSpace(successScene) ? "HomeScreen" : successScene;
+        SceneManager.LoadScene(targetScene);
     }
 
     private void HandleVoltarButtonClick()
@@ -283,5 +310,11 @@ public class RegisterScreenHandler : MonoBehaviour
     {
         if (AuthorizationService.Instance != null) return;
         new GameObject("AuthorizationService").AddComponent<AuthorizationService>();
+    }
+
+    private static void EnsureStarterDeckGrantService()
+    {
+        if (StarterDeckGrantService.Instance != null) return;
+        new GameObject("StarterDeckGrantService").AddComponent<StarterDeckGrantService>();
     }
 }
