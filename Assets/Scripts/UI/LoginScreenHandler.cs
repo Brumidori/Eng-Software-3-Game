@@ -168,8 +168,23 @@ public class LoginScreenHandler : MonoBehaviour
     private void HandleLoginSuccess()
     {
         SetFeedback("Login realizado. Validando perfil...", false);
-        EnsureAuthorizationService();
-        AuthorizationService.Instance.ValidatePlayerRole();
+        EnsureStarterDeckGrantService();
+
+        StarterDeckGrantService.Instance.GrantStarterDecks(result =>
+        {
+            if (result != null && result.Success && InventoryService.Instance != null)
+            {
+                InventoryService.Instance.LoadInventory();
+            }
+
+            if (result != null && !result.Success)
+            {
+                Debug.LogWarning($"[LoginScreenHandler] Starter deck grant skipped or failed: {result.Error}");
+            }
+
+            EnsureAuthorizationService();
+            AuthorizationService.Instance.ValidatePlayerRole();
+        });
     }
 
     private void HandleRoleValidated(UserRole role)
@@ -343,6 +358,17 @@ public class LoginScreenHandler : MonoBehaviour
 
         var authorizationServiceGO = new GameObject("AuthorizationService");
         authorizationServiceGO.AddComponent<AuthorizationService>();
+    }
+
+    private static void EnsureStarterDeckGrantService()
+    {
+        if (StarterDeckGrantService.Instance != null)
+        {
+            return;
+        }
+
+        var grantServiceGO = new GameObject("StarterDeckGrantService");
+        grantServiceGO.AddComponent<StarterDeckGrantService>();
     }
 
     private string ResolveTargetScene(UserRole role)

@@ -23,6 +23,9 @@ public class EconomyService : MonoBehaviour
     public static event Action<string, int> OnCurrencyChanged;
     public static event Action<PlayFabError> OnEconomyFailed;
 
+    private readonly HashSet<string> pendingBalanceRequests = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private bool waitingForLoginToFetchBalance;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -33,6 +36,11 @@ public class EconomyService : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+    }
+
+    private void OnDestroy()
+    {
+        PlayFabService.OnLoginSuccess -= HandlePlayFabLoginSuccess;
     }
 
     public void AddCurrency(string virtualCurrencyCode, int amount)
@@ -75,6 +83,23 @@ public class EconomyService : MonoBehaviour
 
     public void GetBalance(string virtualCurrencyCode)
     {
+        if (string.IsNullOrWhiteSpace(virtualCurrencyCode))
+        {
+            Debug.LogError("[EconomyService] Moeda virtual nao pode ser vazia.");
+            return;
+        }
+
+        if (!ValidateAuth(false))
+        {
+            QueueBalanceRequestUntilLogin(virtualCurrencyCode);
+            return;
+        }
+
+        RequestBalanceFromCloudScript(virtualCurrencyCode);
+    }
+
+    private void RequestBalanceFromCloudScript(string virtualCurrencyCode)
+    {
         if (!ValidateAuth())
         {
             return;
@@ -89,6 +114,39 @@ public class EconomyService : MonoBehaviour
             virtualCurrencyCode,
             "consulta"
         );
+    }
+
+    private void QueueBalanceRequestUntilLogin(string virtualCurrencyCode)
+    {
+        pendingBalanceRequests.Add(virtualCurrencyCode);
+
+        if (waitingForLoginToFetchBalance)
+        {
+            return;
+        }
+
+        waitingForLoginToFetchBalance = true;
+        PlayFabService.OnLoginSuccess += HandlePlayFabLoginSuccess;
+        Debug.Log("[EconomyService] Aguardando login PlayFab para consultar saldo pendente.");
+    }
+
+    private void HandlePlayFabLoginSuccess()
+    {
+        PlayFabService.OnLoginSuccess -= HandlePlayFabLoginSuccess;
+        waitingForLoginToFetchBalance = false;
+
+        if (pendingBalanceRequests.Count == 0)
+        {
+            return;
+        }
+
+        var currenciesToRefresh = new List<string>(pendingBalanceRequests);
+        pendingBalanceRequests.Clear();
+
+        foreach (string currencyCode in currenciesToRefresh)
+        {
+            RequestBalanceFromCloudScript(currencyCode);
+        }
     }
 
     private void ExecuteEconomyFunction(
@@ -257,11 +315,14 @@ public class EconomyService : MonoBehaviour
         return true;
     }
 
-    private bool ValidateAuth()
+    private bool ValidateAuth(bool logWarning = true)
     {
         if (PlayFabService.Instance == null || !PlayFabService.Instance.IsLoggedIn())
         {
-            Debug.LogWarning("[EconomyService] Login PlayFab ainda nao foi concluido.");
+            if (logWarning)
+            {
+                Debug.LogWarning("[EconomyService] Login PlayFab ainda nao foi concluido.");
+            }
             return false;
         }
 
