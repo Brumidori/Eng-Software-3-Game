@@ -6,7 +6,9 @@ using UnityEngine;
 /// </summary>
 public class PlayFabLogin : MonoBehaviour
 {
-    [SerializeField] private bool disableAutoLoginWhenLoginUiDetected = true;
+    [SerializeField] private bool enableAutoLogin = false;
+    [SerializeField] private string autoLoginEmail = "user@email.com";
+    [SerializeField] private string autoLoginPassword = "senha123";
 
     private void OnEnable()
     {
@@ -32,30 +34,25 @@ public class PlayFabLogin : MonoBehaviour
         if (PlayFabService.Instance.IsLoggedIn())
         {
             Debug.Log("[PlayFabLogin] Sessao PlayFab ja autenticada.");
+            return;
         }
-        else
+
+        PlayFabService.Instance.Initialize();
+
+        if (!enableAutoLogin)
         {
-            bool loginUiDetected = disableAutoLoginWhenLoginUiDetected && HasLoginUiInScene();
-
-            if (loginUiDetected)
-            {
-                PlayFabService.Instance.Initialize();
-                Debug.Log("[PlayFabLogin] UI de login detectada. Login automatico por Custom ID foi desativado nesta cena.");
-                return;
-            }
-
-            PlayFabService.Instance.Initialize();
-            Debug.Log("[PlayFabLogin] Inicializacao do PlayFab iniciada.");
+            Debug.Log("[PlayFabLogin] Inicializacao do PlayFab iniciada sem auto login.");
+            return;
         }
-    }
 
-    private static bool HasLoginUiInScene()
-    {
-        var loginInput = GameObject.Find("loginInput");
-        var passwordInput = GameObject.Find("senhaInput");
-        var loginButton = GameObject.Find("loginBtn");
+        if (string.IsNullOrWhiteSpace(autoLoginEmail) || string.IsNullOrWhiteSpace(autoLoginPassword))
+        {
+            Debug.LogWarning("[PlayFabLogin] Auto login habilitado, mas email ou senha estao vazios.");
+            return;
+        }
 
-        return loginInput != null && passwordInput != null && loginButton != null;
+        Debug.Log($"[PlayFabLogin] Auto login habilitado para '{autoLoginEmail.Trim()}'.");
+        PlayFabService.Instance.LoginWithEmail(autoLoginEmail, autoLoginPassword);
     }
 
     private void OnPlayFabLoginSuccess()
