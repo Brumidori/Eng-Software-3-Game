@@ -6,7 +6,7 @@ using UnityEngine;
 /// </summary>
 public class PlayFabLogin : MonoBehaviour
 {
-    [SerializeField] private bool enableAutoLogin = true;
+    [SerializeField] private bool enableAutoLogin = false;
     [SerializeField] private string autoLoginEmail = "user@email.com";
     [SerializeField] private string autoLoginPassword = "senha123";
 
