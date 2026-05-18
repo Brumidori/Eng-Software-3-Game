@@ -17,25 +17,23 @@ public class CoinDisplay : MonoBehaviour
 
     private void OnEnable()
     {
-        // Se inscrever para mudanças de saldo
         EconomyService.OnCurrencyChanged += HandleCurrencyChanged;
         StoreService.OnPurchaseCompletedSecure += HandlePurchaseCompleted;
+        PlayFabService.OnLoginSuccess += HandleLoginSuccess;
 
-        // Buscar saldo inicial
-        if (EconomyService.Instance != null)
-        {
-            EconomyService.Instance.GetBalance(currencyCode);
-        }
-        else
-        {
-            Debug.LogWarning("[CoinDisplay] EconomyService não encontrado. Certifique-se que existe na cena.");
-        }
+        RefreshBalance();
     }
 
     private void OnDisable()
     {
         EconomyService.OnCurrencyChanged -= HandleCurrencyChanged;
         StoreService.OnPurchaseCompletedSecure -= HandlePurchaseCompleted;
+        PlayFabService.OnLoginSuccess -= HandleLoginSuccess;
+    }
+
+    private void HandleLoginSuccess()
+    {
+        RefreshBalance();
     }
 
     private void HandlePurchaseCompleted(PurchaseResult result)
