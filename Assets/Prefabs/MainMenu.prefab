@@ -254,6 +254,10 @@ PrefabInstance:
       propertyPath: m_TargetGraphic
       value: 
       objectReference: {fileID: 0}
+    - target: {fileID: 4614690461416651201, guid: 1ee5ca3a06a024573bde0411db78d342, type: 3}
+      propertyPath: targetScene
+      value: Loja
+      objectReference: {fileID: 0}
     - target: {fileID: 5358808530566767255, guid: 1ee5ca3a06a024573bde0411db78d342, type: 3}
       propertyPath: m_TargetGraphic
       value: 
@@ -332,7 +336,7 @@ MonoBehaviour:
     defaultSprite: {fileID: 21300000, guid: 00d3961a9ff3e4612a97ededd954927b, type: 3}
     hoverSprite: {fileID: 21300000, guid: 3fa76d0644c7c419c8313fc9490101bc, type: 3}
     currentSprite: {fileID: 21300000, guid: 4705d1421b6844e8aa8a408a02a5df79, type: 3}
-    targetScene: 
+    targetScene: Loja
   - tab: 4
     button: {fileID: 2378827770986876002}
     icon: {fileID: 0}
