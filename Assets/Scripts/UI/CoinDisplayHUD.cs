@@ -24,6 +24,11 @@ public class CoinDisplay : MonoBehaviour
         RefreshBalance();
     }
 
+    private void Start()
+    {
+        RefreshBalance();
+    }
+
     private void OnDisable()
     {
         EconomyService.OnCurrencyChanged -= HandleCurrencyChanged;
@@ -83,9 +88,16 @@ public class CoinDisplay : MonoBehaviour
     /// </summary>
     public void RefreshBalance()
     {
-        if (EconomyService.Instance != null)
+        var economyService = EconomyService.Instance;
+
+        if (economyService == null)
         {
-            EconomyService.Instance.GetBalance(currencyCode);
+            economyService = FindFirstObjectByType<EconomyService>();
+        }
+
+        if (economyService != null)
+        {
+            economyService.GetBalance(currencyCode);
         }
     }
 }

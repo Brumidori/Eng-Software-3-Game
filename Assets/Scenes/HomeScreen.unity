@@ -585,7 +585,6 @@ GameObject:
   - component: {fileID: 353247684}
   - component: {fileID: 353247683}
   - component: {fileID: 353247686}
-  - component: {fileID: 353247687}
   m_Layer: 0
   m_Name: EventSystem
   m_TagString: Untagged
@@ -661,7 +660,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 353247682}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 01614664b831546d2ae94a42149d80ac, type: 3}
   m_Name: 
@@ -685,23 +684,6 @@ MonoBehaviour:
   m_PointerBehavior: 0
   m_CursorLockBehavior: 0
   m_ScrollDeltaPerTick: 6
---- !u!114 &353247687
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 353247682}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fd9a59e5081477b429666ae5a9a21478, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EconomyService
-  addCurrencyFunction: EconomyAddCurrency
-  subtractCurrencyFunction: EconomySubtractCurrency
-  getBalanceFunction: EconomyGetBalance
-  generatePlayStreamEvent: 1
-  useLatestRevision: 1
 --- !u!1 &484112505
 GameObject:
   m_ObjectHideFlags: 0
@@ -822,6 +804,55 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 484112505}
   m_CullTransparentMesh: 1
+--- !u!1 &584873393
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 584873395}
+  - component: {fileID: 584873394}
+  m_Layer: 0
+  m_Name: Service
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &584873394
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 584873393}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd9a59e5081477b429666ae5a9a21478, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EconomyService
+  addCurrencyFunction: EconomyAddCurrency
+  subtractCurrencyFunction: EconomySubtractCurrency
+  getBalanceFunction: EconomyGetBalance
+  generatePlayStreamEvent: 1
+  useLatestRevision: 1
+--- !u!4 &584873395
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 584873393}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &597441820
 GameObject:
   m_ObjectHideFlags: 0
@@ -2793,3 +2824,4 @@ SceneRoots:
   - {fileID: 2001}
   - {fileID: 358744608276597389}
   - {fileID: 353247685}
+  - {fileID: 584873395}
