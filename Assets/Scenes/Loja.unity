@@ -1007,7 +1007,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 355c9065b0e4944b3bb72a8a16f4808c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayFabLogin
-  enableAutoLogin: 1
+  enableAutoLogin: 0
   autoLoginEmail: user@email.com
   autoLoginPassword: senha123
 --- !u!114 &1031160769
