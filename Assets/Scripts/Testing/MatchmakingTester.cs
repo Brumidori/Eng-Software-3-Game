@@ -10,11 +10,19 @@ public class MatchmakingTester : PlayFabTerminalTester
     private const string LegacyUserBId = "test_user_456";
     private const string DefaultUserBId = "teste_user_456";
 
-    [Header("Queue e jogadores de teste")]
+    [Header("Queue")]
     [SerializeField] private string queueName = DefaultQueueId;
+
+    [Header("Login por CustomId")]
     [SerializeField] private string userAId = "test_user_123";
     [SerializeField] private string userBId = DefaultUserBId;
     [SerializeField] private bool createMissingUsersForTest = false;
+
+    [Header("Login por Email (usuarios registrados)")]
+    [SerializeField] private string emailA = "";
+    [SerializeField] private string passwordA = "";
+    [SerializeField] private string emailB = "";
+    [SerializeField] private string passwordB = "";
 
     [Header("Tempos")]
     [SerializeField] private int timeoutSeconds = 30;
@@ -43,7 +51,7 @@ public class MatchmakingTester : PlayFabTerminalTester
         MatchmakingService.OnMatchFound += HandleMatchFound;
         MatchmakingService.OnMatchmakingFailed += HandleError;
         Debug.Log($"[{Title}] Config atual: queue='{queueName}', userA='{userAId}', userB='{userBId}', createMissingUsersForTest={createMissingUsersForTest}");
-        PrintReadyMessage(Title, "1=iniciar teste 2x usuarios, 2=cancelar busca, 3=mostrar estado atual, 4=mostrar diagnostico");
+        PrintReadyMessage(Title, "1=iniciar (CustomId), 2=cancelar, 3=estado, 4=diagnostico, 5=iniciar (Email/Senha)");
     }
 
     private void OnDestroy()
@@ -77,6 +85,15 @@ public class MatchmakingTester : PlayFabTerminalTester
         else if (keyboard.digit4Key.wasPressedThisFrame)
         {
             Debug.Log($"[{Title}] {MatchmakingService.Instance.GetDiagnosticsSummary()}");
+        }
+        else if (keyboard.digit5Key.wasPressedThisFrame)
+        {
+            if (string.IsNullOrWhiteSpace(emailA) || string.IsNullOrWhiteSpace(emailB))
+            {
+                Debug.LogWarning($"[{Title}] Preencha emailA, passwordA, emailB e passwordB no Inspector.");
+                return;
+            }
+            MatchmakingService.Instance.StartTwoUserMatchmakingWithEmail(queueName, emailA, passwordA, emailB, passwordB, timeoutSeconds, pollIntervalSeconds);
         }
     }
 
