@@ -18,9 +18,14 @@ public class MatchmakingService : MonoBehaviour
         Failed
     }
 
+    public enum TestUserLoginType { CustomId, EmailPassword }
+
     private sealed class MatchmakingTestUser
     {
+        public TestUserLoginType loginType;
         public string customId;
+        public string email;
+        public string password;
         public PlayFabClientInstanceAPI clientApi;
         public PlayFabMultiplayerInstanceAPI multiplayerApi;
         public PlayFabAuthenticationContext authContext;
@@ -61,32 +66,61 @@ public class MatchmakingService : MonoBehaviour
 
     public void StartTwoUserMatchmaking(string queue, string userAId, string userBId, int timeout, float pollInterval, bool allowCreateMissingUsers = false)
     {
-        if (matchmakingRoutine != null)
-        {
-            Debug.LogWarning("[MatchmakingService] Ja existe um teste de matchmaking em andamento.");
-            return;
-        }
+        if (!ValidateMatchmakingStart(queue)) return;
 
-        if (string.IsNullOrWhiteSpace(queue) || string.IsNullOrWhiteSpace(userAId) || string.IsNullOrWhiteSpace(userBId))
-        {
-            Debug.LogError("[MatchmakingService] Queue e usuarios devem estar preenchidos.");
-            SetState(MatchmakingState.Failed);
-            return;
-        }
-
-        queueName = queue.Trim();
-        timeoutSeconds = Mathf.Max(5, timeout);
+        queueName           = queue.Trim();
+        timeoutSeconds      = Mathf.Max(5, timeout);
         pollIntervalSeconds = Mathf.Max(0.5f, pollInterval);
         createMissingUsersForTest = allowCreateMissingUsers;
-        userA = new MatchmakingTestUser { customId = userAId.Trim() };
-        userB = new MatchmakingTestUser { customId = userBId.Trim() };
+        userA = new MatchmakingTestUser { loginType = TestUserLoginType.CustomId, customId = userAId.Trim() };
+        userB = new MatchmakingTestUser { loginType = TestUserLoginType.CustomId, customId = userBId.Trim() };
         cancellationRequested = false;
 
-        string titleId = PlayFabSettings.staticSettings != null ? PlayFabSettings.staticSettings.TitleId : "<desconhecido>";
-        Debug.Log($"[MatchmakingService] Iniciando teste para queue '{queueName}' com usuarios '{userA.customId}' e '{userB.customId}'. Timeout: {timeoutSeconds}s. TitleId='{titleId}' CreateMissingUsers={createMissingUsersForTest}");
+        Debug.Log($"[MatchmakingService] Iniciando (CustomId) queue='{queueName}' userA='{userAId}' userB='{userBId}'");
         SetState(MatchmakingState.Searching);
         matchmakingRoutine = StartCoroutine(RunTwoUserMatchmaking());
     }
+
+    public void StartTwoUserMatchmakingWithEmail(string queue, string emailA, string passwordA, string emailB, string passwordB, int timeout, float pollInterval)
+    {
+        if (!ValidateMatchmakingStart(queue)) return;
+
+        queueName           = queue.Trim();
+        timeoutSeconds      = Mathf.Max(5, timeout);
+        pollIntervalSeconds = Mathf.Max(0.5f, pollInterval);
+        createMissingUsersForTest = false;
+        userA = new MatchmakingTestUser { loginType = TestUserLoginType.EmailPassword, email = emailA.Trim(), password = passwordA };
+        userB = new MatchmakingTestUser { loginType = TestUserLoginType.EmailPassword, email = emailB.Trim(), password = passwordB };
+        cancellationRequested = false;
+
+        Debug.Log($"[MatchmakingService] Iniciando (Email) queue='{queueName}' userA='{emailA}' userB='{emailB}'");
+        SetState(MatchmakingState.Searching);
+        matchmakingRoutine = StartCoroutine(RunTwoUserMatchmaking());
+    }
+
+    private bool ValidateMatchmakingStart(string queue)
+    {
+        if (matchmakingRoutine != null)
+        {
+            Debug.LogWarning("[MatchmakingService] Ja existe um teste de matchmaking em andamento.");
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(queue))
+        {
+            Debug.LogError("[MatchmakingService] Queue deve estar preenchida.");
+            SetState(MatchmakingState.Failed);
+            return false;
+        }
+        return true;
+    }
+
+#if UNITY_EDITOR
+    public void SimularMatchEncontrado(string matchId = "debug-match-id")
+    {
+        SetState(MatchmakingState.Matched);
+        OnMatchFound?.Invoke(matchId);
+    }
+#endif
 
     public void CancelCurrentSearch()
     {
@@ -178,20 +212,31 @@ public class MatchmakingService : MonoBehaviour
 
         LoginResult loginResult = null;
         PlayFabError loginError = null;
-        yield return LoginWithCustomId(user.clientApi, user.customId, false, result => loginResult = result, error => loginError = error);
 
-        if (loginError != null && loginError.Error == PlayFabErrorCode.AccountNotFound && createMissingUsersForTest)
+        if (user.loginType == TestUserLoginType.EmailPassword)
         {
-            Debug.LogWarning($"[MatchmakingService] Usuario '{user.customId}' nao existe no Title atual. Tentando CreateAccount=true para ambiente de teste.");
-            loginResult = null;
-            loginError = null;
-            yield return LoginWithCustomId(user.clientApi, user.customId, true, result => loginResult = result, error => loginError = error);
+            yield return LoginWithEmail(user.clientApi, user.email, user.password,
+                r => loginResult = r, e => loginError = e);
+        }
+        else
+        {
+            yield return LoginWithCustomIdComRetry(user.clientApi, user.customId, false,
+                r => loginResult = r, e => loginError = e);
+
+            if (loginError != null && loginError.Error == PlayFabErrorCode.AccountNotFound && createMissingUsersForTest)
+            {
+                Debug.LogWarning($"[MatchmakingService] Usuario '{user.customId}' nao existe. Tentando CreateAccount=true.");
+                loginResult = null;
+                loginError  = null;
+                yield return LoginWithCustomIdComRetry(user.clientApi, user.customId, true,
+                    r => loginResult = r, e => loginError = e);
+            }
         }
 
         if (loginError != null)
         {
-            string titleId = PlayFabSettings.staticSettings != null ? PlayFabSettings.staticSettings.TitleId : "<desconhecido>";
-            HandlePlayFabFailure($"Falha no login do usuario '{user.customId}' (TitleId='{titleId}', CreateMissingUsers={createMissingUsersForTest})", loginError);
+            string label = user.loginType == TestUserLoginType.EmailPassword ? user.email : user.customId;
+            HandlePlayFabFailure($"Falha no login do usuario '{label}'", loginError);
             yield break;
         }
 
@@ -204,6 +249,54 @@ public class MatchmakingService : MonoBehaviour
         };
 
         Debug.Log($"[MatchmakingService] Usuario '{user.customId}' logado. Entity: {user.entity.Type}/{user.entity.Id}");
+    }
+
+    private static IEnumerator LoginWithEmail(PlayFabClientInstanceAPI api, string email, string password, Action<LoginResult> onSuccess, Action<PlayFabError> onError)
+    {
+        bool done = false;
+
+        api.LoginWithEmailAddress(new LoginWithEmailAddressRequest
+        {
+            Email    = email,
+            Password = password
+        },
+        result => { onSuccess?.Invoke(result); done = true; },
+        error  => { onError?.Invoke(error);   done = true; });
+
+        while (!done) yield return null;
+    }
+
+    private static IEnumerator LoginWithCustomIdComRetry(PlayFabClientInstanceAPI api, string customId, bool createAccount, Action<LoginResult> onSuccess, Action<PlayFabError> onError, int maxRetries = 3)
+    {
+        float[] delays = new float[] { 3f, 6f, 12f };
+
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
+        {
+            LoginResult loginResult = null;
+            PlayFabError loginError = null;
+
+            yield return LoginWithCustomId(api, customId, createAccount,
+                r => loginResult = r,
+                e => loginError = e);
+
+            if (loginResult != null)
+            {
+                onSuccess?.Invoke(loginResult);
+                yield break;
+            }
+
+            bool throttled = loginError?.HttpCode == 429;
+
+            if (!throttled || attempt == maxRetries)
+            {
+                onError?.Invoke(loginError);
+                yield break;
+            }
+
+            float wait = delays[Mathf.Min(attempt, delays.Length - 1)];
+            Debug.LogWarning($"[MatchmakingService] Throttling no login de '{customId}'. Tentativa {attempt + 1}/{maxRetries}. Aguardando {wait}s...");
+            yield return new WaitForSeconds(wait);
+        }
     }
 
     private static IEnumerator LoginWithCustomId(PlayFabClientInstanceAPI api, string customId, bool createAccount, Action<LoginResult> onSuccess, Action<PlayFabError> onError)
