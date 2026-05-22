@@ -14,6 +14,8 @@ public class StoreItemBinder : MonoBehaviour
     private static readonly Dictionary<string, Sprite> spriteCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
     private StoreItemData boundData;
 
+    public StoreItemData BoundData => boundData;
+
     public void ConfigureReferences(Text nameTextRef, Text priceTextRef, Image thumbnailRef, Button buyButtonRef)
     {
         nameText = nameTextRef ?? nameText;
