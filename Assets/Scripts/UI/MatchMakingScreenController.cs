@@ -7,13 +7,16 @@ public class MatchMakingScreenController : MonoBehaviour
 {
     [Header("Configuração")]
     [SerializeField] private string cenaHomeScreen    = "HomeScreen";
-    [SerializeField] private string cenaPartida       = "GameScene";
+    [SerializeField] private string cenaPartida       = "BrainDuelArena";
     [SerializeField] private int    contagemRegressiva = 3;
 
-    private const string TextoBuscando   = "Buscando oponente";
-    private const string TextoEncontrado = "Oponente encontrado!\nIniciando partida em {0}...";
-    private const string TextoCancelado  = "Busca cancelada.";
-    private const string TextoErro       = "Erro ao buscar partida.\nTente novamente.";
+    [Header("Visual")]
+    [SerializeField] private int tamanhoFonte = 48;
+
+    private const string TextoBuscando   = "BUSCANDO OPONENTE";
+    private const string TextoEncontrado = "OPONENTE ENCONTRADO!\nINICIANDO PARTIDA EM {0}...";
+    private const string TextoCancelado  = "BUSCA CANCELADA.";
+    private const string TextoErro       = "ERRO AO BUSCAR PARTIDA.\nTENTE NOVAMENTE.";
 
     private Text      _statusText;
     private Button    _btnCancelar;
@@ -57,49 +60,77 @@ public class MatchMakingScreenController : MonoBehaviour
         SetBuscando();
     }
 
+#if UNITY_EDITOR
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.M))
+            MatchmakingService.Instance?.SimularMatchEncontrado();
+    }
+#endif
+
     // ────────────────────────────────────────────────────────
     // Criação automática do texto de status
     // ────────────────────────────────────────────────────────
 
     private void CriarTextoStatus()
     {
-        // Procura canvas na cena
-        var canvas = FindObjectOfType<Canvas>();
+        // Busca o Canvas da própria cena ativa, ignorando DontDestroyOnLoad
+        Canvas canvas = null;
+        foreach (var c in FindObjectsOfType<Canvas>())
+        {
+            if (c.gameObject.scene == gameObject.scene)
+            {
+                canvas = c;
+                break;
+            }
+        }
+
         if (canvas == null)
         {
             Debug.LogError("[MatchMaking] Nenhum Canvas encontrado na cena.");
             return;
         }
 
-        // Cria GameObject de texto
-        var go = new GameObject("TxtStatusMatchmaking");
-        go.transform.SetParent(canvas.transform, false);
+        // Container com fundo azul escuro transparente
+        var container = new GameObject("TxtStatusMatchmaking");
+        container.transform.SetParent(canvas.transform, false);
 
-        // RectTransform centralizado
+        var containerRt = container.AddComponent<RectTransform>();
+        containerRt.anchorMin        = new Vector2(0.5f, 0.5f);
+        containerRt.anchorMax        = new Vector2(0.5f, 0.5f);
+        containerRt.pivot            = new Vector2(0.5f, 0.5f);
+        containerRt.anchoredPosition = Vector2.zero;
+        containerRt.sizeDelta        = new Vector2(740f, 120f);
+
+        var bg = container.AddComponent<Image>();
+        bg.color = new Color(0.05f, 0.1f, 0.25f, 0.75f);
+
+        // Texto filho do container
+        var go = new GameObject("Label");
+        go.transform.SetParent(container.transform, false);
+
         var rt = go.AddComponent<RectTransform>();
-        rt.anchorMin        = new Vector2(0.5f, 0.5f);
-        rt.anchorMax        = new Vector2(0.5f, 0.5f);
-        rt.pivot            = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition = Vector2.zero;
-        rt.sizeDelta        = new Vector2(700f, 200f);
+        rt.anchorMin  = Vector2.zero;
+        rt.anchorMax  = Vector2.one;
+        rt.offsetMin  = new Vector2(16f, 8f);
+        rt.offsetMax  = new Vector2(-16f, -8f);
 
         // Componente Text
-        _statusText                 = go.AddComponent<Text>();
-        _statusText.font            = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        _statusText.fontSize        = 32;
-        _statusText.fontStyle       = FontStyle.Bold;
-        _statusText.alignment       = TextAnchor.MiddleCenter;
-        _statusText.color           = Color.white;
+        _statusText                    = go.AddComponent<Text>();
+        _statusText.font               = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        _statusText.fontSize           = tamanhoFonte;
+        _statusText.fontStyle          = FontStyle.Bold;
+        _statusText.alignment          = TextAnchor.MiddleCenter;
+        _statusText.color              = Color.white;
         _statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
         _statusText.verticalOverflow   = VerticalWrapMode.Overflow;
 
         // Sombra leve para legibilidade
-        var shadow       = go.AddComponent<Shadow>();
+        var shadow            = go.AddComponent<Shadow>();
         shadow.effectColor    = new Color(0f, 0f, 0f, 0.6f);
         shadow.effectDistance = new Vector2(2f, -2f);
 
-        // Garante que fique sobre o background
-        go.transform.SetAsLastSibling();
+        container.transform.SetAsLastSibling();
     }
 
     // ────────────────────────────────────────────────────────
@@ -186,6 +217,7 @@ public class MatchMakingScreenController : MonoBehaviour
 
     private IEnumerator ContagemRegressiva()
     {
+        SetCor(Color.white);
         for (int i = contagemRegressiva; i > 0; i--)
         {
             SetTexto(string.Format(TextoEncontrado, i));
@@ -202,6 +234,12 @@ public class MatchMakingScreenController : MonoBehaviour
     {
         if (_statusText != null)
             _statusText.text = texto;
+    }
+
+    private void SetCor(Color cor)
+    {
+        if (_statusText != null)
+            _statusText.color = cor;
     }
 
     private void StopAnimations()
