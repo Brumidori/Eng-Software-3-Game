@@ -619,7 +619,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuItemHover
   tab: 1
-  targetScene: 
+  targetScene: Profile
   defaultSprite: {fileID: 21300000, guid: 6ad8b786457ef4d0f806eeb74e12baf6, type: 3}
   hoverSprite: {fileID: -1317948474848665188, guid: 111125d39ea804f3689de42d3fbd513b, type: 3}
   currentSprite: {fileID: 21300000, guid: fa328f2c5deb140f68a888f6864ae573, type: 3}
