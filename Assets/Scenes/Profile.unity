@@ -2445,6 +2445,7 @@ GameObject:
   - component: {fileID: 1066319351}
   - component: {fileID: 1066319350}
   - component: {fileID: 1066319349}
+  - component: {fileID: 1066319353}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -2539,6 +2540,33 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!114 &1066319353
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1066319348}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f0d27395310875443b929f38bc8b641a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ProfileUIBinder
+  playerNameText: {fileID: 549554208}
+  levelText: {fileID: 1529566760}
+  xpText: {fileID: 1222622586}
+  xpSlider: {fileID: 536150745}
+  winsText: {fileID: 1376291320}
+  lossesText: {fileID: 172900545}
+  accuracyText: {fileID: 868075932}
+  titleText: {fileID: 2098975511}
+  brainCoinsText: {fileID: 0}
+  avatarImage: {fileID: 1502664862}
+  avatarSprites: []
+  populateDecks: 1
+  clearExistingDecks: 1
+  decksContainer: {fileID: 0}
+  deckCardPrefab: {fileID: 0}
 --- !u!1 &1114688850
 GameObject:
   m_ObjectHideFlags: 0
