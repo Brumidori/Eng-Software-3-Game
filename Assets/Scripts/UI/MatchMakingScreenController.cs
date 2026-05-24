@@ -6,9 +6,14 @@ using UnityEngine.SceneManagement;
 public class MatchMakingScreenController : MonoBehaviour
 {
     [Header("Configuração")]
-    [SerializeField] private string cenaHomeScreen    = "HomeScreen";
-    [SerializeField] private string cenaPartida       = "BrainDuelArena";
+    [SerializeField] private string cenaHomeScreen     = "HomeScreen";
+    [SerializeField] private string cenaPartida        = "BrainDuelArena";
     [SerializeField] private int    contagemRegressiva = 3;
+
+    [Header("Matchmaking")]
+    [SerializeField] private string queueName            = "BrainDuelPublicQueue";
+    [SerializeField] private int    timeoutSeconds       = 60;
+    [SerializeField] private float  pollIntervalSeconds  = 3f;
 
     [Header("Visual")]
     [SerializeField] private int tamanhoFonte = 48;
@@ -58,6 +63,15 @@ public class MatchMakingScreenController : MonoBehaviour
     private void Start()
     {
         SetBuscando();
+
+        var service = MatchmakingService.Instance;
+        if (service == null)
+        {
+            var go = new GameObject("MatchmakingService");
+            service = go.AddComponent<MatchmakingService>();
+        }
+
+        service.StartSinglePlayerMatchmaking(queueName, timeoutSeconds, pollIntervalSeconds);
     }
 
 #if UNITY_EDITOR
