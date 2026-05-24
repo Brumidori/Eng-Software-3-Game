@@ -62,13 +62,13 @@ public class RankingScreenController : MonoBehaviour
 
         if (novoTipo == TipoRanking.Semanal)
         {
-            if (imgSemanal != null) imgSemanal.sprite = spriteSemanalAceso;
-            if (imgMensal != null) imgMensal.sprite = spriteMensalApagado;
+            if (imgSemanal != null) imgSemanal.sprite = spriteSemanalApagado;
+            if (imgMensal != null) imgMensal.sprite = spriteMensalAceso;
         }
         else
         {
-            if (imgSemanal != null) imgSemanal.sprite = spriteSemanalApagado;
-            if (imgMensal != null) imgMensal.sprite = spriteMensalAceso;
+            if (imgSemanal != null) imgSemanal.sprite = spriteSemanalAceso;
+            if (imgMensal != null) imgMensal.sprite = spriteMensalApagado;
         }
 
         ConfigurarTabelaVazia("Carregando...");

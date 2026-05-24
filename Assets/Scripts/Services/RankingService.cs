@@ -18,8 +18,8 @@ public class RankingService : MonoBehaviour
     public static RankingService Instance { get; private set; }
 
     //Configuração das Estatísticas"
-    private string statSemanal = "xp_mensal";
-    private string statMensal = "xp_mensal";
+    private string statSemanal = "vitorias_semanal";
+    private string statMensal  = "vitorias_mensal";
 
     // Eventos para notificar o RankingScreenController sobre os dados recebidos
     public static event Action<List<PlayerLeaderboardEntry>, TipoRanking> OnRankingCarregado;
@@ -109,11 +109,12 @@ public class RankingService : MonoBehaviour
             new StatisticUpdate { StatisticName = "partidas_totais_mensal", Value = 1 }
         };
 
-        // Se o jogador ganhou, adiciona 1 vitória em ambos
+        // Se o jogador ganhou, adiciona 1 vitória em ambos os rankings e no total histórico
         if (venceu)
         {
             atualizacoes.Add(new StatisticUpdate { StatisticName = "vitorias_semanal", Value = 1 });
             atualizacoes.Add(new StatisticUpdate { StatisticName = "vitorias_mensal", Value = 1 });
+            atualizacoes.Add(new StatisticUpdate { StatisticName = "wins", Value = 1 });
         }
 
         var request = new UpdatePlayerStatisticsRequest { Statistics = atualizacoes };
