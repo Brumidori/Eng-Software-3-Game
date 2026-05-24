@@ -982,8 +982,7 @@ GameObject:
   - component: {fileID: 1031160763}
   - component: {fileID: 1031160762}
   - component: {fileID: 1031160766}
-  - component: {fileID: 1031160769}
-  - component: {fileID: 1031160770}
+  - component: {fileID: 1031160768}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -1126,18 +1125,6 @@ MonoBehaviour:
   catalogVersion: mainCatalog
   itemsStoreId: itensStore
   decksStoreId: decksStore
---- !u!114 &1031160767
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1031160761}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1a30aa806272baa4c978014eebd96570, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::StoreService
 --- !u!114 &1031160768
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1153,35 +1140,6 @@ MonoBehaviour:
   enableAutoLogin: 1
   autoLoginEmail: user@email.com
   autoLoginPassword: senha123
---- !u!114 &1031160769
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1031160761}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fd9a59e5081477b429666ae5a9a21478, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EconomyService
-  addCurrencyFunction: EconomyAddCurrency
-  subtractCurrencyFunction: EconomySubtractCurrency
-  getBalanceFunction: EconomyGetBalance
-  generatePlayStreamEvent: 1
-  useLatestRevision: 1
---- !u!114 &1031160770
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1031160761}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 493cd491c46e24b438f75b3ce88c095a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::InventoryService
 --- !u!1 &1059268029
 GameObject:
   m_ObjectHideFlags: 0
@@ -1877,6 +1835,50 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1201837776}
   m_CullTransparentMesh: 1
+--- !u!1 &1283977929
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1283977931}
+  - component: {fileID: 1283977930}
+  m_Layer: 0
+  m_Name: InventoryService
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1283977930
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1283977929}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 493cd491c46e24b438f75b3ce88c095a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InventoryService
+--- !u!4 &1283977931
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1283977929}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1290656671
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -4008,4 +4010,4 @@ SceneRoots:
   - {fileID: 1082490392}
   - {fileID: 679810433}
   - {fileID: 1113910908}
-  - {fileID: 1164952803}
+  - {fileID: 1283977931}
