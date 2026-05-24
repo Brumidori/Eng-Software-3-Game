@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using PlayFab;
 using PlayFab.ClientModels;
 using UnityEngine;
@@ -162,8 +163,7 @@ public class StoreService : MonoBehaviour
             return;
         }
 
-        var success = resultData.TryGetValue("success", out var successObj) && 
-                     (successObj is bool successBool) && successBool;
+        var success = TryGetBool(resultData, "success");
 
         if (!success)
         {
@@ -178,7 +178,7 @@ public class StoreService : MonoBehaviour
 
             Debug.LogWarning($"[StoreService] Compra rejeitada: {errorMessage}");
 
-            resultData.TryGetValue("currentBalance", out var balanceObj);
+            var currentBalance = TryGetInt(resultData, "currentBalance");
             
             var purchaseResult = new PurchaseResult
             {
@@ -186,7 +186,7 @@ public class StoreService : MonoBehaviour
                 ItemId = item.itemId,
                 CurrencyCode = item.virtualCurrency,
                 Error = errorMessage,
-                NewBalance = balanceObj is int balance ? balance : 0
+                NewBalance = currentBalance
             };
             
             onComplete?.Invoke(purchaseResult);
@@ -195,8 +195,7 @@ public class StoreService : MonoBehaviour
         }
 
         // Sucesso na compra
-        resultData.TryGetValue("newBalance", out var newBalanceObj);
-        var newBalance = newBalanceObj is int nb ? nb : 0;
+        var newBalance = TryGetInt(resultData, "newBalance");
 
         Debug.Log($"[StoreService] ✅ Compra concluída com sucesso! ItemId={item.itemId}, Novo saldo={newBalance}");
 
@@ -238,6 +237,34 @@ public class StoreService : MonoBehaviour
         if (functionResult is Dictionary<string, object> dict)
             return dict;
 
+        // Muitos retornos do PlayFab chegam como IDictionary (não genérico)
+        if (functionResult is IDictionary<string, object> genericDict)
+        {
+            var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in genericDict)
+            {
+                map[pair.Key] = pair.Value;
+            }
+
+            return map;
+        }
+
+        if (functionResult is IDictionary nonGenericDict)
+        {
+            var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            foreach (DictionaryEntry entry in nonGenericDict)
+            {
+                if (entry.Key == null)
+                {
+                    continue;
+                }
+
+                map[entry.Key.ToString()] = entry.Value;
+            }
+
+            return map.Count > 0 ? map : null;
+        }
+
         // Se for string (JSON), tenta parsear
         if (functionResult is string json)
         {
@@ -261,6 +288,62 @@ public class StoreService : MonoBehaviour
         }
 
         return null;
+    }
+
+    private static bool TryGetBool(Dictionary<string, object> data, string key)
+    {
+        if (data == null || string.IsNullOrWhiteSpace(key) || !data.TryGetValue(key, out var raw) || raw == null)
+        {
+            return false;
+        }
+
+        if (raw is bool boolValue)
+        {
+            return boolValue;
+        }
+
+        var text = raw.ToString();
+        if (bool.TryParse(text, out var parsedBool))
+        {
+            return parsedBool;
+        }
+
+        if (int.TryParse(text, out var parsedInt))
+        {
+            return parsedInt != 0;
+        }
+
+        return false;
+    }
+
+    private static int TryGetInt(Dictionary<string, object> data, string key)
+    {
+        if (data == null || string.IsNullOrWhiteSpace(key) || !data.TryGetValue(key, out var raw) || raw == null)
+        {
+            return 0;
+        }
+
+        if (raw is int intValue)
+        {
+            return intValue;
+        }
+
+        if (raw is long longValue)
+        {
+            return (int)longValue;
+        }
+
+        if (raw is float floatValue)
+        {
+            return (int)floatValue;
+        }
+
+        if (raw is double doubleValue)
+        {
+            return (int)doubleValue;
+        }
+
+        return int.TryParse(raw.ToString(), out var parsed) ? parsed : 0;
     }
 
     private void OnLoadCatalogSuccess(GetCatalogItemsResult result, string catalogVersion, Action<List<StoreItemData>> onSuccess)

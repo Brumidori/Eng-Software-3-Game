@@ -24,6 +24,9 @@ public class StoreUIController : MonoBehaviour
     [Tooltip("Card template already placed in the Scene. It will be cloned for each store item and should stay inactive or hidden.")]
     [SerializeField] private GameObject sceneItemTemplate;
 
+    [Tooltip("Card template used for deck entries. It will be cloned for each deck item and should stay inactive or hidden.")]
+    [SerializeField] private GameObject sceneDeckTemplate;
+
     [Header("Optional Fallback Prefabs")]
     [Tooltip("Optional prefabs kept only as fallback. The card template from the Scene has priority.")]
     [SerializeField] private List<GameObject> availablePrefabs = new List<GameObject>();
@@ -41,13 +44,16 @@ public class StoreUIController : MonoBehaviour
     private Dictionary<string, Sprite> iconMap = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
     private bool storeLoadsStarted;
     private string lastLegacyPurchaseCurrency;
+    private string lastLegacyPurchaseItemId;
+    private string lastLegacyPurchaseStoreId;
+    private HashSet<string> ownedDeckIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     private void Awake()
     {
         BuildIconMap();
         AutoFindRoots();
         TryLoadDefaultPrefabsFromResources();
-        AutoAssignSceneTemplate();
+        AutoAssignSceneTemplates();
     }
 
     private void OnEnable()
@@ -56,6 +62,7 @@ public class StoreUIController : MonoBehaviour
         StoreService.OnPurchaseCompleted += HandlePurchaseCompleted;
         StoreService.OnPurchaseCompletedSecure += HandlePurchaseCompletedSecure;
         StoreService.OnPurchaseFailed += HandlePurchaseFailed;
+        InventoryService.OnInventoryLoaded += HandleInventoryLoaded;
     }
 
     private void OnDisable()
@@ -64,6 +71,7 @@ public class StoreUIController : MonoBehaviour
         StoreService.OnPurchaseCompleted -= HandlePurchaseCompleted;
         StoreService.OnPurchaseCompletedSecure -= HandlePurchaseCompletedSecure;
         StoreService.OnPurchaseFailed -= HandlePurchaseFailed;
+        InventoryService.OnInventoryLoaded -= HandleInventoryLoaded;
     }
 
     private void AutoFindRoots()
@@ -167,8 +175,18 @@ public class StoreUIController : MonoBehaviour
 
         storeLoadsStarted = true;
 
-        ClearChildren(itemsRoot, sceneItemTemplate != null ? sceneItemTemplate.transform : null);
-        ClearChildren(decksRoot, null);
+        // Trigger inventory load so we can filter owned decks
+        if (InventoryService.Instance != null)
+        {
+            InventoryService.Instance.LoadInventory();
+        }
+
+        ClearChildren(itemsRoot,
+            sceneItemTemplate != null ? sceneItemTemplate.transform : null,
+            sceneDeckTemplate != null ? sceneDeckTemplate.transform : null);
+        ClearChildren(decksRoot,
+            sceneItemTemplate != null ? sceneItemTemplate.transform : null,
+            sceneDeckTemplate != null ? sceneDeckTemplate.transform : null);
 
         StoreService.Instance.LoadCatalog(catalogVersion, itemsStoreId, HandleItemsStoreLoaded);
         StoreService.Instance.LoadCatalog(catalogVersion, decksStoreId, HandleDecksStoreLoaded);
@@ -193,7 +211,13 @@ public class StoreUIController : MonoBehaviour
 
         foreach (var item in items)
         {
-            var visualTemplate = ResolveVisualTemplate(item);
+            // Skip decks already owned by the player
+            var isDeckStore = string.Equals(sourceStoreId, decksStoreId, StringComparison.OrdinalIgnoreCase);
+            if (isDeckStore && !string.IsNullOrWhiteSpace(item.itemId) && ownedDeckIds.Contains(item.itemId))
+            {
+                continue;
+            }
+            var visualTemplate = ResolveVisualTemplate(item, sourceStoreId);
 
             if (visualTemplate != null)
             {
@@ -230,11 +254,20 @@ public class StoreUIController : MonoBehaviour
         }
     }
 
-    private GameObject ResolveVisualTemplate(StoreItemData item)
+    private GameObject ResolveVisualTemplate(StoreItemData item, string sourceStoreId)
     {
-        if (sceneItemTemplate != null)
+        var isDeckStore = string.Equals(sourceStoreId, decksStoreId, StringComparison.OrdinalIgnoreCase);
+        var primaryTemplate = isDeckStore ? sceneDeckTemplate : sceneItemTemplate;
+        var secondaryTemplate = isDeckStore ? sceneItemTemplate : sceneDeckTemplate;
+
+        if (primaryTemplate != null)
         {
-            return sceneItemTemplate;
+            return primaryTemplate;
+        }
+
+        if (secondaryTemplate != null)
+        {
+            return secondaryTemplate;
         }
 
         if (item != null && !string.IsNullOrWhiteSpace(item.itemId))
@@ -306,26 +339,22 @@ public class StoreUIController : MonoBehaviour
         {
             Debug.LogWarning("[StoreUIController] PurchaseConfirmationPanel not found. Falling back to direct purchase.");
             lastLegacyPurchaseCurrency = item.virtualCurrency;
+            lastLegacyPurchaseItemId = item.itemId;
+            lastLegacyPurchaseStoreId = item.storeId;
             StoreService.Instance.PurchaseItem(item.itemId, item.virtualCurrency, item.price, catalogVersion, item.storeId);
             return;
         }
 
-        // Obter saldo atual do jogador para a moeda deste item
-        var currentBalance = GetPlayerBalance(item.virtualCurrency);
-
         // Mostrar modal de confirmação
         purchaseConfirmationPanel.Show(
             item,
-            currentBalance,
             onConfirm: OnPurchaseConfirmed,
-            onCancel: () => Debug.Log($"[StoreUIController] Compra de {item.itemId} cancelada pelo usuário")
+            onCancel: () => { }
         );
     }
 
     private void OnPurchaseConfirmed(StoreItemData item)
     {
-        Debug.Log($"[StoreUIController] Iniciando compra segura de {item.itemId}");
-
         // Mostrar progress/loading
         if (PurchaseProgressManager.Instance != null)
         {
@@ -337,13 +366,17 @@ public class StoreUIController : MonoBehaviour
         {
             if (result.Success)
             {
-                Debug.Log($"[StoreUIController] ✅ Compra bem-sucedida!");
+                if (string.Equals(item.storeId, decksStoreId, StringComparison.OrdinalIgnoreCase))
+                {
+                    ownedDeckIds.Add(item.itemId);
+                    RemovePurchasedDeckCard(item.itemId);
+                }
+
                 UpdatePlayerBalance(item.virtualCurrency, result.NewBalance);
                 RequestEconomyBalanceRefresh(item.virtualCurrency);
             }
             else
             {
-                Debug.LogWarning($"[StoreUIController] ❌ Compra falhou: {result.Error}");
             }
         });
     }
@@ -355,15 +388,27 @@ public class StoreUIController : MonoBehaviour
             return;
         }
 
+        if (string.Equals(lastLegacyPurchaseStoreId, decksStoreId, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(lastLegacyPurchaseItemId))
+        {
+            ownedDeckIds.Add(lastLegacyPurchaseItemId);
+            RemovePurchasedDeckCard(lastLegacyPurchaseItemId);
+        }
+
         RequestEconomyBalanceRefresh(lastLegacyPurchaseCurrency);
         lastLegacyPurchaseCurrency = null;
+        lastLegacyPurchaseItemId = null;
+        lastLegacyPurchaseStoreId = null;
     }
 
     private void HandlePurchaseCompletedSecure(PurchaseResult result)
     {
         if (result.Success)
         {
-            Debug.Log($"[StoreUIController] Compra concluída com sucesso! Novo saldo: {result.NewBalance} {result.CurrencyCode}");
+            // If this purchase was a deck, remove it from the UI immediately
+            if (!string.IsNullOrWhiteSpace(result.ItemId))
+            {
+                RemovePurchasedDeckCard(result.ItemId);
+            }
             UpdatePlayerBalance(result.CurrencyCode, result.NewBalance);
             RequestEconomyBalanceRefresh(result.CurrencyCode);
         }
@@ -371,7 +416,76 @@ public class StoreUIController : MonoBehaviour
 
     private void HandlePurchaseFailed(string errorMessage)
     {
-        Debug.LogError($"[StoreUIController] Compra falhou: {errorMessage}");
+    }
+
+    private void HandleInventoryLoaded(List<ItemInstance> items)
+    {
+        if (items == null)
+        {
+            return;
+        }
+
+        ownedDeckIds.Clear();
+        foreach (var it in items)
+        {
+            if (it == null)
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(it.ItemId)) continue;
+            ownedDeckIds.Add(it.ItemId);
+        }
+
+        // Remove any deck cards already present in the UI
+        FilterExistingDeckCards();
+    }
+
+    private void FilterExistingDeckCards()
+    {
+        if (decksRoot == null) return;
+
+        for (int i = decksRoot.childCount - 1; i >= 0; i--)
+        {
+            var child = decksRoot.GetChild(i);
+
+            // Skip templates or non-active
+            if (child == null) continue;
+
+            var binder = child.GetComponent<StoreItemBinder>();
+            if (binder == null) continue;
+
+            var bound = binder.BoundData;
+            if (bound == null || string.IsNullOrWhiteSpace(bound.itemId)) continue;
+
+            if (ownedDeckIds.Contains(bound.itemId))
+            {
+                Destroy(child.gameObject);
+            }
+        }
+    }
+
+    private void RemovePurchasedDeckCard(string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(itemId) || decksRoot == null)
+        {
+            return;
+        }
+
+        ownedDeckIds.Add(itemId);
+
+        for (int i = decksRoot.childCount - 1; i >= 0; i--)
+        {
+            var child = decksRoot.GetChild(i);
+            if (child == null) continue;
+            var binder = child.GetComponent<StoreItemBinder>();
+            if (binder == null) continue;
+            var bound = binder.BoundData;
+            if (bound != null && string.Equals(bound.itemId, itemId, StringComparison.OrdinalIgnoreCase))
+            {
+                Destroy(child.gameObject);
+            }
+        }
     }
 
     private int GetPlayerBalance(string currencyCode)
@@ -404,38 +518,60 @@ public class StoreUIController : MonoBehaviour
         EconomyService.Instance.GetBalance(currencyCode);
     }
 
-    private void AutoAssignSceneTemplate()
+    private void AutoAssignSceneTemplates()
     {
-        if (sceneItemTemplate != null)
+        if (sceneItemTemplate == null)
         {
-            return;
+            sceneItemTemplate = FindTemplateByName(itemsRoot, "CardItemTemplate") ?? FindTemplateByName(decksRoot, "CardItemTemplate");
         }
 
-        if (itemsRoot == null)
+        if (sceneDeckTemplate == null)
         {
-            return;
-        }
-
-        for (int i = 0; i < itemsRoot.childCount; i++)
-        {
-            var child = itemsRoot.GetChild(i);
-            if (child.GetComponent<StoreItemBinder>() != null)
-            {
-                sceneItemTemplate = child.gameObject;
-                return;
-            }
+            sceneDeckTemplate = FindTemplateByName(itemsRoot, "CardDeckTemplate") ?? FindTemplateByName(decksRoot, "CardDeckTemplate");
         }
     }
 
-    private static void ClearChildren(Transform root, Transform preservedChild)
+    private static GameObject FindTemplateByName(Transform root, string templateName)
+    {
+        if (root == null || string.IsNullOrWhiteSpace(templateName))
+        {
+            return null;
+        }
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            var child = root.GetChild(i);
+            if (string.Equals(child.name, templateName, StringComparison.OrdinalIgnoreCase))
+            {
+                return child.gameObject;
+            }
+        }
+
+        return null;
+    }
+
+    private static void ClearChildren(Transform root, params Transform[] preservedChildren)
     {
         if (root == null) return;
         for (int i = root.childCount - 1; i >= 0; i--)
         {
             var child = root.GetChild(i);
-            if (preservedChild != null && child == preservedChild)
+            if (preservedChildren != null)
             {
-                continue;
+                var shouldPreserve = false;
+                for (int preservedIndex = 0; preservedIndex < preservedChildren.Length; preservedIndex++)
+                {
+                    if (preservedChildren[preservedIndex] != null && child == preservedChildren[preservedIndex])
+                    {
+                        shouldPreserve = true;
+                        break;
+                    }
+                }
+
+                if (shouldPreserve)
+                {
+                    continue;
+                }
             }
 
             Destroy(child.gameObject);
