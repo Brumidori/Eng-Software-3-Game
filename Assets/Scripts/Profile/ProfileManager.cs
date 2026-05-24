@@ -31,6 +31,8 @@ public class ProfileManager : MonoBehaviour
     private string equippedDeckId = string.Empty;
     private bool inventoryLoaded;
     private bool equippedLoaded;
+    private bool statsLoaded;
+    private bool accountLoaded;
 
     private void Awake()
     {
@@ -40,25 +42,25 @@ public class ProfileManager : MonoBehaviour
         }
     }
 
-private void Start()
-{
-    Debug.Log("[ProfileManager] Start chamado");
-    Debug.Log($"[ProfileManager] profileUIBinder = {profileUIBinder}");
-    
-    var fakeData = PlayerProfileData.CreatePlaceholder();
-    profileUIBinder.Bind(fakeData);
-}
+    private void Start()
+    {
+        LoadProfile();
+    }
 
     private void LoadProfile()
     {
         currentProfile = PlayerProfileData.CreateDefault();
         inventoryLoaded = false;
-        equippedLoaded = false;
+        equippedLoaded  = false;
+        statsLoaded     = false;
+        accountLoaded   = false;
         ownedDeckIds.Clear();
         equippedDeckId = string.Empty;
 
         RequestInventory();
         RequestEquippedDeck();
+        RequestPlayerStats();
+        RequestAccountInfo();
     }
 
     private void RequestInventory()
@@ -107,9 +109,52 @@ private void Start()
             HandlePlayFabError);
     }
 
+    private void RequestPlayerStats()
+    {
+        PlayFabClientAPI.GetPlayerStatistics(
+            new GetPlayerStatisticsRequest
+            {
+                StatisticNames = new List<string> { "wins", "losses" }
+            },
+            result =>
+            {
+                if (result?.Statistics != null)
+                {
+                    foreach (var stat in result.Statistics)
+                    {
+                        if (stat.StatisticName == "wins")   currentProfile.wins   = stat.Value;
+                        if (stat.StatisticName == "losses") currentProfile.losses = stat.Value;
+                    }
+                }
+
+                statsLoaded = true;
+                TryBuildProfile();
+            },
+            HandlePlayFabError);
+    }
+
+    private void RequestAccountInfo()
+    {
+        PlayFabClientAPI.GetAccountInfo(
+            new GetAccountInfoRequest(),
+            result =>
+            {
+                if (result?.AccountInfo?.TitleInfo != null)
+                {
+                    var name = result.AccountInfo.TitleInfo.DisplayName;
+                    if (!string.IsNullOrWhiteSpace(name))
+                        currentProfile.displayName = name;
+                }
+
+                accountLoaded = true;
+                TryBuildProfile();
+            },
+            HandlePlayFabError);
+    }
+
     private void TryBuildProfile()
     {
-        if (!inventoryLoaded || !equippedLoaded || currentProfile == null)
+        if (!inventoryLoaded || !equippedLoaded || !statsLoaded || !accountLoaded || currentProfile == null)
         {
             return;
         }
