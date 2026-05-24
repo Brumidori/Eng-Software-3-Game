@@ -10,16 +10,12 @@ public class PurchaseConfirmationPanel : MonoBehaviour
 {
     [Header("UI References")]
     [SerializeField] private Text itemNameText;
-    [SerializeField] private Text itemDescriptionText;
     [SerializeField] private Text priceText;
-    [SerializeField] private Text currentBalanceText;
-    [SerializeField] private Text warningText;
     [SerializeField] private Button confirmButton;
     [SerializeField] private Button cancelButton;
     [SerializeField] private CanvasGroup canvasGroup;
 
     private StoreItemData currentItem;
-    private int currentBalance;
     private Action<StoreItemData> onConfirmCallback;
     private Action onCancelCallback;
     private bool isVisible;
@@ -41,16 +37,6 @@ public class PurchaseConfirmationPanel : MonoBehaviour
         SetVisible(false);
     }
 
-    private void OnEnable()
-    {
-        StoreService.OnPurchaseFailed += HandlePurchaseFailed;
-    }
-
-    private void OnDisable()
-    {
-        StoreService.OnPurchaseFailed -= HandlePurchaseFailed;
-    }
-
     private void Update()
     {
         // ESC para cancelar se modal está visível
@@ -69,7 +55,7 @@ public class PurchaseConfirmationPanel : MonoBehaviour
     /// <summary>
     /// Mostra o modal com dados do item a ser comprado
     /// </summary>
-    public void Show(StoreItemData item, int currentBalance, Action<StoreItemData> onConfirm, Action onCancel)
+    public void Show(StoreItemData item, Action<StoreItemData> onConfirm, Action onCancel)
     {
         if (item == null)
         {
@@ -78,7 +64,6 @@ public class PurchaseConfirmationPanel : MonoBehaviour
         }
 
         currentItem = item;
-        this.currentBalance = currentBalance;
         onConfirmCallback = onConfirm;
         onCancelCallback = onCancel;
 
@@ -101,34 +86,12 @@ public class PurchaseConfirmationPanel : MonoBehaviour
                 ? currentItem.itemId 
                 : currentItem.displayName;
 
-        if (itemDescriptionText != null)
-            itemDescriptionText.text = currentItem.description ?? string.Empty;
-
         if (priceText != null)
             priceText.text = $"{currentItem.price} {currentItem.virtualCurrency}";
 
-        if (currentBalanceText != null)
-            currentBalanceText.text = $"Saldo: {currentBalance} {currentItem.virtualCurrency}";
-
-        // Verificar se tem saldo suficiente
-        var hasSufficientBalance = currentBalance >= currentItem.price;
-        
-        if (warningText != null)
-        {
-            if (!hasSufficientBalance)
-            {
-                warningText.text = $"⚠️ Saldo insuficiente! Faltam {currentItem.price - currentBalance} {currentItem.virtualCurrency}";
-                warningText.color = new Color(1f, 0.5f, 0f); // Orange
-            }
-            else
-            {
-                warningText.text = string.Empty;
-            }
-        }
-
-        // Desabilitar botão de confirmação se saldo insuficiente
+        // Confirmar sempre que houver item selecionado
         if (confirmButton != null)
-            confirmButton.interactable = hasSufficientBalance;
+            confirmButton.interactable = currentItem != null;
     }
 
     private void OnConfirmClick()
@@ -148,16 +111,6 @@ public class PurchaseConfirmationPanel : MonoBehaviour
         
         Hide();
         onCancelCallback?.Invoke();
-    }
-
-    private void HandlePurchaseFailed(string errorMessage)
-    {
-        // Se compra falhar, exibir erro no modal
-        if (warningText != null && isVisible)
-        {
-            warningText.text = $"❌ Erro: {errorMessage}";
-            warningText.color = new Color(1f, 0f, 0f); // Red
-        }
     }
 
     private void SetVisible(bool visible)

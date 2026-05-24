@@ -531,7 +531,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: usuario.brainduel@fatec.com.br
+  m_Text: brainduel@fatec.com.br
 --- !u!222 &287974194
 CanvasRenderer:
   m_ObjectHideFlags: 0
