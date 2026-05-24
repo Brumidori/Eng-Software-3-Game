@@ -1865,6 +1865,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::InventoryService
 --- !u!4 &1283977931
+  m_EditorClassIdentifier: Assembly-CSharp::PlayFabLogin
+  enableAutoLogin: 0
+  autoLoginEmail: user@email.com
+  autoLoginPassword: senha123
+--- !u!4 &1164952803
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
