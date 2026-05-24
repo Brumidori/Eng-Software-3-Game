@@ -48,6 +48,7 @@ public class MatchmakingService : MonoBehaviour
     private float pollIntervalSeconds;
     private MatchmakingTestUser userA;
     private MatchmakingTestUser userB;
+    private MatchmakingTestUser singleUser;
     private Coroutine matchmakingRoutine;
     private bool cancellationRequested;
     private bool createMissingUsersForTest;
@@ -62,6 +63,51 @@ public class MatchmakingService : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+    }
+
+    public void StartSinglePlayerMatchmaking(string queue, int timeout = 60, float pollInterval = 3f)
+    {
+        if (matchmakingRoutine != null)
+        {
+            StopCoroutine(matchmakingRoutine);
+            matchmakingRoutine = null;
+        }
+
+        if (string.IsNullOrWhiteSpace(queue))
+        {
+            Debug.LogError("[MatchmakingService] Queue deve estar preenchida.");
+            SetState(MatchmakingState.Failed);
+            return;
+        }
+
+        if (!PlayFabClientAPI.IsClientLoggedIn())
+        {
+            Debug.LogError("[MatchmakingService] Nenhum jogador logado.");
+            SetState(MatchmakingState.Failed);
+            OnMatchmakingFailed?.Invoke(null);
+            return;
+        }
+
+        queueName           = queue.Trim();
+        timeoutSeconds      = Mathf.Max(5, timeout);
+        pollIntervalSeconds = Mathf.Max(0.5f, pollInterval);
+        cancellationRequested = false;
+
+        var authContext = PlayFabSettings.staticPlayer;
+        singleUser = new MatchmakingTestUser
+        {
+            authContext   = authContext,
+            multiplayerApi = new PlayFabMultiplayerInstanceAPI(authContext),
+            entity = new MultiplayerEntityKey
+            {
+                Id   = authContext.EntityId,
+                Type = authContext.EntityType
+            }
+        };
+
+        Debug.Log($"[MatchmakingService] Iniciando matchmaking individual | fila='{queueName}' entity={authContext.EntityType}/{authContext.EntityId}");
+        SetState(MatchmakingState.Searching);
+        matchmakingRoutine = StartCoroutine(RunSinglePlayerMatchmaking());
     }
 
     public void StartTwoUserMatchmaking(string queue, string userAId, string userBId, int timeout, float pollInterval, bool allowCreateMissingUsers = false)
@@ -137,6 +183,47 @@ public class MatchmakingService : MonoBehaviour
     public string GetDiagnosticsSummary()
     {
         return $"Queue='{queueName}' | Estado={CurrentState} | UserA='{userA?.customId}' Ticket='{userA?.ticketId}' Status='{userA?.status}' Match='{userA?.matchId}' | UserB='{userB?.customId}' Ticket='{userB?.ticketId}' Status='{userB?.status}' Match='{userB?.matchId}'";
+    }
+
+    private IEnumerator RunSinglePlayerMatchmaking()
+    {
+        yield return CancelAllTicketsForUser(singleUser);
+
+        yield return CreateTicket(singleUser);
+        if (CurrentState == MatchmakingState.Failed)
+        {
+            FinishRoutine();
+            yield break;
+        }
+
+        var deadline = Time.time + timeoutSeconds;
+        while (Time.time < deadline && !cancellationRequested)
+        {
+            yield return new WaitForSeconds(pollIntervalSeconds);
+            yield return PollTicket(singleUser);
+
+            if (singleUser.status == "Matched" && !string.IsNullOrWhiteSpace(singleUser.matchId))
+            {
+                SetState(MatchmakingState.Matched);
+                Debug.Log($"[MatchmakingService] Match encontrado! MatchId: {singleUser.matchId}");
+                OnMatchFound?.Invoke(singleUser.matchId);
+                FinishRoutine();
+                yield break;
+            }
+        }
+
+        if (cancellationRequested)
+        {
+            yield return CancelTicketIfNeeded(singleUser);
+            SetState(MatchmakingState.Cancelled);
+            FinishRoutine();
+            yield break;
+        }
+
+        yield return CancelTicketIfNeeded(singleUser);
+        SetState(MatchmakingState.TimedOut);
+        Debug.LogWarning($"[MatchmakingService] Timeout após {timeoutSeconds}s sem match.");
+        FinishRoutine();
     }
 
     private IEnumerator RunTwoUserMatchmaking()
