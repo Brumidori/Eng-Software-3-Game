@@ -3,304 +3,194 @@ using System.Collections.Generic;
 using PlayFab;
 using PlayFab.ClientModels;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 public class ProfileManager : MonoBehaviour
 {
-    [Header("References")]
-    [SerializeField] private ProfileUIBinder uiBinder;
+    private static readonly string[] AllDeckIds =
+    {
+        "deckHistoria",
+        "deckEntretenimento",
+        "deckGeografia",
+        "deckCiencia"
+    };
 
-    [Header("PlayFab Requests")]
-    [SerializeField] private bool loadOnStart = true;
-    [SerializeField] private bool requestPlayFabProfile = true;
-    [SerializeField] private bool requestStatistics = true;
-    [SerializeField] private bool requestCurrency = true;
-    [SerializeField] private string currencyCode = "BC";
-    [SerializeField] private bool buildDecksFromIndex = true;
+    private static readonly Dictionary<string, string> DeckCategories = new Dictionary<string, string>
+    {
+        { "deckHistoria", "HISTÓRIA" },
+        { "deckEntretenimento", "ENTRETENIMENTO" },
+        { "deckGeografia", "GEOGRAFIA" },
+        { "deckCiencia", "CIÊNCIA" }
+    };
 
-    [Header("Deck Visual Presets")]
-    [SerializeField] private List<DeckVisualPreset> deckPresets = new List<DeckVisualPreset>();
+    [SerializeField, FormerlySerializedAs("uiBinder")]
+    private ProfileUIBinder profileUIBinder;
 
-    private PlayerProfileData runtimeData;
+    private PlayerProfileData currentProfile;
+    private HashSet<string> ownedDeckIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private string equippedDeckId = string.Empty;
+    private bool inventoryLoaded;
+    private bool equippedLoaded;
 
     private void Awake()
     {
-        if (uiBinder == null)
+        if (profileUIBinder == null)
         {
-            uiBinder = GetComponent<ProfileUIBinder>();
+            profileUIBinder = GetComponent<ProfileUIBinder>();
         }
     }
 
-    private void OnEnable()
+private void Start()
+{
+    Debug.Log("[ProfileManager] Start chamado");
+    Debug.Log($"[ProfileManager] profileUIBinder = {profileUIBinder}");
+    
+    var fakeData = PlayerProfileData.CreatePlaceholder();
+    profileUIBinder.Bind(fakeData);
+}
+
+    private void LoadProfile()
     {
-        PlayerDataService.OnPlayerDataLoaded += HandlePlayerDataLoaded;
-        EconomyService.OnCurrencyChanged += HandleCurrencyChanged;
-        DeckService.OnDecksLoaded += HandleDecksLoaded;
-        DeckService.OnDecksLoadFailed += HandleDecksFailed;
+        currentProfile = PlayerProfileData.CreateDefault();
+        inventoryLoaded = false;
+        equippedLoaded = false;
+        ownedDeckIds.Clear();
+        equippedDeckId = string.Empty;
+
+        RequestInventory();
+        RequestEquippedDeck();
     }
 
-    private void OnDisable()
+    private void RequestInventory()
     {
-        PlayerDataService.OnPlayerDataLoaded -= HandlePlayerDataLoaded;
-        EconomyService.OnCurrencyChanged -= HandleCurrencyChanged;
-        DeckService.OnDecksLoaded -= HandleDecksLoaded;
-        DeckService.OnDecksLoadFailed -= HandleDecksFailed;
-    }
-
-    private void Start()
-    {
-        if (loadOnStart)
-        {
-            LoadProfile();
-        }
-    }
-
-    public void LoadProfile()
-    {
-        runtimeData = PlayerProfileData.CreateDefault();
-
-        var cachedProfile = PlayerDataService.Instance != null ? PlayerDataService.Instance.CurrentProfile : null;
-        if (cachedProfile != null)
-        {
-            MergeProfile(runtimeData, cachedProfile);
-        }
-
-        uiBinder?.Bind(runtimeData);
-
-        PlayerDataService.Instance?.LoadPlayerData();
-
-        if (requestPlayFabProfile)
-        {
-            RequestPlayFabProfile();
-        }
-
-        if (requestStatistics)
-        {
-            RequestStatistics();
-        }
-
-        if (requestCurrency)
-        {
-            EconomyService.Instance?.GetBalance(currencyCode);
-        }
-
-        if (buildDecksFromIndex)
-        {
-            DeckService.Instance?.Initialize();
-            TryBuildDecksFromIndex();
-        }
-    }
-
-    private void HandlePlayerDataLoaded(PlayerProfileData profile)
-    {
-        MergeProfile(runtimeData, profile);
-        uiBinder?.Bind(runtimeData);
-    }
-
-    private void HandleCurrencyChanged(string code, int balance)
-    {
-        if (!string.Equals(code, currencyCode, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        runtimeData.brainCoins = balance;
-        uiBinder?.Bind(runtimeData);
-    }
-
-    private void HandleDecksLoaded()
-    {
-        if (!buildDecksFromIndex)
-        {
-            return;
-        }
-
-        TryBuildDecksFromIndex();
-    }
-
-    private void HandleDecksFailed(PlayFabError error)
-    {
-        Debug.LogWarning("[ProfileManager] Falha ao carregar decks para a tela de perfil.");
-    }
-
-    private void TryBuildDecksFromIndex()
-    {
-        if (DeckService.Instance == null)
-        {
-            return;
-        }
-
-        var index = DeckService.Instance.GetDeckIndex();
-        if (index == null || index.categorias == null)
-        {
-            return;
-        }
-
-        var decks = new List<PlayerDeckData>();
-        foreach (var categoria in index.categorias)
-        {
-            if (categoria == null || !categoria.ativo)
+        PlayFabClientAPI.GetUserInventory(
+            new GetUserInventoryRequest(),
+            result =>
             {
-                continue;
-            }
+                ownedDeckIds.Clear();
 
-            var preset = FindPreset(categoria.nome);
+                if (result != null && result.Inventory != null)
+                {
+                    foreach (var item in result.Inventory)
+                    {
+                        if (item != null && !string.IsNullOrWhiteSpace(item.ItemId)
+                            && item.ItemId.StartsWith("deck", StringComparison.OrdinalIgnoreCase))
+                        {
+                            ownedDeckIds.Add(item.ItemId);
+                        }
+                    }
+                }
+
+                inventoryLoaded = true;
+                TryBuildProfile();
+            },
+            HandlePlayFabError);
+    }
+
+    private void RequestEquippedDeck()
+    {
+        PlayFabClientAPI.GetUserData(
+            new GetUserDataRequest { Keys = new List<string> { "equippedDeckId" } },
+            result =>
+            {
+                equippedDeckId = string.Empty;
+
+                if (result != null && result.Data != null
+                    && result.Data.TryGetValue("equippedDeckId", out var entry))
+                {
+                    equippedDeckId = entry.Value;
+                }
+
+                equippedLoaded = true;
+                TryBuildProfile();
+            },
+            HandlePlayFabError);
+    }
+
+    private void TryBuildProfile()
+    {
+        if (!inventoryLoaded || !equippedLoaded || currentProfile == null)
+        {
+            return;
+        }
+
+        currentProfile.equippedDeckId = equippedDeckId;
+        currentProfile.decks = BuildDecks();
+        profileUIBinder?.Bind(currentProfile);
+    }
+
+    private List<PlayerDeckData> BuildDecks()
+    {
+        var decks = new List<PlayerDeckData>();
+
+        for (int i = 0; i < AllDeckIds.Length; i++)
+        {
+            var deckId = AllDeckIds[i];
+            var category = DeckCategories.TryGetValue(deckId, out var name) ? name : deckId;
+            bool isOwned = ownedDeckIds.Contains(deckId);
 
             decks.Add(new PlayerDeckData
             {
-                id = categoria.nome,
-                category = categoria.nome,
-                colorHex = preset != null ? preset.colorHex : string.Empty,
-                iconName = preset != null ? preset.iconName : string.Empty,
-                isEquipped = !string.IsNullOrWhiteSpace(runtimeData.equippedDeckId)
-                    && string.Equals(runtimeData.equippedDeckId, categoria.nome, StringComparison.OrdinalIgnoreCase)
+                id = deckId,
+                category = category,
+                iconName = string.Empty,
+                isOwned = isOwned,
+                isEquipped = isOwned && string.Equals(deckId, equippedDeckId, StringComparison.OrdinalIgnoreCase)
             });
         }
 
-        runtimeData.decks = decks;
-        uiBinder?.Bind(runtimeData);
+        return decks;
     }
 
-    private DeckVisualPreset FindPreset(string category)
+    public void EquipDeck(string deckId)
     {
-        if (deckPresets == null)
+        if (string.IsNullOrWhiteSpace(deckId) || currentProfile == null)
         {
-            return null;
+            return;
         }
 
-        for (int i = 0; i < deckPresets.Count; i++)
+        if (!ownedDeckIds.Contains(deckId))
         {
-            if (deckPresets[i] != null && deckPresets[i].IsMatch(category))
+            Debug.LogWarning("[ProfileManager] Tentou equipar um deck nao possuido.");
+            return;
+        }
+
+        PlayFabClientAPI.UpdateUserData(
+            new UpdateUserDataRequest
             {
-                return deckPresets[i];
-            }
-        }
-
-        return null;
-    }
-
-    private void RequestPlayFabProfile()
-    {
-        if (PlayFabService.Instance == null || !PlayFabService.Instance.IsLoggedIn())
-        {
-            return;
-        }
-
-        var request = new GetPlayerProfileRequest
-        {
-            ProfileConstraints = new PlayerProfileViewConstraints
+                Data = new Dictionary<string, string> { { "equippedDeckId", deckId } }
+            },
+            result =>
             {
-                ShowDisplayName = true,
-                ShowAvatarUrl = true
-            }
-        };
-
-        PlayFabClientAPI.GetPlayerProfile(request, HandlePlayFabProfileLoaded, HandlePlayFabError);
+                equippedDeckId = deckId;
+                currentProfile.equippedDeckId = deckId;
+                UpdateEquippedFlags(deckId);
+                profileUIBinder?.Bind(currentProfile);
+            },
+            HandlePlayFabError);
     }
 
-    private void HandlePlayFabProfileLoaded(GetPlayerProfileResult result)
+    private void UpdateEquippedFlags(string deckId)
     {
-        if (result == null || result.PlayerProfile == null)
+        if (currentProfile == null || currentProfile.decks == null)
         {
             return;
         }
 
-        runtimeData.displayName = result.PlayerProfile.DisplayName;
-        runtimeData.avatarUrl = result.PlayerProfile.AvatarUrl;
-        uiBinder?.Bind(runtimeData);
-    }
-
-    private void RequestStatistics()
-    {
-        if (PlayFabService.Instance == null || !PlayFabService.Instance.IsLoggedIn())
+        for (int i = 0; i < currentProfile.decks.Count; i++)
         {
-            return;
-        }
-
-        PlayFabClientAPI.GetPlayerStatistics(new GetPlayerStatisticsRequest(), HandleStatisticsLoaded, HandlePlayFabError);
-    }
-
-    private void HandleStatisticsLoaded(GetPlayerStatisticsResult result)
-    {
-        if (result == null || result.Statistics == null)
-        {
-            return;
-        }
-
-        foreach (var stat in result.Statistics)
-        {
-            if (stat == null)
+            var deck = currentProfile.decks[i];
+            if (deck == null)
             {
                 continue;
             }
 
-            if (string.Equals(stat.StatisticName, "wins", StringComparison.OrdinalIgnoreCase))
-            {
-                runtimeData.wins = stat.Value;
-            }
-            else if (string.Equals(stat.StatisticName, "losses", StringComparison.OrdinalIgnoreCase))
-            {
-                runtimeData.losses = stat.Value;
-            }
+            deck.isEquipped = string.Equals(deck.id, deckId, StringComparison.OrdinalIgnoreCase);
         }
-
-        int totalMatches = runtimeData.wins + runtimeData.losses;
-        if (totalMatches > 0)
-        {
-            runtimeData.accuracy = Mathf.Clamp01(runtimeData.wins / (float)totalMatches) * 100f;
-        }
-
-        uiBinder?.Bind(runtimeData);
     }
 
     private void HandlePlayFabError(PlayFabError error)
     {
-        Debug.LogWarning($"[ProfileManager] PlayFab error: {error.GenerateErrorReport()}");
-    }
-
-    private void MergeProfile(PlayerProfileData target, PlayerProfileData source)
-    {
-        if (target == null || source == null)
-        {
-            return;
-        }
-
-        target.displayName = string.IsNullOrWhiteSpace(source.displayName) ? target.displayName : source.displayName;
-        target.avatarId = string.IsNullOrWhiteSpace(source.avatarId) ? target.avatarId : source.avatarId;
-        target.avatarUrl = string.IsNullOrWhiteSpace(source.avatarUrl) ? target.avatarUrl : source.avatarUrl;
-        target.level = source.level;
-        target.currentXp = source.currentXp;
-        target.xpToNextLevel = source.xpToNextLevel > 0 ? source.xpToNextLevel : target.xpToNextLevel;
-        target.wins = source.wins;
-        target.losses = source.losses;
-        target.accuracy = source.accuracy;
-        target.title = string.IsNullOrWhiteSpace(source.title) ? target.title : source.title;
-        target.brainCoins = source.brainCoins;
-        target.equippedDeckId = string.IsNullOrWhiteSpace(source.equippedDeckId) ? target.equippedDeckId : source.equippedDeckId;
-        target.decks = source.decks ?? target.decks;
-        target.settings = source.settings ?? target.settings;
-    }
-
-#if UNITY_EDITOR
-    [ContextMenu("Load Test Data")]
-    private void LoadTestData()
-    {
-        runtimeData = PlayerProfileData.CreatePlaceholder();
-        uiBinder?.Bind(runtimeData);
-    }
-#endif
-}
-
-[System.Serializable]
-public class DeckVisualPreset
-{
-    public string category;
-    public string colorHex;
-    public string iconName;
-
-    public bool IsMatch(string candidate)
-    {
-        return !string.IsNullOrWhiteSpace(category)
-               && !string.IsNullOrWhiteSpace(candidate)
-               && string.Equals(category.Trim(), candidate.Trim(), StringComparison.OrdinalIgnoreCase);
+        Debug.LogError(error.GenerateErrorReport());
     }
 }

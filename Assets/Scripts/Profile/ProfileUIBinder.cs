@@ -25,6 +25,7 @@ public class ProfileUIBinder : MonoBehaviour
     [SerializeField] private bool clearExistingDecks = true;
     [SerializeField] private Transform decksContainer;
     [SerializeField] private DeckCardUI deckCardPrefab;
+    [SerializeField] private ProfileManager profileManager;
 
     public void Bind(PlayerProfileData data)
     {
@@ -108,9 +109,22 @@ public class ProfileUIBinder : MonoBehaviour
 
     private void BindDecks(List<PlayerDeckData> decks)
     {
+         Debug.Log($"[ProfileUIBinder] BindDecks chamado. decks={decks?.Count}, container={decksContainer}, prefab={deckCardPrefab}");
+    
+    if (decksContainer == null || deckCardPrefab == null)
+    {
+        Debug.LogError("[ProfileUIBinder] decksContainer ou deckCardPrefab é null!");
+        return;
+    }
+        
         if (decksContainer == null || deckCardPrefab == null)
         {
             return;
+        }
+
+        if (profileManager == null)
+        {
+            profileManager = GetComponentInParent<ProfileManager>();
         }
 
         if (clearExistingDecks)
@@ -129,8 +143,11 @@ public class ProfileUIBinder : MonoBehaviour
         foreach (var deck in decks)
         {
             var card = Instantiate(deckCardPrefab, decksContainer);
-            card.Setup(deck);
+            card.Setup(deck, profileManager);
+                Debug.Log($"[ProfileUIBinder] Card instanciado: {deck.id} → GO={card.gameObject.name}");
+
         }
+        
     }
 
     private static Sprite ResolveSprite(List<NamedSprite> mapping, string key)
