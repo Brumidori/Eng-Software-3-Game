@@ -148,8 +148,8 @@ public class MatchmakingService : MonoBehaviour
     {
         if (matchmakingRoutine != null)
         {
-            Debug.LogWarning("[MatchmakingService] Ja existe um teste de matchmaking em andamento.");
-            return false;
+            StopCoroutine(matchmakingRoutine);
+            matchmakingRoutine = null;
         }
         if (string.IsNullOrWhiteSpace(queue))
         {
@@ -170,14 +170,15 @@ public class MatchmakingService : MonoBehaviour
 
     public void CancelCurrentSearch()
     {
-        if (matchmakingRoutine == null)
+        if (matchmakingRoutine != null)
         {
-            Debug.LogWarning("[MatchmakingService] Nao ha busca ativa para cancelar.");
-            return;
+            StopCoroutine(matchmakingRoutine);
+            matchmakingRoutine = null;
         }
 
-        cancellationRequested = true;
-        Debug.Log("[MatchmakingService] Cancelamento solicitado.");
+        cancellationRequested = false;
+        SetState(MatchmakingState.Cancelled);
+        Debug.Log("[MatchmakingService] Busca cancelada.");
     }
 
     public string GetDiagnosticsSummary()
