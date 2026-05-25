@@ -41,6 +41,8 @@ public class MatchmakingService : MonoBehaviour
     public static event Action<string> OnMatchFound;
     public static event Action<PlayFabError> OnMatchmakingFailed;
 
+    public string CurrentMatchId { get; private set; }
+
     public MatchmakingState CurrentState { get; private set; } = MatchmakingState.Idle;
 
     private string queueName;
@@ -205,6 +207,7 @@ public class MatchmakingService : MonoBehaviour
 
             if (singleUser.status == "Matched" && !string.IsNullOrWhiteSpace(singleUser.matchId))
             {
+                CurrentMatchId = singleUser.matchId;
                 SetState(MatchmakingState.Matched);
                 Debug.Log($"[MatchmakingService] Match encontrado! MatchId: {singleUser.matchId}");
                 OnMatchFound?.Invoke(singleUser.matchId);
@@ -269,6 +272,7 @@ public class MatchmakingService : MonoBehaviour
 
             if (AreUsersMatchedTogether())
             {
+                CurrentMatchId = userA.matchId;
                 SetState(MatchmakingState.Matched);
                 Debug.Log($"[MatchmakingService] Match encontrado! MatchId compartilhado: {userA.matchId}");
                 OnMatchFound?.Invoke(userA.matchId);
