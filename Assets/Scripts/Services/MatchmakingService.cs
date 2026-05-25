@@ -41,6 +41,8 @@ public class MatchmakingService : MonoBehaviour
     public static event Action<string> OnMatchFound;
     public static event Action<PlayFabError> OnMatchmakingFailed;
 
+    public string CurrentMatchId { get; private set; }
+
     public MatchmakingState CurrentState { get; private set; } = MatchmakingState.Idle;
 
     private string queueName;
@@ -148,8 +150,8 @@ public class MatchmakingService : MonoBehaviour
     {
         if (matchmakingRoutine != null)
         {
-            Debug.LogWarning("[MatchmakingService] Ja existe um teste de matchmaking em andamento.");
-            return false;
+            StopCoroutine(matchmakingRoutine);
+            matchmakingRoutine = null;
         }
         if (string.IsNullOrWhiteSpace(queue))
         {
@@ -170,14 +172,15 @@ public class MatchmakingService : MonoBehaviour
 
     public void CancelCurrentSearch()
     {
-        if (matchmakingRoutine == null)
+        if (matchmakingRoutine != null)
         {
-            Debug.LogWarning("[MatchmakingService] Nao ha busca ativa para cancelar.");
-            return;
+            StopCoroutine(matchmakingRoutine);
+            matchmakingRoutine = null;
         }
 
-        cancellationRequested = true;
-        Debug.Log("[MatchmakingService] Cancelamento solicitado.");
+        cancellationRequested = false;
+        SetState(MatchmakingState.Cancelled);
+        Debug.Log("[MatchmakingService] Busca cancelada.");
     }
 
     public string GetDiagnosticsSummary()
@@ -204,6 +207,7 @@ public class MatchmakingService : MonoBehaviour
 
             if (singleUser.status == "Matched" && !string.IsNullOrWhiteSpace(singleUser.matchId))
             {
+                CurrentMatchId = singleUser.matchId;
                 SetState(MatchmakingState.Matched);
                 Debug.Log($"[MatchmakingService] Match encontrado! MatchId: {singleUser.matchId}");
                 OnMatchFound?.Invoke(singleUser.matchId);
@@ -268,6 +272,7 @@ public class MatchmakingService : MonoBehaviour
 
             if (AreUsersMatchedTogether())
             {
+                CurrentMatchId = userA.matchId;
                 SetState(MatchmakingState.Matched);
                 Debug.Log($"[MatchmakingService] Match encontrado! MatchId compartilhado: {userA.matchId}");
                 OnMatchFound?.Invoke(userA.matchId);
