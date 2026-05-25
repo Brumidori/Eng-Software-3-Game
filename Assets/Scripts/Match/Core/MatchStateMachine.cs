@@ -28,6 +28,8 @@ namespace BrainDuel.Match.Core
         public event Action<string>              OnOpponentDisconnected;
         public event Action<MatchEndPayload>     OnMatchEnded;
         public event Action<RoundResultPayload>  OnRoundResultReceived;
+        public event Action<RoundStartPayload>   OnRoundStarted;
+        public event Action<QuestionRevealPayload> OnQuestionRevealed;
 
         // ----------------------------------------------------------
         // Estado
@@ -190,6 +192,7 @@ namespace BrainDuel.Match.Core
             Context.ResetRoundInputs();
             Context.PhaseStartServerMs = p.ServerTimestampMs;
             Context.PhaseDurationMs    = p.ThemeDurationMs;
+            OnRoundStarted?.Invoke(p);
             TransitionTo(MatchPhase.ThemeAndPowerUp);
         }
 
@@ -197,6 +200,7 @@ namespace BrainDuel.Match.Core
         {
             Context.PhaseStartServerMs = p.ServerTimestampMs;
             Context.PhaseDurationMs    = p.DurationMs;
+            OnQuestionRevealed?.Invoke(p);
             TransitionTo(MatchPhase.Question);
         }
 
