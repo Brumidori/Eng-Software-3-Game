@@ -1,0 +1,1131 @@
+fileFormatVersion: 2
+guid: 5ca372a8e6913fe41b18c34a889cf0da
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 4544765970496614084
+    second: Medalha_0
+  - first:
+      213: 6911761670687215760
+    second: Medalha_1
+  - first:
+      213: -401570837649771835
+    second: Medalha_2
+  - first:
+      213: -4487108273052211078
+    second: Medalha_3
+  - first:
+      213: 4066623275507961904
+    second: Medalha_4
+  - first:
+      213: 819740997007548526
+    second: Medalha_5
+  - first:
+      213: -3990277500870070548
+    second: Medalha_6
+  - first:
+      213: 6275056631849060425
+    second: Medalha_7
+  - first:
+      213: -2713928000403950957
+    second: Medalha_8
+  - first:
+      213: -167702977425375509
+    second: Medalha_9
+  - first:
+      213: -4942118515786195648
+    second: Medalha_10
+  - first:
+      213: -85996692307366852
+    second: Medalha_11
+  - first:
+      213: 6899184950535097943
+    second: Medalha_12
+  - first:
+      213: 216536812912479347
+    second: Medalha_13
+  - first:
+      213: -3475947626623381003
+    second: Medalha_14
+  - first:
+      213: -4530335034373117916
+    second: Medalha_15
+  - first:
+      213: -3111645014951842104
+    second: Medalha_16
+  - first:
+      213: 4732522348640611743
+    second: Medalha_17
+  - first:
+      213: 3183823343245356391
+    second: Medalha_18
+  - first:
+      213: -1959199752893046409
+    second: Medalha_19
+  - first:
+      213: -1545950762871797957
+    second: Medalha_20
+  - first:
+      213: -5918367643537595826
+    second: Medalha_21
+  - first:
+      213: -3840740603727502817
+    second: Medalha_22
+  - first:
+      213: -2573169064049661590
+    second: Medalha_23
+  - first:
+      213: 5691346388685165205
+    second: Medalha_24
+  - first:
+      213: 4535311361971036990
+    second: Medalha_25
+  - first:
+      213: -3650398312629540961
+    second: Medalha_26
+  - first:
+      213: -5590056902005136620
+    second: Medalha_27
+  - first:
+      213: 5329704140373661087
+    second: Medalha_28
+  - first:
+      213: 5804327120108102890
+    second: Medalha_29
+  - first:
+      213: -1997149054963196166
+    second: Medalha_30
+  - first:
+      213: -1331631791721741918
+    second: Medalha_31
+  - first:
+      213: -4707600504659366881
+    second: Medalha_32
+  - first:
+      213: -8354865687154639135
+    second: Medalha_33
+  - first:
+      213: 7110484285918084587
+    second: Medalha_34
+  - first:
+      213: 7012338624035690963
+    second: Medalha_35
+  - first:
+      213: -4070992349381930321
+    second: Medalha_36
+  - first:
+      213: 375735691737722143
+    second: Medalha_37
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Android
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: Medalha_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 59
+        width: 21
+        height: 3921
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4ceebba2290421f30800000000000000
+      internalID: 4544765970496614084
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_1
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 21
+        height: 51
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 090d8719e928bef50800000000000000
+      internalID: 6911761670687215760
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_2
+      rect:
+        serializedVersion: 2
+        x: 29
+        y: 29
+        width: 4739
+        height: 3951
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5c2bab563755d6af0800000000000000
+      internalID: -401570837649771835
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_3
+      rect:
+        serializedVersion: 2
+        x: 39
+        y: 2079
+        width: 112
+        height: 88
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a78a104acc69ab1c0800000000000000
+      internalID: -4487108273052211078
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_4
+      rect:
+        serializedVersion: 2
+        x: 96
+        y: 3267
+        width: 446
+        height: 629
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 030dcfbb25c8f6830800000000000000
+      internalID: 4066623275507961904
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_5
+      rect:
+        serializedVersion: 2
+        x: 99
+        y: 1274
+        width: 435
+        height: 572
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e60a576f71e406b00800000000000000
+      internalID: 819740997007548526
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_6
+      rect:
+        serializedVersion: 2
+        x: 99
+        y: 242
+        width: 440
+        height: 585
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ceee76d11cfaf98c0800000000000000
+      internalID: -3990277500870070548
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_7
+      rect:
+        serializedVersion: 2
+        x: 117
+        y: 3263
+        width: 406
+        height: 140
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 94882de82ca751750800000000000000
+      internalID: 6275056631849060425
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_8
+      rect:
+        serializedVersion: 2
+        x: 118
+        y: 2385
+        width: 405
+        height: 493
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 392bfe5dcd0365ad0800000000000000
+      internalID: -2713928000403950957
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_9
+      rect:
+        serializedVersion: 2
+        x: 504
+        y: 2267
+        width: 9
+        height: 9
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: beef8c2d7033cadf0800000000000000
+      internalID: -167702977425375509
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_10
+      rect:
+        serializedVersion: 2
+        x: 571
+        y: 2267
+        width: 9
+        height: 11
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 04ddea4f4611a6bb0800000000000000
+      internalID: -4942118515786195648
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_11
+      rect:
+        serializedVersion: 2
+        x: 577
+        y: 2267
+        width: 17
+        height: 17
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c3c2927c67a7ecef0800000000000000
+      internalID: -85996692307366852
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_12
+      rect:
+        serializedVersion: 2
+        x: 896
+        y: 3267
+        width: 448
+        height: 607
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 75e8d58b824debf50800000000000000
+      internalID: 6899184950535097943
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_13
+      rect:
+        serializedVersion: 2
+        x: 908
+        y: 1273
+        width: 424
+        height: 572
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 37c8176851b410300800000000000000
+      internalID: 216536812912479347
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_14
+      rect:
+        serializedVersion: 2
+        x: 908
+        y: 246
+        width: 424
+        height: 579
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5f15049cc04f2cfc0800000000000000
+      internalID: -3475947626623381003
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_15
+      rect:
+        serializedVersion: 2
+        x: 913
+        y: 3267
+        width: 401
+        height: 123
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 428eeaaf9440121c0800000000000000
+      internalID: -4530335034373117916
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_16
+      rect:
+        serializedVersion: 2
+        x: 915
+        y: 2322
+        width: 412
+        height: 550
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8ce2ea8585731d4d0800000000000000
+      internalID: -3111645014951842104
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_17
+      rect:
+        serializedVersion: 2
+        x: 1695
+        y: 3267
+        width: 449
+        height: 608
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f9d225a800c4da140800000000000000
+      internalID: 4732522348640611743
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_18
+      rect:
+        serializedVersion: 2
+        x: 1699
+        y: 1262
+        width: 437
+        height: 584
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 76d6cb946763f2c20800000000000000
+      internalID: 3183823343245356391
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_19
+      rect:
+        serializedVersion: 2
+        x: 1702
+        y: 246
+        width: 434
+        height: 581
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 771e6cc74368fc4e0800000000000000
+      internalID: -1959199752893046409
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_20
+      rect:
+        serializedVersion: 2
+        x: 1713
+        y: 2311
+        width: 414
+        height: 558
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b3748c2d8fdab8ae0800000000000000
+      internalID: -1545950762871797957
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_21
+      rect:
+        serializedVersion: 2
+        x: 2560
+        y: 2065
+        width: 122
+        height: 80
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e42a6cc2cfbbddda0800000000000000
+      internalID: -5918367643537595826
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_22
+      rect:
+        serializedVersion: 2
+        x: 2618
+        y: 3229
+        width: 457
+        height: 646
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f12276025c2f2bac0800000000000000
+      internalID: -3840740603727502817
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_23
+      rect:
+        serializedVersion: 2
+        x: 2625
+        y: 1260
+        width: 442
+        height: 586
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a69ab469e544a4cd0800000000000000
+      internalID: -2573169064049661590
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_24
+      rect:
+        serializedVersion: 2
+        x: 2625
+        y: 231
+        width: 443
+        height: 594
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 592184fe269bbfe40800000000000000
+      internalID: 5691346388685165205
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_25
+      rect:
+        serializedVersion: 2
+        x: 2640
+        y: 2372
+        width: 416
+        height: 506
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e33a31497a9a0fe30800000000000000
+      internalID: 4535311361971036990
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_26
+      rect:
+        serializedVersion: 2
+        x: 2839
+        y: 2326
+        width: 16
+        height: 18
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f97e707431e275dc0800000000000000
+      internalID: -3650398312629540961
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_27
+      rect:
+        serializedVersion: 2
+        x: 3026
+        y: 2254
+        width: 20
+        height: 22
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 41363c17dd02c62b0800000000000000
+      internalID: -5590056902005136620
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_28
+      rect:
+        serializedVersion: 2
+        x: 3095
+        y: 2254
+        width: 25
+        height: 26
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f9596ec7da9e6f940800000000000000
+      internalID: 5329704140373661087
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_29
+      rect:
+        serializedVersion: 2
+        x: 3419
+        y: 3254
+        width: 457
+        height: 620
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ae4a53a53cc1d8050800000000000000
+      internalID: 5804327120108102890
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_30
+      rect:
+        serializedVersion: 2
+        x: 3430
+        y: 1259
+        width: 436
+        height: 586
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: afe596f0483b844e0800000000000000
+      internalID: -1997149054963196166
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_31
+      rect:
+        serializedVersion: 2
+        x: 3430
+        y: 232
+        width: 436
+        height: 593
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2a10fc2d0f7158de0800000000000000
+      internalID: -1331631791721741918
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_32
+      rect:
+        serializedVersion: 2
+        x: 3437
+        y: 2308
+        width: 422
+        height: 564
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f1c245f684e3baeb0800000000000000
+      internalID: -4707600504659366881
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_33
+      rect:
+        serializedVersion: 2
+        x: 4219
+        y: 3255
+        width: 457
+        height: 618
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1ee3c0b6ced8d0c80800000000000000
+      internalID: -8354865687154639135
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_34
+      rect:
+        serializedVersion: 2
+        x: 4227
+        y: 1255
+        width: 440
+        height: 592
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bedf42bf8c38da260800000000000000
+      internalID: 7110484285918084587
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_35
+      rect:
+        serializedVersion: 2
+        x: 4227
+        y: 234
+        width: 440
+        height: 591
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3d9166a53d4d05160800000000000000
+      internalID: 7012338624035690963
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_36
+      rect:
+        serializedVersion: 2
+        x: 4235
+        y: 2298
+        width: 425
+        height: 571
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fa2d1cbf60ee087c0800000000000000
+      internalID: -4070992349381930321
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Medalha_37
+      rect:
+        serializedVersion: 2
+        x: 29
+        y: 0
+        width: 4739
+        height: 21
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f1d6673fe91e63500800000000000000
+      internalID: 375735691737722143
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: c9d23f3c31d0a964b9340e8d01d2f8c6
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      Medalha_0: 4544765970496614084
+      Medalha_1: 6911761670687215760
+      Medalha_10: -4942118515786195648
+      Medalha_11: -85996692307366852
+      Medalha_12: 6899184950535097943
+      Medalha_13: 216536812912479347
+      Medalha_14: -3475947626623381003
+      Medalha_15: -4530335034373117916
+      Medalha_16: -3111645014951842104
+      Medalha_17: 4732522348640611743
+      Medalha_18: 3183823343245356391
+      Medalha_19: -1959199752893046409
+      Medalha_2: -401570837649771835
+      Medalha_20: -1545950762871797957
+      Medalha_21: -5918367643537595826
+      Medalha_22: -3840740603727502817
+      Medalha_23: -2573169064049661590
+      Medalha_24: 5691346388685165205
+      Medalha_25: 4535311361971036990
+      Medalha_26: -3650398312629540961
+      Medalha_27: -5590056902005136620
+      Medalha_28: 5329704140373661087
+      Medalha_29: 5804327120108102890
+      Medalha_3: -4487108273052211078
+      Medalha_30: -1997149054963196166
+      Medalha_31: -1331631791721741918
+      Medalha_32: -4707600504659366881
+      Medalha_33: -8354865687154639135
+      Medalha_34: 7110484285918084587
+      Medalha_35: 7012338624035690963
+      Medalha_36: -4070992349381930321
+      Medalha_37: 375735691737722143
+      Medalha_4: 4066623275507961904
+      Medalha_5: 819740997007548526
+      Medalha_6: -3990277500870070548
+      Medalha_7: 6275056631849060425
+      Medalha_8: -2713928000403950957
+      Medalha_9: -167702977425375509
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
