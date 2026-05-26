@@ -1,7 +1,10 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using PlayFab.ClientModels;
 using BrainDuel.Match;
 using BrainDuel.Match.Core;
 using BrainDuel.Match.PowerUps;
@@ -40,6 +43,7 @@ namespace BrainDuel.Match.UI
         [SerializeField] private GameObject panelTemaPoderes;
         [SerializeField] private Image      temaIcon;
         [SerializeField] private Button[]   powerUpButtons;       // 5 botões na ordem: Escudo, EscudoDuplo, Roubo, Aposta, Eliminar2
+        [SerializeField] private string[]   powerUpItemIds;       // IDs no catálogo PlayFab, mesma ordem dos botões
         [SerializeField] private TMP_Text   powerUpDescricaoText;
         [SerializeField] private TMP_Text   timerTemaPoderesText;
 
@@ -70,9 +74,18 @@ namespace BrainDuel.Match.UI
 
         [Header("Panel Fim de Partida")]
         [SerializeField] private GameObject panelFimPartida;
-        [SerializeField] private TMP_Text   resultadoText;
-        [SerializeField] private TMP_Text   xpGanhoText;
-        [SerializeField] private Button     botaoVoltar;
+
+        [Header("Sub-panel Vitória")]
+        [SerializeField] private GameObject panelVitoria;
+        [SerializeField] private TMP_Text   xpGanhoVitoriaText;
+        [SerializeField] private Button     btnMenuVitoria;
+        [SerializeField] private Button     btnOutraPartidaVitoria;
+
+        [Header("Sub-panel Derrota")]
+        [SerializeField] private GameObject panelDerrota;
+        [SerializeField] private TMP_Text   xpGanhoDerrotaText;
+        [SerializeField] private Button     btnMenuDerrota;
+        [SerializeField] private Button     btnOutraPartidaDerrota;
 
         // ----------------------------------------------------------
         // Estado interno
@@ -88,9 +101,11 @@ namespace BrainDuel.Match.UI
             PowerUpType.EliminateTwo
         };
 
-        private MatchContext           _ctx;
-        private QuestionRevealPayload  _perguntaAtual;
-        private Coroutine              _timerCoroutine;
+        private MatchContext              _ctx;
+        private QuestionRevealPayload     _perguntaAtual;
+        private Coroutine                 _timerCoroutine;
+        private bool                      _poderJaUsado;
+        private HashSet<PowerUpType>      _poderesNoInventario = new HashSet<PowerUpType>();
 
         // ----------------------------------------------------------
         // Unity lifecycle
@@ -113,9 +128,15 @@ namespace BrainDuel.Match.UI
             if (powerUpManager != null)
                 powerUpManager.OnPowerUpActivated += HandlePoderAtivado;
 
+            InventoryService.OnInventoryLoaded += PopularInventarioPoderes;
+            InventoryService.Instance?.LoadInventory();
+
             ConfigurarBotoesPoder();
             ConfigurarBotoesResposta();
-            botaoVoltar.onClick.AddListener(OnVoltarClicked);
+            btnMenuVitoria.onClick.AddListener(IrParaMenu);
+            btnMenuDerrota.onClick.AddListener(IrParaMenu);
+            btnOutraPartidaVitoria.onClick.AddListener(IrParaMatchmaking);
+            btnOutraPartidaDerrota.onClick.AddListener(IrParaMatchmaking);
 
             InicializarHUD();
             DesativarTodosPanels();
@@ -134,6 +155,8 @@ namespace BrainDuel.Match.UI
 
             if (powerUpManager != null)
                 powerUpManager.OnPowerUpActivated -= HandlePoderAtivado;
+
+            InventoryService.OnInventoryLoaded -= PopularInventarioPoderes;
         }
 
         // ----------------------------------------------------------
@@ -171,7 +194,7 @@ namespace BrainDuel.Match.UI
             {
                 case MatchPhase.ThemeAndPowerUp:
                     panelTemaPoderes.SetActive(true);
-                    IniciarTimer(timerTemaPoderesText, MatchConfig.ThemePhaseDurationMs / 1000f);
+                    IniciarTimer(timerTemaPoderesText, MatchConfig.ThemePhaseDurationMs / 1000f, IrParaPergunta);
                     AtualizarTextoRodada();
                     break;
 
@@ -243,8 +266,35 @@ namespace BrainDuel.Match.UI
             }
         }
 
+        void PopularInventarioPoderes(List<ItemInstance> itens)
+        {
+            _poderesNoInventario.Clear();
+
+            for (int i = 0; i < OrdemPoderes.Length; i++)
+            {
+                if (i >= powerUpItemIds.Length) break;
+
+                string itemId = powerUpItemIds[i];
+                bool possuiItem = itens.Exists(it => it.ItemId == itemId);
+
+                if (possuiItem)
+                    _poderesNoInventario.Add(OrdemPoderes[i]);
+            }
+
+            // Atualiza os botões caso o panel já esteja visível
+            if (panelTemaPoderes.activeSelf)
+                AtualizarEstadoBotoesPoder();
+        }
+
         void AtualizarEstadoBotoesPoder()
         {
+            // Poder já usado nesta partida — bloqueia todos para sempre
+            if (_poderJaUsado)
+            {
+                BloquearTodosBotoesPoder();
+                return;
+            }
+
             if (_ctx == null) return;
 
             PowerUpType equipado = _ctx.EquippedPowerUp;
@@ -252,9 +302,13 @@ namespace BrainDuel.Match.UI
 
             for (int i = 0; i < powerUpButtons.Length; i++)
             {
-                bool esteEquipado = OrdemPoderes[i] == equipado;
-                powerUpButtons[i].interactable = esteEquipado && podeUsar;
-                SetAlpha(powerUpButtons[i], esteEquipado ? 1f : 0.35f);
+                PowerUpType tipo          = OrdemPoderes[i];
+                bool        esteEquipado  = tipo == equipado;
+                bool        temInventario = _poderesNoInventario.Contains(tipo);
+                bool        habilitado    = esteEquipado && podeUsar && temInventario;
+
+                powerUpButtons[i].interactable = habilitado;
+                SetAlpha(powerUpButtons[i], temInventario ? (esteEquipado ? 1f : 0.35f) : 0.15f);
             }
 
             powerUpDescricaoText.text = string.Empty;
@@ -262,7 +316,18 @@ namespace BrainDuel.Match.UI
 
         void OnPoderClicado(int index)
         {
+            if (_poderJaUsado) return;
             if (index >= OrdemPoderes.Length) return;
+
+            // Desabilita os outros botões imediatamente ao clicar
+            for (int i = 0; i < powerUpButtons.Length; i++)
+            {
+                if (i != index)
+                {
+                    powerUpButtons[i].interactable = false;
+                    SetAlpha(powerUpButtons[i], 0.2f);
+                }
+            }
 
             PowerUpType tipo = OrdemPoderes[index];
             powerUpDescricaoText.text = PowerUpManager.GetDescription(tipo);
@@ -271,10 +336,18 @@ namespace BrainDuel.Match.UI
 
         void HandlePoderAtivado(PowerUpType tipo)
         {
-            foreach (var btn in powerUpButtons)
-                btn.interactable = false;
-
+            _poderJaUsado = true;
+            BloquearTodosBotoesPoder();
             powerUpDescricaoText.text = $"{PowerUpManager.GetName(tipo)} ativado!";
+        }
+
+        void BloquearTodosBotoesPoder()
+        {
+            foreach (var btn in powerUpButtons)
+            {
+                btn.interactable = false;
+                SetAlpha(btn, 0.2f);
+            }
         }
 
         // ----------------------------------------------------------
@@ -362,22 +435,54 @@ namespace BrainDuel.Match.UI
         void HandleFimPartida(MatchEndPayload payload)
         {
             bool venceu = payload.WinnerId == _ctx?.LocalPlayerId;
-            resultadoText.text = venceu ? "VITÓRIA!" : "DERROTA";
-            xpGanhoText.text   = venceu ? "+100 XP"  : "+20 XP";
+            bool porAbandono = payload.Reason == MatchEndReason.Abandonment;
+
+            MostrarResultadoFinal(venceu, porAbandono);
         }
 
-        void OnVoltarClicked()
+        // Chamado pelo AbandonarPartidaModal quando o jogador LOCAL abandona
+        public void MostrarDerrotaPorAbandono()
+        {
+            DesativarTodosPanels();
+            panelFimPartida.SetActive(true);
+            MostrarResultadoFinal(venceu: false, porAbandono: true);
+        }
+
+        void MostrarResultadoFinal(bool venceu, bool porAbandono)
+        {
+            panelFimPartida.SetActive(true);
+            panelVitoria.SetActive(venceu);
+            panelDerrota.SetActive(!venceu);
+
+            if (venceu)
+            {
+                // Vitória por abandono do adversário: recompensa diferente
+                xpGanhoVitoriaText.text = porAbandono ? "+20 XP  +40 moedas" : "+100 XP";
+            }
+            else
+            {
+                // Derrota por abandono: penalidade
+                xpGanhoDerrotaText.text = porAbandono ? "-10 XP" : "+20 XP";
+            }
+        }
+
+        void IrParaMenu()
         {
             UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
+        }
+
+        void IrParaMatchmaking()
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene("MatchMaking");
         }
 
         // ----------------------------------------------------------
         // Timer
         // ----------------------------------------------------------
 
-        void IniciarTimer(TMP_Text label, float duracao)
+        void IniciarTimer(TMP_Text label, float duracao, Action aoTerminar = null)
         {
-            _timerCoroutine = StartCoroutine(TimerRoutine(label, duracao));
+            _timerCoroutine = StartCoroutine(TimerRoutine(label, duracao, aoTerminar));
         }
 
         void PararTimer()
@@ -389,17 +494,29 @@ namespace BrainDuel.Match.UI
             }
         }
 
-        IEnumerator TimerRoutine(TMP_Text label, float duracao)
+        IEnumerator TimerRoutine(TMP_Text label, float duracao, Action aoTerminar)
         {
             float restante = duracao;
             while (restante > 0f)
             {
                 label.text  = Mathf.CeilToInt(restante).ToString();
-                label.color = restante <= 5f ? Color.red : Color.white;
+                label.color = restante <= 2f ? Color.red : Color.white;
                 restante   -= Time.deltaTime;
                 yield return null;
             }
             label.text = "0";
+            aoTerminar?.Invoke();
+        }
+
+        void IrParaPergunta()
+        {
+            // Só age se o servidor ainda não trocou a fase (evita conflito)
+            if (stateMachine.Phase == MatchPhase.ThemeAndPowerUp)
+            {
+                panelTemaPoderes.SetActive(false);
+                panelPergunta.SetActive(true);
+                IniciarTimer(timerPerguntaText, MatchConfig.QuestionPhaseDurationMs / 1000f);
+            }
         }
 
         // ----------------------------------------------------------
