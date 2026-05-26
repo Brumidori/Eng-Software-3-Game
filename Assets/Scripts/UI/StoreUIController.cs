@@ -6,6 +6,10 @@ using UnityEngine.UI;
 
 public class StoreUIController : MonoBehaviour
 {
+    private const float SixteenByTenAspect = 16f / 10f;
+    private const float AspectTolerance = 0.035f;
+    private const float BaseAspect = 16f / 9f;
+
     [Serializable]
     private class ItemIconMapping
     {
@@ -47,6 +51,9 @@ public class StoreUIController : MonoBehaviour
     private string lastLegacyPurchaseItemId;
     private string lastLegacyPurchaseStoreId;
     private HashSet<string> ownedDeckIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private bool hasAppliedLayout;
+    private bool lastAppliedCompactLayout;
+    private float lastAppliedAspectRatio = -1f;
 
     private void Awake()
     {
@@ -146,7 +153,13 @@ public class StoreUIController : MonoBehaviour
             return;
         }
 
+        ApplyResponsiveLayouts();
         TryLoadStoreContent();
+    }
+
+    private void Update()
+    {
+        ApplyResponsiveLayouts();
     }
 
     private void HandlePlayFabLoginSuccess()
@@ -187,6 +200,8 @@ public class StoreUIController : MonoBehaviour
         ClearChildren(decksRoot,
             sceneItemTemplate != null ? sceneItemTemplate.transform : null,
             sceneDeckTemplate != null ? sceneDeckTemplate.transform : null);
+
+        ApplyResponsiveLayouts();
 
         StoreService.Instance.LoadCatalog(catalogVersion, itemsStoreId, HandleItemsStoreLoaded);
         StoreService.Instance.LoadCatalog(catalogVersion, decksStoreId, HandleDecksStoreLoaded);
@@ -516,6 +531,128 @@ public class StoreUIController : MonoBehaviour
         }
 
         EconomyService.Instance.GetBalance(currencyCode);
+    }
+
+    private void ApplyResponsiveLayouts()
+    {
+        var currentAspectRatio = GetCurrentAspectRatio();
+        var compactLayout = IsSixteenByTenLayout();
+        if (hasAppliedLayout && compactLayout == lastAppliedCompactLayout && Mathf.Abs(currentAspectRatio - lastAppliedAspectRatio) <= 0.001f)
+        {
+            return;
+        }
+
+        hasAppliedLayout = true;
+        lastAppliedCompactLayout = compactLayout;
+        lastAppliedAspectRatio = currentAspectRatio;
+
+        ConfigureLayout(itemsRoot, compactLayout, isDeckGrid: false);
+
+        if (decksRoot != itemsRoot)
+        {
+            ConfigureLayout(decksRoot, compactLayout, isDeckGrid: true);
+        }
+
+        ApplyAspectSpacing(compactLayout, currentAspectRatio);
+    }
+
+    private float GetCurrentAspectRatio()
+    {
+        if (Screen.height <= 0)
+        {
+            return BaseAspect;
+        }
+
+        return (float)Screen.width / Screen.height;
+    }
+
+    private bool IsSixteenByTenLayout()
+    {
+        if (Screen.height <= 0)
+        {
+            return false;
+        }
+
+        var aspectRatio = (float)Screen.width / Screen.height;
+        return Mathf.Abs(aspectRatio - SixteenByTenAspect) <= AspectTolerance;
+    }
+
+    private static void ConfigureLayout(Transform root, bool compactLayout, bool isDeckGrid)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        var grid = root.GetComponent<GridLayoutGroup>();
+        if (grid == null)
+        {
+            grid = root.gameObject.AddComponent<GridLayoutGroup>();
+        }
+
+        grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
+        grid.startAxis = GridLayoutGroup.Axis.Horizontal;
+        grid.childAlignment = TextAnchor.UpperCenter;
+        grid.constraint = GridLayoutGroup.Constraint.FixedRowCount;
+        grid.constraintCount = 1;
+
+        if (compactLayout)
+        {
+            grid.cellSize = isDeckGrid ? new Vector2(160f, 225f) : new Vector2(165f, 230f);
+            grid.spacing = new Vector2(8f, 8f);
+            grid.padding = new RectOffset(4, 4, 4, 4);
+        }
+        else
+        {
+            grid.cellSize = new Vector2(180f, 250f);
+            grid.spacing = new Vector2(10f, 10f);
+            grid.padding = new RectOffset(0, 0, 0, 0);
+        }
+
+        if (root is RectTransform rootRect)
+        {
+            LayoutRebuilder.ForceRebuildLayoutImmediate(rootRect);
+        }
+    }
+
+    private void ApplyAspectSpacing(bool compactLayout, float aspectRatio)
+    {
+        ApplySceneRect("textDecks", compactLayout ? -38.865f : -44.865f, compactLayout ? 53.7505f : 53.7505f, compactLayout ? 286.998f : 284.998f);
+        ApplySceneRect("GridIDecks", compactLayout ? -26.406982f : -8.406982f, compactLayout ? 4.814087f : 16.814087f, 0f);
+
+        var cosmeticTitle = GameObject.Find("textCosmeticStore")?.GetComponent<RectTransform>();
+        if (cosmeticTitle != null)
+        {
+            cosmeticTitle.anchoredPosition = new Vector2(compactLayout ? 0f : 0.81359863f, compactLayout ? 310.89612f : 316.89612f);
+            cosmeticTitle.sizeDelta = new Vector2(compactLayout ? -54f : -46.3728f, compactLayout ? 44f : 49.3349f);
+        }
+
+        var cosmeticLabel = GameObject.Find("textCosmeticStore")?.GetComponent<UnityEngine.UI.Text>();
+        if (cosmeticLabel != null)
+        {
+            cosmeticLabel.fontSize = compactLayout ? 32 : 40;
+            cosmeticLabel.resizeTextForBestFit = compactLayout;
+            cosmeticLabel.resizeTextMinSize = compactLayout ? 16 : 0;
+            cosmeticLabel.horizontalOverflow = compactLayout ? HorizontalWrapMode.Wrap : HorizontalWrapMode.Overflow;
+        }
+    }
+
+    private static void ApplySceneRect(string objectName, float anchoredY, float height, float width)
+    {
+        var target = GameObject.Find(objectName);
+        if (target == null)
+        {
+            return;
+        }
+
+        var rectTransform = target.GetComponent<RectTransform>();
+        if (rectTransform == null)
+        {
+            return;
+        }
+
+        rectTransform.anchoredPosition = new Vector2(rectTransform.anchoredPosition.x, anchoredY);
+        rectTransform.sizeDelta = new Vector2(width, height);
     }
 
     private void AutoAssignSceneTemplates()
