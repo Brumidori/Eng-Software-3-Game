@@ -468,7 +468,7 @@ namespace BrainDuel.Match.UI
 
         void IrParaMenu()
         {
-            UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
+            UnityEngine.SceneManagement.SceneManager.LoadScene("HomeScreen");
         }
 
         void IrParaMatchmaking()
