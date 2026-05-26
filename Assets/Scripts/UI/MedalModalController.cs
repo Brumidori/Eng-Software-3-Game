@@ -1,34 +1,79 @@
-using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class MedalModalController : MonoBehaviour
 {
+    [Header("Configurações de Painel")]
     [SerializeField] private Transform panel;
     [SerializeField] private GameObject medalPrefab;
-    [SerializeField] private Sprite[] medalSprites;
 
-    void Start()
+    [Header("Sprites das Medalhas")]
+    [SerializeField] private Sprite[] spritesApagados;
+    [SerializeField] private Sprite[] spritesAcesos;
+
+    private void Start()
     {
-        initializeMedals();
+        InicializarInterface();
+        CarregarProgressoDoJogador();
     }
-    
-    private void initializeMedals()
-    {
-        for (int i = 0; i < medalSprites.Length; i++)
-        {
-            GameObject medal = Instantiate(medalPrefab, panel);
 
-            medal.GetComponent<Image>().sprite = medalSprites[i];
+    private void InicializarInterface()
+    {
+        // Garante que o painel comece limpo
+        foreach (Transform child in panel) Destroy(child.gameObject);
+
+        // Gera as medalhas inicialmente apagadas
+        for (int i = 0; i < spritesApagados.Length; i++)
+        {
+            var medal = Instantiate(medalPrefab, panel);
+            medal.GetComponent<Image>().sprite = spritesApagados[i];
         }
     }
 
-    private void setMedalColor (int index, Color color)
+    private void CarregarProgressoDoJogador()
     {
-        panel.GetChild(index).GetComponent<Image>().color = color;
+        var service = MedalhaService.Instance;
+
+        // Partidas Totais
+        service.PegarEstatistica("partidas_totais", valor => {
+            ValidarConquista(valor, 1, 0);
+            ValidarConquista(valor, 10, 1);
+            ValidarConquista(valor, 50, 2);
+        });
+
+        // Acertos Totais
+        service.PegarEstatistica("acertos_totais", valor => {
+            ValidarConquista(valor, 50, 3);
+            ValidarConquista(valor, 200, 4);
+            ValidarConquista(valor, 500, 5);
+        });
+
+        // Acertos Tema
+        service.PegarEstatistica("acertos_tema_temp", valor => {
+            ValidarConquista(valor, 10, 6);
+            ValidarConquista(valor, 30, 7);
+            ValidarConquista(valor, 100, 8);
+        });
+
+        // Escudos
+        service.PegarEstatistica("escudos", valor => {
+            ValidarConquista(valor, 10, 9);
+            ValidarConquista(valor, 25, 10);
+            ValidarConquista(valor, 50, 11);
+        });
     }
-    public void setMedalColor (int index, bool hasMedal)
+
+    private void ValidarConquista(int valorAtual, int meta, int indice)
     {
-        setMedalColor(index, hasMedal ? Color.white : new Color(1, 1, 1, 0.5f));
+        if (valorAtual >= meta) 
+            AtivarMedalhaVisual(indice);
+    }
+
+    private void AtivarMedalhaVisual(int index)
+    {
+        if (index < 0 || index >= panel.childCount) return;
+
+        var imagemMedalha = panel.GetChild(index).GetComponent<Image>();
+        imagemMedalha.sprite = spritesAcesos[index];
     }
 }

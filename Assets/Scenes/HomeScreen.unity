@@ -1249,10 +1249,56 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df9d0cfb72f83b047b4bd13dd088654a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Stepindicator
-  scrollRect: {fileID: 0}
-  points: []
+  scrollRect: {fileID: 1798301536}
+  points:
+  - {fileID: 622299481}
+  - {fileID: 1803862810}
   activeColor: {r: 1, g: 1, b: 1, a: 1}
   inactiveColor: {r: 1, g: 1, b: 1, a: 0.3}
+--- !u!1 &793179932
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 793179934}
+  - component: {fileID: 793179933}
+  m_Layer: 0
+  m_Name: MedalService
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &793179933
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 793179932}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c78af5816e925534e87cbcbda731e058, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MedalhaService
+--- !u!4 &793179934
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 793179932}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &940948563
 GameObject:
   m_ObjectHideFlags: 0
@@ -1781,7 +1827,6 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 183098855}
   - {fileID: 2033014499}
   m_Father: {fileID: 1919649143}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -2617,7 +2662,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MedalModalController
   panel: {fileID: 476314041}
   medalPrefab: {fileID: 5058715989744616480, guid: e4aceefaea1d14243af369115d56008c, type: 3}
-  medalSprites:
+  spritesApagados:
+  - {fileID: -3840740603727502817, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  - {fileID: 5804327120108102890, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  - {fileID: -8354865687154639135, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  - {fileID: 4535311361971036990, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  - {fileID: -4707600504659366881, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  - {fileID: -4070992349381930321, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  - {fileID: -2573169064049661590, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  - {fileID: -1997149054963196166, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  - {fileID: 7110484285918084587, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  - {fileID: 5691346388685165205, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  - {fileID: -1331631791721741918, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  - {fileID: 7012338624035690963, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
+  spritesAcesos:
   - {fileID: 4066623275507961904, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
   - {fileID: 6899184950535097943, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
   - {fileID: 4732522348640611743, guid: 5ca372a8e6913fe41b18c34a889cf0da, type: 3}
@@ -3831,3 +3889,4 @@ SceneRoots:
   - {fileID: 358744608276597389}
   - {fileID: 353247685}
   - {fileID: 322490262}
+  - {fileID: 793179934}
