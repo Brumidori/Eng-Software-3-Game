@@ -175,6 +175,9 @@ public class RegisterScreenHandler : MonoBehaviour
         SetFeedback("Conta criada! Concedendo decks iniciais...", false);
         EnsureStarterDeckGrantService();
 
+        EnsureRankingService();
+        RankingService.Instance.RegistroRanking();
+
         StarterDeckGrantService.Instance.GrantStarterDecks(result =>
         {
             if (result == null || !result.Success)
@@ -317,4 +320,10 @@ public class RegisterScreenHandler : MonoBehaviour
         if (StarterDeckGrantService.Instance != null) return;
         new GameObject("StarterDeckGrantService").AddComponent<StarterDeckGrantService>();
     }
+
+    private static void EnsureRankingService()
+    {
+        if (RankingService.Instance != null) return;
+        new GameObject("RankingService").AddComponent<RankingService>();
+    }
 }
