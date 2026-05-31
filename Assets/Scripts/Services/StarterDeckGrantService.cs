@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using PlayFab;
 using PlayFab.ClientModels;
+using PlayFab.CloudScriptModels;
 using UnityEngine;
 
 public class StarterDeckGrantResult
@@ -57,30 +58,29 @@ public class StarterDeckGrantService : MonoBehaviour
             return;
         }
 
-        var request = new ExecuteCloudScriptRequest
+        var request = new ExecuteFunctionRequest
         {
             FunctionName = grantFunctionName,
             FunctionParameter = new Dictionary<string, object>
             {
                 { "catalogVersion", catalogVersion }
-            },
-            GeneratePlayStreamEvent = true
+            }
         };
 
-        PlayFabService.Client.ExecuteCloudScript(
+        PlayFabService.Client.ExecuteFunction(
             request,
             result => HandleGrantSuccess(result, onComplete),
             error => HandleGrantError(error, onComplete));
     }
 
-    private void HandleGrantSuccess(ExecuteCloudScriptResult result, Action<StarterDeckGrantResult> onComplete)
+    private void HandleGrantSuccess(ExecuteFunctionResult result, Action<StarterDeckGrantResult> onComplete)
     {
         if (result.Error != null)
         {
             onComplete?.Invoke(new StarterDeckGrantResult
             {
                 Success = false,
-                Error = BuildCloudScriptError(result.Error.Error, result.Error.Message, result.Error.StackTrace)
+                Error = result.Error.Message ?? "Erro ao executar GrantStarterDecks."
             });
             return;
         }
@@ -94,7 +94,7 @@ public class StarterDeckGrantService : MonoBehaviour
         onComplete?.Invoke(new StarterDeckGrantResult
         {
             Success = false,
-            Error = "Resposta inesperada do CloudScript ao conceder decks iniciais."
+            Error = "Resposta inesperada do servidor ao conceder decks iniciais."
         });
     }
 
@@ -107,30 +107,6 @@ public class StarterDeckGrantService : MonoBehaviour
                 ? "Falha ao comunicar com o servidor para conceder decks iniciais."
                 : error.GenerateErrorReport()
         });
-    }
-
-    private static string BuildCloudScriptError(string code, string message, string stackTrace)
-    {
-        var combined = string.Empty;
-
-        if (!string.IsNullOrWhiteSpace(code))
-        {
-            combined = code;
-        }
-
-        if (!string.IsNullOrWhiteSpace(message))
-        {
-            combined = string.IsNullOrWhiteSpace(combined) ? message : combined + ": " + message;
-        }
-
-        if (!string.IsNullOrWhiteSpace(stackTrace))
-        {
-            combined = string.IsNullOrWhiteSpace(combined) ? stackTrace : combined + " | " + stackTrace;
-        }
-
-        return string.IsNullOrWhiteSpace(combined)
-            ? "Erro no CloudScript ao conceder decks iniciais."
-            : combined;
     }
 
     private static bool TryExtractResult(object functionResult, out StarterDeckGrantResult parsedResult)

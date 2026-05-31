@@ -112,6 +112,7 @@ namespace BrainDuel.Match
     {
         public string    PlayerId;
         public string    DisplayName;
+        public int       Level;
         public int       HP;
         public int       Streak;
         public bool      HasUsedPowerUp;

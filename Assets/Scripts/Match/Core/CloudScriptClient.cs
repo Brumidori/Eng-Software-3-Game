@@ -1,6 +1,6 @@
 using System;
 using PlayFab;
-using PlayFab.ClientModels;
+using PlayFab.CloudScriptModels;
 using UnityEngine;
 
 namespace BrainDuel.Match.Core
@@ -11,12 +11,11 @@ namespace BrainDuel.Match.Core
             Action<object> onSuccess = null,
             Action<string> onError   = null)
         {
-            PlayFabClientAPI.ExecuteCloudScript(
-                new ExecuteCloudScriptRequest
+            PlayFabCloudScriptAPI.ExecuteFunction(
+                new ExecuteFunctionRequest
                 {
-                    FunctionName           = functionName,
-                    FunctionParameter      = args,
-                    GeneratePlayStreamEvent = false
+                    FunctionName      = functionName,
+                    FunctionParameter = args
                 },
                 result =>
                 {

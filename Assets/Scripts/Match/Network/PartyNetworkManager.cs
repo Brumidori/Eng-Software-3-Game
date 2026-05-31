@@ -51,6 +51,19 @@ namespace BrainDuel.Match.Network
         public string LocalPlayerId    { get; private set; }
         public long   AverageLatencyMs { get; private set; }
 
+        // True quando rodando sem o PlayFab Party SDK instalado
+        public bool IsStubMode
+        {
+            get
+            {
+#if PLAYFAB_PARTY_INSTALLED
+                return false;
+#else
+                return true;
+#endif
+            }
+        }
+
         // ----------------------------------------------------------
         // Estado interno
         // ----------------------------------------------------------

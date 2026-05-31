@@ -2,6 +2,8 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using PlayFab;
+using PlayFab.ClientModels;
 
 public class MatchMakingScreenController : MonoBehaviour
 {
@@ -175,8 +177,37 @@ public class MatchMakingScreenController : MonoBehaviour
 
     private void HandleMatchFound(string matchId)
     {
+        BrainDuel.Match.Core.MatchSessionData.MatchId       = matchId;
+        BrainDuel.Match.Core.MatchSessionData.LocalPlayerId = PlayFab.PlayFabSettings.staticPlayer?.EntityId;
+
         StopAnimations();
-        _contagemCoroutine = StartCoroutine(ContagemRegressiva());
+        _contagemCoroutine = StartCoroutine(BuscarNomeEIniciar());
+    }
+
+    private IEnumerator BuscarNomeEIniciar()
+    {
+        bool done = false;
+
+        PlayFabClientAPI.GetAccountInfo(
+            new GetAccountInfoRequest(),
+            result =>
+            {
+                var name = result?.AccountInfo?.TitleInfo?.DisplayName;
+                if (!string.IsNullOrEmpty(name))
+                    BrainDuel.Match.Core.MatchSessionData.LocalDisplayName = name;
+
+                var profile = PlayerDataService.Instance?.CurrentProfile;
+                if (profile != null && profile.level > 0)
+                    BrainDuel.Match.Core.MatchSessionData.LocalLevel = profile.level;
+
+                done = true;
+            },
+            _ => done = true
+        );
+
+        while (!done) yield return null;
+
+        yield return ContagemRegressiva();
     }
 
     private void HandleMatchFailed(PlayFab.PlayFabError _)

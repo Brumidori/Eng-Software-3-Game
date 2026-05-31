@@ -18,15 +18,24 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using PlayFab;
 using PlayFab.Plugins.CloudScript;
+using PlayFab.ServerModels;
 using BrainDuel.CloudScript;
 
 namespace BrainDuel.Server
 {
     public static class MatchFunctions
     {
-        // Chave no Entity Object onde o estado é persistido
-        private const string MatchStateKey = "MatchState";
-        private const string ObjectCollection = "MatchObjects";
+        private const string MatchStateKey     = "MatchState";
+        private const string ObjectCollection  = "MatchObjects";
+
+        // Chave no Title Data com os IDs dos decks iniciais
+        // Valor esperado: JSON array de strings, ex. ["deckHistoria","deckCiencia"]
+        private const string StarterDecksKey   = "starter_decks";
+
+        // Cache de decks em memória — persiste durante a vida da instância Azure Function.
+        // Evita múltiplas leituras ao Title Data para a mesma partida.
+        private static readonly Dictionary<string, DeckSchemaServer> _deckCache
+            = new Dictionary<string, DeckSchemaServer>();
 
         // ----------------------------------------------------------
         // CreateMatch
@@ -123,7 +132,7 @@ namespace BrainDuel.Server
                 return new OkObjectResult("Partida encerrada por rodadas");
             }
 
-            var question = GetQuestionForRound(state, request.RoundNumber);
+            var question = await GetQuestionForRoundAsync(state, request.RoundNumber);
             if (question == null)
             {
                 log.LogError($"[StartNextRound] Pergunta não encontrada para rodada {request.RoundNumber}");
@@ -339,12 +348,11 @@ namespace BrainDuel.Server
         private static PlayerMatchState GetPlayerState(ServerMatchState state, string playerId) =>
             playerId == state.Player1Id ? state.Player1State : state.Player2State;
 
-        private static QuestionData GetQuestionForRound(ServerMatchState state, int round)
+        private static async Task<QuestionData> GetQuestionForRoundAsync(ServerMatchState state, int round)
         {
             int idx = round - 1;
             if (idx < 0 || idx >= state.QuestionPool.Count) return null;
-            // LoadQuestionData é chamado de forma síncrona aqui via cache
-            return LoadQuestionDataSync(state.QuestionPool[idx]);
+            return await LoadQuestionData(state.QuestionPool[idx]);
         }
 
         private static int[] ComputeEliminatedIndices(ServerMatchState state, QuestionData question)
@@ -393,28 +401,286 @@ namespace BrainDuel.Server
             return await PlayFabStorageService.LoadAllActiveMatchesAsync(log);
         }
 
-        private static async Task<QuestionData> LoadQuestionData(string questionId)
-        {
-            // PlayFabEconomyAPI.GetItems ou TitleData
-            await Task.CompletedTask;
-            return null;
-        }
+        // ----------------------------------------------------------
+        // Pool de perguntas
+        // ----------------------------------------------------------
 
-        private static QuestionData LoadQuestionDataSync(string questionId) => null; // via cache
-
+        /// <summary>
+        /// Monta o pool embaralhado de perguntas para a partida.
+        /// Combina os decks equipados pelos dois jogadores, embaralha com
+        /// Fisher-Yates e retorna exatamente MaxRounds IDs no formato
+        /// "{deckId}|{questionId}" (cicla se houver menos de 20 perguntas).
+        /// </summary>
         private static async Task<List<string>> BuildQuestionPool(string p1Id, string p2Id)
         {
-            // Carrega decks de ambos os jogadores, combina e embaralha
-            await Task.CompletedTask;
-            return new List<string>();
+            var p1DeckId = await GetEquippedDeckId(p1Id);
+            var p2DeckId = await GetEquippedDeckId(p2Id);
+
+            // Sem duplicatas quando ambos usam o mesmo deck
+            var deckIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { p1DeckId, p2DeckId }
+                          .Where(d => !string.IsNullOrEmpty(d)).ToList();
+
+            var allIds = new List<string>();
+            foreach (var deckId in deckIds)
+            {
+                var deck = await LoadDeck(deckId);
+                if (deck?.questions == null) continue;
+                foreach (var q in deck.questions)
+                    allIds.Add($"{deckId}|{q.id}");
+            }
+
+            if (allIds.Count == 0) return allIds;
+
+            // Embaralha — Fisher-Yates
+            var rng = new Random();
+            for (int i = allIds.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                var tmp = allIds[i]; allIds[i] = allIds[j]; allIds[j] = tmp;
+            }
+
+            // Garante exatamente MaxRounds entradas (cicla se necessário)
+            var pool = new List<string>(MatchConfig.MaxRounds);
+            for (int i = 0; i < MatchConfig.MaxRounds; i++)
+                pool.Add(allIds[i % allIds.Count]);
+
+            return pool;
         }
 
+        // ----------------------------------------------------------
+        // Carregamento de perguntas
+        // ----------------------------------------------------------
+
+        /// <summary>
+        /// Carrega a pergunta pelo ID composto "{deckId}|{questionId}".
+        /// Usa o cache de deck; carrega do Title Data se necessário.
+        /// </summary>
+        private static async Task<QuestionData> LoadQuestionData(string questionId)
+        {
+            var parts = questionId?.Split('|');
+            if (parts == null || parts.Length != 2) return null;
+
+            string deckId      = parts[0];
+            string localQId    = parts[1];
+
+            var deck = await LoadDeck(deckId);
+            if (deck?.questions == null) return null;
+
+            var q = deck.questions.FirstOrDefault(x => x.id == localQId);
+            return q == null ? null : ConvertToQuestionData(questionId, q, deck);
+        }
+
+        // ----------------------------------------------------------
+        // Helpers de deck
+        // ----------------------------------------------------------
+
+        /// <summary>
+        /// Retorna o deckId equipado pelo jogador.
+        /// Lê "player_profile" do User Data; usa "deckHistoria" como fallback.
+        /// </summary>
+        private static async Task<string> GetEquippedDeckId(string playerId)
+        {
+            try
+            {
+                var data = await PlayFabStorageService.GetUserDataAsync(
+                    playerId, new List<string> { "player_profile" });
+
+                if (data.TryGetValue("player_profile", out var json) && !string.IsNullOrEmpty(json))
+                {
+                    var profile = JsonConvert.DeserializeObject<PlayerProfileServer>(json);
+                    if (!string.IsNullOrEmpty(profile?.equippedDeckId))
+                        return profile.equippedDeckId;
+                }
+            }
+            catch { /* fallback */ }
+
+            return "deckHistoria";
+        }
+
+        /// <summary>
+        /// Carrega o deck do Title Data (chave: "cartas_&lt;categoria&gt;").
+        /// Resultado mantido no cache estático da instância.
+        /// </summary>
+        private static async Task<DeckSchemaServer> LoadDeck(string deckId)
+        {
+            if (_deckCache.TryGetValue(deckId, out var cached)) return cached;
+
+            string titleKey = DeckIdToTitleKey(deckId);
+            var    data     = await PlayFabStorageService.GetTitleDataAsync(
+                                  new List<string> { titleKey });
+
+            if (!data.TryGetValue(titleKey, out var json) || string.IsNullOrEmpty(json))
+                return null;
+
+            var deck = JsonConvert.DeserializeObject<DeckSchemaServer>(json);
+            if (deck != null) _deckCache[deckId] = deck;
+            return deck;
+        }
+
+        /// <summary>
+        /// Mapeia o ID do deck (ex. "deckHistoria") para a chave do Title Data
+        /// (ex. "cartas_historia").  Padrão: remove prefixo "deck", lowercase.
+        /// </summary>
+        private static string DeckIdToTitleKey(string deckId)
+        {
+            const string prefix = "deck";
+            string name = deckId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                ? deckId.Substring(prefix.Length)
+                : deckId;
+            return "cartas_" + name.ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Converte DeckQuestionServer → QuestionData, atribuindo IDs "A"–"D"
+        /// às opções e identificando o CorrectOptionId pela flag is_correct.
+        /// </summary>
+        private static QuestionData ConvertToQuestionData(
+            string fullQuestionId, DeckQuestionServer q, DeckSchemaServer deck)
+        {
+            var    optionIds  = new[] { "A", "B", "C", "D" };
+            var    options    = new List<AnswerOption>();
+            string correctId  = null;
+
+            for (int i = 0; i < q.options.Count && i < optionIds.Length; i++)
+            {
+                var id = optionIds[i];
+                options.Add(new AnswerOption { Id = id, Text = q.options[i].text });
+                if (q.options[i].is_correct) correctId = id;
+            }
+
+            return new QuestionData
+            {
+                QuestionId      = fullQuestionId,
+                Text            = q.text,
+                ThemeId         = deck.deck_id,
+                ThemeName       = deck.theme,
+                Options         = options,
+                CorrectOptionId = correctId ?? "A",
+                DifficultyLevel = 1
+            };
+        }
+
+        // ----------------------------------------------------------
+        // Power-up equipado
+        // ----------------------------------------------------------
+
+        /// <summary>
+        /// Retorna o power-up que o jogador selecionou antes da partida.
+        /// Lê "player_profile" do User Data (campo equippedPowerUp).
+        /// Fallback: PowerUpType.None.
+        /// </summary>
         private static async Task<PowerUpType> GetEquippedPowerUp(string playerId)
         {
-            // Lê do PlayFab Player Data
-            await Task.CompletedTask;
+            try
+            {
+                var data = await PlayFabStorageService.GetUserDataAsync(
+                    playerId, new List<string> { "player_profile" });
+
+                if (data.TryGetValue("player_profile", out var json) && !string.IsNullOrEmpty(json))
+                {
+                    var profile = JsonConvert.DeserializeObject<PlayerProfileServer>(json);
+                    if (!string.IsNullOrEmpty(profile?.equippedPowerUp)
+                        && Enum.TryParse<PowerUpType>(profile.equippedPowerUp, out var powerUp))
+                        return powerUp;
+                }
+            }
+            catch { /* fallback */ }
+
             return PowerUpType.None;
         }
+
+        // ----------------------------------------------------------
+        // GrantStarterDecks
+        // Chamado em registro e login. Idempotente via flag User Data.
+        // ----------------------------------------------------------
+
+        [FunctionName("GrantStarterDecks")]
+        public static async Task<IActionResult> GrantStarterDecks(
+            [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequest req,
+            ILogger log)
+        {
+            PlayFabStorageService.EnsureInitialized();
+
+            var ctx            = await FunctionContext<GrantStarterDecksRequest>.Create(req);
+            string playerId    = ctx.CallerEntityProfile.Entity.Id;
+            string catalogVer  = ctx.FunctionArgument?.CatalogVersion ?? "mainCatalog";
+
+            log.LogInformation($"[GrantStarterDecks] playerId={playerId}");
+
+            // Idempotência — não concede duas vezes
+            var userData = await PlayFabStorageService.GetUserDataAsync(
+                playerId, new List<string> { "starterDecksGranted" });
+
+            if (userData.TryGetValue("starterDecksGranted", out var flag) && flag == "true")
+            {
+                return new OkObjectResult(new
+                {
+                    success        = true,
+                    alreadyGranted = true,
+                    catalogVersion = catalogVer,
+                    grantedItemIds = Array.Empty<string>()
+                });
+            }
+
+            // Lê a lista de decks iniciais do Title Data (configurável sem redeploy)
+            List<string> starterIds = await LoadStarterDeckIds(catalogVer);
+
+            List<string> granted;
+            try
+            {
+                granted = await PlayFabStorageService.GrantItemsAsync(
+                    playerId, catalogVer, starterIds, log);
+            }
+            catch (Exception ex)
+            {
+                log.LogError($"[GrantStarterDecks] Falha ao conceder: {ex.Message}");
+                return new OkObjectResult(new
+                {
+                    success = false,
+                    error   = ex.Message
+                });
+            }
+
+            // Marca como concedido
+            await PlayFabStorageService.SetUserDataAsync(
+                playerId,
+                new Dictionary<string, string> { { "starterDecksGranted", "true" } },
+                log);
+
+            log.LogInformation($"[GrantStarterDecks] Concedido a {playerId}: {string.Join(", ", granted)}");
+
+            return new OkObjectResult(new
+            {
+                success        = true,
+                alreadyGranted = false,
+                catalogVersion = catalogVer,
+                grantedItemIds = granted
+            });
+        }
+
+        /// <summary>
+        /// Lê a lista de IDs dos decks iniciais do Title Data.
+        /// Chave: "starter_decks" → JSON array, ex. ["deckHistoria","deckCiencia"].
+        /// Fallback: ["deckHistoria","deckCiencia"].
+        /// </summary>
+        private static async Task<List<string>> LoadStarterDeckIds(string catalogVer)
+        {
+            try
+            {
+                var data = await PlayFabStorageService.GetTitleDataAsync(
+                    new List<string> { StarterDecksKey });
+
+                if (data.TryGetValue(StarterDecksKey, out var json) && !string.IsNullOrEmpty(json))
+                    return JsonConvert.DeserializeObject<List<string>>(json)
+                           ?? DefaultStarterDecks();
+            }
+            catch { /* usa fallback */ }
+
+            return DefaultStarterDecks();
+        }
+
+        private static List<string> DefaultStarterDecks()
+            => new List<string> { "deckHistoria", "deckCiencia" };
 
         // ----------------------------------------------------------
         // Party broadcast (via PlayFab Party Management API)

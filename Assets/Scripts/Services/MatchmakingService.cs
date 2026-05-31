@@ -192,7 +192,10 @@ public class MatchmakingService : MonoBehaviour
     {
         yield return CancelAllTicketsForUser(singleUser);
 
-        yield return CreateTicket(singleUser);
+        // Aguarda PlayFab processar o cancelamento antes de criar novo ticket
+        yield return new WaitForSeconds(2f);
+
+        yield return CreateTicketWithRetry(singleUser);
         if (CurrentState == MatchmakingState.Failed)
         {
             FinishRoutine();
@@ -480,6 +483,51 @@ public class MatchmakingService : MonoBehaviour
         user.status = "WaitingForMatch";
         user.matchId = null;
         Debug.Log($"[MatchmakingService] Ticket criado para '{user.customId}': {user.ticketId}");
+    }
+
+    private IEnumerator CreateTicketWithRetry(MatchmakingTestUser user)
+    {
+        int   maxRetries = 3;
+        float[] delays   = { 2f, 4f, 8f };
+
+        for (int attempt = 0; attempt < maxRetries; attempt++)
+        {
+            bool          done        = false;
+            CreateMatchmakingTicketResult ticketResult = null;
+            PlayFabError  ticketError  = null;
+
+            user.multiplayerApi.CreateMatchmakingTicket(new CreateMatchmakingTicketRequest
+            {
+                QueueName          = queueName,
+                GiveUpAfterSeconds = timeoutSeconds,
+                Creator            = new MatchmakingPlayer { Entity = user.entity }
+            },
+            result => { ticketResult = result; done = true; },
+            error  => { ticketError  = error;  done = true; });
+
+            while (!done) yield return null;
+
+            if (ticketError == null)
+            {
+                user.ticketId = ticketResult.TicketId;
+                user.status   = "WaitingForMatch";
+                user.matchId  = null;
+                Debug.Log($"[MatchmakingService] Ticket criado: {user.ticketId}");
+                yield break;
+            }
+
+            bool throttled = ticketError.HttpCode == 429;
+
+            if (!throttled || attempt == maxRetries - 1)
+            {
+                HandlePlayFabFailure("Falha ao criar ticket", ticketError);
+                yield break;
+            }
+
+            float wait = delays[Mathf.Min(attempt, delays.Length - 1)];
+            Debug.LogWarning($"[MatchmakingService] Throttling em CreateTicket. Tentativa {attempt + 1}/{maxRetries}. Aguardando {wait}s...");
+            yield return new WaitForSeconds(wait);
+        }
     }
 
     private IEnumerator PollTicket(MatchmakingTestUser user)
