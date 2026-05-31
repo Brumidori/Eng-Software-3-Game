@@ -152,6 +152,11 @@ namespace BrainDuel.CloudScript
         public string PlayerId;
     }
 
+    public class GrantStarterDecksRequest
+    {
+        public string CatalogVersion; // opcional — padrão "mainCatalog"
+    }
+
     // ----------------------------------------------------------
     // Responses enviadas de volta ao cliente e/ou broadcast Party
     // ----------------------------------------------------------
@@ -194,5 +199,42 @@ namespace BrainDuel.CloudScript
     {
         public string Id;
         public string Text;
+    }
+
+    // ----------------------------------------------------------
+    // Deck schemas (espelham DeckSchemaV2.cs do cliente)
+    // Deserializados do Title Data — chave: "cartas_<categoria>"
+    // ----------------------------------------------------------
+
+    public class DeckSchemaServer
+    {
+        public string deck_id;
+        public string theme;
+        public List<DeckQuestionServer> questions;
+    }
+
+    public class DeckQuestionServer
+    {
+        public string id;
+        public string text;
+        public List<DeckOptionServer> options;
+        public int time_limit;
+    }
+
+    public class DeckOptionServer
+    {
+        public string text;
+        public bool is_correct;
+    }
+
+    // ----------------------------------------------------------
+    // Perfil do jogador — apenas campos usados no servidor
+    // Deserializado do User Data — chave: "player_profile"
+    // ----------------------------------------------------------
+
+    public class PlayerProfileServer
+    {
+        public string equippedDeckId  = "";
+        public string equippedPowerUp = "";   // enum name: "SimpleShield", "Bet", etc.
     }
 }

@@ -83,6 +83,8 @@ namespace BrainDuel.Match.States
 
         private void RequestNextRound()
         {
+            if (Context.IsStubMode) return;
+
             CloudScriptClient.Call("StartNextRound", new
             {
                 matchId     = Context.MatchId,

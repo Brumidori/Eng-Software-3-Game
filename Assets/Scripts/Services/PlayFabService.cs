@@ -136,6 +136,7 @@ public class PlayFabService : MonoBehaviour
             {
                 Debug.Log($"[PlayFabService] Registro realizado com sucesso. PlayFabId: {result.PlayFabId}");
                 OnRegisterSuccess?.Invoke();
+                TryGrantStarterDecks();
             },
             error =>
             {
@@ -151,6 +152,23 @@ public class PlayFabService : MonoBehaviour
         var identifier = !string.IsNullOrEmpty(CurrentEmail) ? CurrentEmail : CurrentCustomId;
         Debug.Log($"[PlayFabService] Login realizado com sucesso para '{identifier}'!");
         OnLoginSuccess?.Invoke();
+        TryGrantStarterDecks();
+    }
+
+    private void TryGrantStarterDecks()
+    {
+        if (StarterDeckGrantService.Instance == null)
+        {
+            var go = new GameObject("StarterDeckGrantService");
+            go.AddComponent<StarterDeckGrantService>();
+        }
+        StarterDeckGrantService.Instance.GrantStarterDecks(r =>
+        {
+            if (!r.Success)
+                Debug.LogWarning($"[PlayFabService] GrantStarterDecks falhou: {r.Error}");
+            else if (!r.AlreadyGranted)
+                Debug.Log($"[PlayFabService] Decks iniciais concedidos: {string.Join(", ", r.GrantedItemIds)}");
+        });
     }
 
     private void OnLoginFailureCallback(PlayFabError error)

@@ -220,5 +220,96 @@ namespace BrainDuel.Server
                 Value = JsonConvert.SerializeObject(ids)
             });
         }
+
+        // ----------------------------------------------------------
+        // User Data — perfil e configurações do jogador
+        // ----------------------------------------------------------
+
+        /// <summary>Lê chaves do User Data público de um jogador.</summary>
+        public static async Task<Dictionary<string, string>> GetUserDataAsync(
+            string playerId, List<string> keys, ILogger log = null)
+        {
+            EnsureInitialized();
+
+            var result = await PlayFabServerAPI.GetUserDataAsync(new GetUserDataRequest
+            {
+                PlayFabId = playerId,
+                Keys      = keys
+            });
+
+            if (result.Error != null)
+                throw new Exception($"[Storage] GetUserData falhou: {result.Error.ErrorMessage}");
+
+            return result.Result.Data?
+                       .ToDictionary(kv => kv.Key, kv => kv.Value.Value)
+                   ?? new Dictionary<string, string>();
+        }
+
+        /// <summary>Grava pares chave/valor no User Data público de um jogador.</summary>
+        public static async Task SetUserDataAsync(
+            string playerId, Dictionary<string, string> data, ILogger log = null)
+        {
+            EnsureInitialized();
+
+            var result = await PlayFabServerAPI.UpdateUserDataAsync(new UpdateUserDataRequest
+            {
+                PlayFabId  = playerId,
+                Data       = data,
+                Permission = UserDataPermission.Public
+            });
+
+            if (result.Error != null)
+                throw new Exception($"[Storage] SetUserData falhou: {result.Error.ErrorMessage}");
+
+            log?.LogInformation($"[Storage] UserData atualizado para {playerId}");
+        }
+
+        // ----------------------------------------------------------
+        // Title Data — conteúdo compartilhado (decks, configs)
+        // ----------------------------------------------------------
+
+        /// <summary>Lê chaves do Title Data público (onde os decks estão armazenados).</summary>
+        public static async Task<Dictionary<string, string>> GetTitleDataAsync(
+            List<string> keys, ILogger log = null)
+        {
+            EnsureInitialized();
+
+            var result = await PlayFabServerAPI.GetTitleDataAsync(
+                new PlayFab.ServerModels.GetTitleDataRequest { Keys = keys });
+
+            if (result.Error != null)
+                throw new Exception($"[Storage] GetTitleData falhou: {result.Error.ErrorMessage}");
+
+            return result.Result.Data ?? new Dictionary<string, string>();
+        }
+
+        // ----------------------------------------------------------
+        // Inventário — conceder itens ao jogador
+        // ----------------------------------------------------------
+
+        /// <summary>Concede itens do catálogo ao jogador (usado para decks iniciais).</summary>
+        public static async Task<List<string>> GrantItemsAsync(
+            string playerId, string catalogVersion, List<string> itemIds, ILogger log = null)
+        {
+            EnsureInitialized();
+
+            var result = await PlayFabServerAPI.GrantItemsToUserAsync(new GrantItemsToUserRequest
+            {
+                PlayFabId      = playerId,
+                CatalogVersion = catalogVersion,
+                ItemIds        = itemIds,
+                Annotation     = "starter_grant"
+            });
+
+            if (result.Error != null)
+                throw new Exception($"[Storage] GrantItems falhou: {result.Error.ErrorMessage}");
+
+            var granted = result.Result?.ItemGrantResults?
+                              .Select(r => r.ItemId).ToList()
+                          ?? itemIds;
+
+            log?.LogInformation($"[Storage] Itens concedidos a {playerId}: {string.Join(", ", granted)}");
+            return granted;
+        }
     }
 }
