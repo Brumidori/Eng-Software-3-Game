@@ -125,9 +125,10 @@ public class PlayFabService : MonoBehaviour
 
         var request = new RegisterPlayFabUserRequest
         {
-            Username = username.Trim(),
-            Email = CurrentEmail,
-            Password = password,
+            Username    = username.Trim(),
+            DisplayName = username.Trim(),   // define o Display Name atomicamente no registro
+            Email       = CurrentEmail,
+            Password    = password,
             RequireBothUsernameAndEmail = true
         };
 

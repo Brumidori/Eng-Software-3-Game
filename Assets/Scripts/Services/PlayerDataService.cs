@@ -89,6 +89,28 @@ public class PlayerDataService : MonoBehaviour
         SaveProgress(cachedProfile.level, cachedProfile.currentXp, cachedProfile.settings);
     }
 
+    /// <summary>
+    /// Cria e persiste o perfil inicial de um novo jogador no PlayFab.
+    /// Deve ser chamado uma única vez, logo após o registro bem-sucedido.
+    /// </summary>
+    public void InitializeForNewPlayer(string displayName)
+    {
+        cachedProfile = PlayerProfileData.CreateDefault();
+        if (!string.IsNullOrWhiteSpace(displayName))
+            cachedProfile.displayName = displayName;
+        cachedProfile.equippedDeckId = "deckHistoria";
+
+        string json = JsonUtility.ToJson(cachedProfile);
+        PlayFabService.Client.UpdateUserData(
+            new UpdateUserDataRequest
+            {
+                Data = new Dictionary<string, string> { { PlayerProfileKey, json } }
+            },
+            _ => Debug.Log("[PlayerDataService] Perfil inicial salvo."),
+            e => Debug.LogError($"[PlayerDataService] Falha ao salvar perfil inicial: {e.GenerateErrorReport()}")
+        );
+    }
+
     private void OnGetUserDataSuccess(GetUserDataResult result)
     {
         if (result.Data != null && result.Data.TryGetValue(PlayerProfileKey, out UserDataRecord record) && !string.IsNullOrWhiteSpace(record.Value))
