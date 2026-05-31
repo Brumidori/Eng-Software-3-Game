@@ -173,6 +173,13 @@ public class RegisterScreenHandler : MonoBehaviour
         _isSubmitting = false;
         _registrationSucceeded = true;
         SetFeedback("Conta criada! Concedendo decks iniciais...", false);
+
+        var nickname = nicknameInput != null ? nicknameInput.text.Trim() : string.Empty;
+
+        // Inicializa perfil e estatísticas do novo jogador no PlayFab
+        EnsurePlayerDataService();
+        PlayerDataService.Instance.InitializeForNewPlayer(nickname);
+
         EnsureStarterDeckGrantService();
 
         EnsureRankingService();
@@ -319,6 +326,13 @@ public class RegisterScreenHandler : MonoBehaviour
     {
         if (StarterDeckGrantService.Instance != null) return;
         new GameObject("StarterDeckGrantService").AddComponent<StarterDeckGrantService>();
+    }
+
+
+    private static void EnsurePlayerDataService()
+    {
+        if (PlayerDataService.Instance != null) return;
+        new GameObject("PlayerDataService").AddComponent<PlayerDataService>();
     }
 
     private static void EnsureRankingService()

@@ -101,25 +101,26 @@ public class RankingService : MonoBehaviour
         {
             Statistics = new List<StatisticUpdate>
             {
-                new StatisticUpdate { StatisticName = "acertos_tema_temp", Value = 0 },
-                new StatisticUpdate { StatisticName = "acertos_totais", Value = 0 },
-                new StatisticUpdate { StatisticName = "escudos", Value = 0 },
-                new StatisticUpdate { StatisticName = "partidas_totais", Value = 0 },
-                new StatisticUpdate { StatisticName = "partidas_totais_mensal", Value = 0 },
+                new StatisticUpdate { StatisticName = "acertos_tema_temp",       Value = 0 },
+                new StatisticUpdate { StatisticName = "acertos_totais",          Value = 0 },
+                new StatisticUpdate { StatisticName = "escudos",                 Value = 0 },
+                new StatisticUpdate { StatisticName = "losses",                  Value = 0 },
+                new StatisticUpdate { StatisticName = "partidas_totais",         Value = 0 },
+                new StatisticUpdate { StatisticName = "partidas_totais_mensal",  Value = 0 },
                 new StatisticUpdate { StatisticName = "partidas_totais_semanal", Value = 0 },
-                new StatisticUpdate { StatisticName = "vitorias_mensal", Value = 0 },
-                new StatisticUpdate { StatisticName = "vitorias_semanal", Value = 0 },
-                new StatisticUpdate { StatisticName = "wins", Value = 0 },
-                new StatisticUpdate { StatisticName = "xp_total", Value = 0 },
-                new StatisticUpdate { StatisticName = "xp_mensal", Value = 0 },
-                new StatisticUpdate { StatisticName = "xp_semanal", Value = 0 }
+                new StatisticUpdate { StatisticName = "score",                   Value = 0 },
+                new StatisticUpdate { StatisticName = "vitorias_mensal",         Value = 0 },
+                new StatisticUpdate { StatisticName = "vitorias_semanal",        Value = 0 },
+                new StatisticUpdate { StatisticName = "wins",                    Value = 0 },
+                new StatisticUpdate { StatisticName = "xp_total",                Value = 0 },
+                new StatisticUpdate { StatisticName = "xp_mensal",               Value = 0 },
+                new StatisticUpdate { StatisticName = "xp_semanal",              Value = 0 }
             }
         };
 
-        // Envia o pacote pronto para o PlayFab
         PlayFabClientAPI.UpdatePlayerStatistics(request,
-            result => Debug.Log("Estatísticas criadas com sucesso!"),
-            error => Debug.LogError("Erro ao criar estatísticas: " + error.ErrorMessage)
+            result => Debug.Log("[RankingService] Estatísticas inicializadas com sucesso."),
+            error => Debug.LogError("[RankingService] Erro ao inicializar estatísticas: " + error.ErrorMessage)
         );
     }
 
