@@ -53,7 +53,7 @@ namespace BrainDuel.Match
     {
         public const int   InitialHP                = 100;
         public const int   MaxRounds               = 20;
-        public const int   ThemePhaseDurationMs    = 4_000;
+        public const int   ThemePhaseDurationMs    = 5_000;
         public const int   QuestionPhaseDurationMs = 20_000;
         public const int   RevealPhaseDurationMs   = 3_000;
         public const int   RoundEndPhaseDurationMs = 1_500;

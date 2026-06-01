@@ -15,7 +15,8 @@ public class PlayerProfileData
     public float accuracy = 0f;
     public string title = "NOVATO";
     public int brainCoins = 0;
-    public string equippedDeckId = "";
+    public string equippedDeckId  = "";
+    public string equippedPowerUp = "";
     public List<PlayerDeckData> decks = new List<PlayerDeckData>();
     public PlayerBasicSettings settings = new PlayerBasicSettings();
 
@@ -38,15 +39,14 @@ public class PlayerProfileData
             accuracy = 78f,
             title = "MESTRE DO TRIVIA",
             brainCoins = 13500,
-            equippedDeckId = "deckEntretenimento",
+            equippedDeckId = "deckHistoria",
             decks = new List<PlayerDeckData>
             {
                 new PlayerDeckData { id = "deckAnimes", category = "ANIMES", colorHex = "", iconName = "", isOwned = true, isEquipped = false },
                 new PlayerDeckData { id = "deckAstronomia", category = "ASTRONOMIA", colorHex = "", iconName = "", isOwned = true, isEquipped = false },
                 new PlayerDeckData { id = "deckDireito", category = "DIREITO", colorHex = "", iconName = "", isOwned = true, isEquipped = false },
                 new PlayerDeckData { id = "deckGastronomia", category = "GASTRONOMIA", colorHex = "", iconName = "", isOwned = true, isEquipped = false },
-                new PlayerDeckData { id = "deckHistoria", category = "HISTORIA", colorHex = "#8B2020", iconName = "history", isOwned = true, isEquipped = false },
-                new PlayerDeckData { id = "deckEntretenimento", category = "ENTRETENIMENTO", colorHex = "#D4A017", iconName = "entertainment", isOwned = true, isEquipped = true },
+                new PlayerDeckData { id = "deckHistoria", category = "HISTORIA", colorHex = "#8B2020", iconName = "history", isOwned = true, isEquipped = true },
                 new PlayerDeckData { id = "deckGeografia", category = "GEOGRAFIA", colorHex = "#1E5D9A", iconName = "geography", isOwned = true, isEquipped = false },
                 new PlayerDeckData { id = "deckCiencia", category = "CIENCIA", colorHex = "#2E8B57", iconName = "science", isOwned = true, isEquipped = false },
                 new PlayerDeckData { id = "deckLiteratura", category = "LITERATURA", colorHex = "", iconName = "", isOwned = true, isEquipped = false },

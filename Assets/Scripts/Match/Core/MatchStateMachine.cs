@@ -4,7 +4,7 @@
 // CloudScript e delega para o estado ativo.
 //
 // Fluxo por rodada:
-//   ThemeAndPowerUp (4s) → Question (20s) → Reveal (3s) → RoundEnd (1.5s)
+//   ThemeAndPowerUp (5s) → Question (20s) → Reveal (3s) → RoundEnd (1.5s)
 //   → [next round ou MatchEnd]
 // ============================================================
 using System;
@@ -127,11 +127,12 @@ namespace BrainDuel.Match.Core
                     IsActive     = true,
                     Player1State = new PlayerMatchState
                     {
-                        PlayerId    = Context.LocalPlayerId,
-                        DisplayName = Context.LocalDisplayName,
-                        Level       = Context.LocalLevel,
-                        HP          = MatchConfig.InitialHP,
-                        IsConnected = true,
+                        PlayerId        = Context.LocalPlayerId,
+                        DisplayName     = Context.LocalDisplayName,
+                        Level           = Context.LocalLevel,
+                        HP              = MatchConfig.InitialHP,
+                        IsConnected     = true,
+                        EquippedPowerUp = ResolveEquippedPowerUp(),
                     },
                     Player2State = new PlayerMatchState
                     {
@@ -150,8 +151,8 @@ namespace BrainDuel.Match.Core
                 HandleRoundStart(new RoundStartPayload
                 {
                     RoundNumber        = 1,
-                    ThemeId            = "stub",
-                    ThemeName          = "Tema de Teste",
+                    ThemeId            = "Historia",
+                    ThemeName          = "Historia",
                     ServerTimestampMs  = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     ThemeDurationMs    = MatchConfig.ThemePhaseDurationMs,
                     QuestionDurationMs = MatchConfig.QuestionPhaseDurationMs,
@@ -316,11 +317,15 @@ namespace BrainDuel.Match.Core
                     if (Context.ServerState != null)
                         Context.ServerState.CurrentRound = nextRound;
 
+                    // Alterna entre temas disponíveis para variar visualmente no stub
+                    string[] temasStub = { "Historia", "Ciencia", "Geografia", "Tecnologia", "Literatura" };
+                    string temaStub = temasStub[(nextRound - 1) % temasStub.Length];
+
                     HandleRoundStart(new RoundStartPayload
                     {
                         RoundNumber        = nextRound,
-                        ThemeId            = "stub",
-                        ThemeName          = $"Tema de Teste (Round {nextRound})",
+                        ThemeId            = temaStub,
+                        ThemeName          = temaStub,
                         ServerTimestampMs  = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                         ThemeDurationMs    = MatchConfig.ThemePhaseDurationMs,
                         QuestionDurationMs = MatchConfig.QuestionPhaseDurationMs,
@@ -381,6 +386,22 @@ namespace BrainDuel.Match.Core
                         PowerUp  = type
                     });
             });
+        }
+
+        // ----------------------------------------------------------
+        // Helpers
+        // ----------------------------------------------------------
+
+        private static PowerUpType ResolveEquippedPowerUp()
+        {
+            var raw = PlayerDataService.Instance?.CurrentProfile?.equippedPowerUp;
+            if (!string.IsNullOrWhiteSpace(raw) &&
+                Enum.TryParse<PowerUpType>(raw, ignoreCase: true, out var type) &&
+                type != PowerUpType.None)
+            {
+                return type;
+            }
+            return PowerUpType.None;
         }
 
         // ----------------------------------------------------------
