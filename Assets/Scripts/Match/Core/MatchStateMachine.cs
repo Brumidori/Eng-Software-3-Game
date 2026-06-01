@@ -43,6 +43,9 @@ namespace BrainDuel.Match.Core
         private ReconnectionManager                    _reconnectionManager;
         private Coroutine                              _stubConductorCoroutine;
 
+        private struct StubRoundData { public string ThemeName; public Carta Carta; }
+        private StubRoundData[] _stubRoundPool;
+
         // ----------------------------------------------------------
         // Inicialização
         // ----------------------------------------------------------
@@ -153,12 +156,18 @@ namespace BrainDuel.Match.Core
 
             if (party.IsStubMode)
             {
+                yield return BuildStubRoundPool();
+
+                string temaRound1 = _stubRoundPool != null && _stubRoundPool.Length > 0
+                    ? _stubRoundPool[0].ThemeName
+                    : "Historia";
+
                 // Modo stub: pula chamada ao servidor e dispara RoundStart localmente
                 HandleRoundStart(new RoundStartPayload
                 {
                     RoundNumber        = 1,
-                    ThemeId            = "Historia",
-                    ThemeName          = "Historia",
+                    ThemeId            = temaRound1,
+                    ThemeName          = temaRound1,
                     ServerTimestampMs  = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     ThemeDurationMs    = MatchConfig.ThemePhaseDurationMs,
                     QuestionDurationMs = MatchConfig.QuestionPhaseDurationMs,
@@ -249,20 +258,46 @@ namespace BrainDuel.Match.Core
                 {
                     yield return new WaitForSeconds(MatchConfig.ThemePhaseDurationMs / 1000f + 0.1f);
                     if (Phase != MatchPhase.ThemeAndPowerUp) yield break;
-                    HandleQuestionReveal(new QuestionRevealPayload
+
+                    QuestionRevealPayload qPayload;
+                    int roundIdx = Context.CurrentRound - 1;
+
+                    if (_stubRoundPool != null && roundIdx >= 0 && roundIdx < _stubRoundPool.Length
+                        && _stubRoundPool[roundIdx].Carta != null)
                     {
-                        QuestionId        = "stub_q",
-                        QuestionText      = "Qual é a capital do Brasil?",
-                        Answers           = new[]
+                        var carta   = _stubRoundPool[roundIdx].Carta;
+                        var answers = new AnswerOption[carta.alternativas.Count];
+                        for (int i = 0; i < carta.alternativas.Count; i++)
+                            answers[i] = new AnswerOption { Id = ((char)('A' + i)).ToString(), Text = carta.alternativas[i] };
+
+                        qPayload = new QuestionRevealPayload
                         {
-                            new AnswerOption { Id = "A", Text = "Brasília"       },
-                            new AnswerOption { Id = "B", Text = "São Paulo"      },
-                            new AnswerOption { Id = "C", Text = "Rio de Janeiro" },
-                            new AnswerOption { Id = "D", Text = "Salvador"       },
-                        },
-                        ServerTimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        DurationMs        = MatchConfig.QuestionPhaseDurationMs,
-                    });
+                            QuestionId        = carta.id,
+                            QuestionText      = carta.pergunta,
+                            Answers           = answers,
+                            ServerTimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                            DurationMs        = MatchConfig.QuestionPhaseDurationMs,
+                        };
+                    }
+                    else
+                    {
+                        qPayload = new QuestionRevealPayload
+                        {
+                            QuestionId        = "stub_q",
+                            QuestionText      = "Qual é a capital do Brasil?",
+                            Answers           = new[]
+                            {
+                                new AnswerOption { Id = "A", Text = "Brasília"       },
+                                new AnswerOption { Id = "B", Text = "São Paulo"      },
+                                new AnswerOption { Id = "C", Text = "Rio de Janeiro" },
+                                new AnswerOption { Id = "D", Text = "Salvador"       },
+                            },
+                            ServerTimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                            DurationMs        = MatchConfig.QuestionPhaseDurationMs,
+                        };
+                    }
+
+                    HandleQuestionReveal(qPayload);
                     break;
                 }
 
@@ -271,27 +306,39 @@ namespace BrainDuel.Match.Core
                     yield return new WaitForSeconds(MatchConfig.QuestionPhaseDurationMs / 1000f + 0.1f);
                     if (Phase != MatchPhase.Question) yield break;
 
-                    int round      = Context.CurrentRound;
+                    int round    = Context.CurrentRound;
+                    int roundIdx = round - 1;
                     int localHP    = Context.LocalHP;
                     int opponentHP = Context.OpponentHP;
-                    bool answered  = Context.HasAnsweredThisRound;
-                    int dmg        = answered ? DamageConfig.BaseDamage : 0;
-                    int newOppHP   = Mathf.Max(0, opponentHP - dmg);
+
+                    // Resolve correct answer ID from pool (index → letter) or hardcoded fallback
+                    string correctAnswerId = "A";
+                    if (_stubRoundPool != null && roundIdx >= 0 && roundIdx < _stubRoundPool.Length
+                        && _stubRoundPool[roundIdx].Carta != null)
+                        correctAnswerId = ((char)('A' + _stubRoundPool[roundIdx].Carta.respostaCorreta)).ToString();
+
+                    bool answered = Context.HasAnsweredThisRound;
+                    bool acertou  = answered && Context.SelectedAnswerId == correctAnswerId;
+                    int  dmg      = acertou ? DamageConfig.BaseDamage : 0;
+                    int  newOppHP = Mathf.Max(0, opponentHP - dmg);
                     bool matchOver = newOppHP <= 0 || round >= MatchConfig.MaxRounds;
 
                     HandleRoundResult(new RoundResultPayload
                     {
-                        RoundNumber   = round,
-                        Player1Result = new RoundPlayerResult
+                        RoundNumber     = round,
+                        CorrectAnswerId = correctAnswerId,
+                        Player1Result   = new RoundPlayerResult
                         {
                             PlayerId    = Context.LocalPlayerId,
-                            Result      = answered ? AnswerResult.Correct : AnswerResult.NotAnswered,
+                            Result      = answered
+                                            ? (acertou ? AnswerResult.Correct : AnswerResult.Incorrect)
+                                            : AnswerResult.NotAnswered,
                             AnsweredId  = Context.SelectedAnswerId,
                             DamageDealt = dmg,
                             HPBefore    = localHP,
                             HPAfter     = localHP,
                             WasShielded = false,
-                            StreakAfter = answered ? Context.LocalStreak + 1 : 0,
+                            StreakAfter = acertou ? Context.LocalStreak + 1 : 0,
                             Breakdown   = new DamageBreakdown { BaseDamage = dmg },
                         },
                         Player2Result = new RoundPlayerResult
@@ -323,9 +370,15 @@ namespace BrainDuel.Match.Core
                     if (Context.ServerState != null)
                         Context.ServerState.CurrentRound = nextRound;
 
-                    // Alterna entre temas disponíveis para variar visualmente no stub
-                    string[] temasStub = { "Historia", "Ciencia", "Geografia", "Tecnologia", "Literatura" };
-                    string temaStub = temasStub[(nextRound - 1) % temasStub.Length];
+                    int nextRoundIdx = nextRound - 1;
+                    string temaStub;
+                    if (_stubRoundPool != null && nextRoundIdx >= 0 && nextRoundIdx < _stubRoundPool.Length)
+                        temaStub = _stubRoundPool[nextRoundIdx].ThemeName;
+                    else
+                    {
+                        string[] temasStub = { "Historia", "Ciencia", "Geografia", "Tecnologia", "Literatura" };
+                        temaStub = temasStub[(nextRound - 1) % temasStub.Length];
+                    }
 
                     HandleRoundStart(new RoundStartPayload
                     {
@@ -339,6 +392,97 @@ namespace BrainDuel.Match.Core
                     break;
                 }
             }
+        }
+
+        // ----------------------------------------------------------
+        // Carregamento de perguntas reais para modo stub
+        // ----------------------------------------------------------
+
+        private IEnumerator BuildStubRoundPool()
+        {
+            _stubRoundPool = null;
+
+            var deckService = DeckService.Instance;
+            if (deckService == null) yield break;
+
+            // Aguarda DeckIndex ficar disponível (máx 5s)
+            float idxDeadline = Time.time + 5f;
+            while (deckService.GetAvailableCategories().Count == 0 && Time.time < idxDeadline)
+                yield return new WaitForSeconds(0.3f);
+
+            var allCategories = deckService.GetAvailableCategories();
+            if (allCategories.Count == 0) yield break;
+
+            // Resolve quais categorias o jogador possui
+            var profile    = PlayerDataService.Instance?.CurrentProfile;
+            var ownedDecks = profile?.decks?.FindAll(d => d.isOwned);
+            var categorias = new List<string>();
+
+            if (ownedDecks != null && ownedDecks.Count > 0)
+            {
+                foreach (var deck in ownedDecks)
+                {
+                    // "deckHistoria" → "Historia"
+                    var suffix = deck.id.StartsWith("deck", StringComparison.OrdinalIgnoreCase)
+                        ? deck.id.Substring(4)
+                        : deck.id;
+                    var match = allCategories.Find(c =>
+                        string.Equals(c, suffix, StringComparison.OrdinalIgnoreCase));
+                    if (match != null && !categorias.Contains(match))
+                        categorias.Add(match);
+                }
+            }
+
+            // Fallback: usa todas as categorias disponíveis
+            if (categorias.Count == 0)
+                categorias.AddRange(allCategories);
+
+            // Dispara carregamento dos decks ainda não cacheados
+            foreach (var cat in categorias)
+            {
+                if (deckService.GetDeck(cat) == null)
+                    deckService.LoadDeck(cat);
+            }
+
+            // Aguarda todos carregarem (máx 10s)
+            float deckDeadline = Time.time + 10f;
+            while (Time.time < deckDeadline)
+            {
+                bool allLoaded = true;
+                foreach (var cat in categorias)
+                {
+                    var d = deckService.GetDeck(cat);
+                    if (d == null || d.Count == 0) { allLoaded = false; break; }
+                }
+                if (allLoaded) break;
+                yield return new WaitForSeconds(0.5f);
+            }
+
+            // Coleta todas as perguntas disponíveis
+            var pool = new List<StubRoundData>();
+            foreach (var cat in categorias)
+            {
+                var deck = deckService.GetDeck(cat);
+                if (deck == null) continue;
+                foreach (var carta in deck)
+                    pool.Add(new StubRoundData { ThemeName = cat, Carta = carta });
+            }
+
+            if (pool.Count == 0) yield break;
+
+            // Embaralha Fisher-Yates
+            for (int i = pool.Count - 1; i > 0; i--)
+            {
+                int j = UnityEngine.Random.Range(0, i + 1);
+                (pool[i], pool[j]) = (pool[j], pool[i]);
+            }
+
+            int rounds = MatchConfig.MaxRounds;
+            _stubRoundPool = new StubRoundData[rounds];
+            for (int i = 0; i < rounds; i++)
+                _stubRoundPool[i] = pool[i % pool.Count];
+
+            Debug.Log($"[MatchStateMachine] Pool stub: {rounds} rodadas, {pool.Count} perguntas de {categorias.Count} deck(s).");
         }
 
         // ----------------------------------------------------------

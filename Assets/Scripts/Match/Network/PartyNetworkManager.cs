@@ -42,7 +42,6 @@ namespace BrainDuel.Match.Network
         public event Action<string>                  OnOpponentReconnected;
         public event Action<string>                  OnOpponentAbandoned;
         public event Action                          OnNetworkReady;
-        public event Action<string>                  OnNetworkError;
 
         // ----------------------------------------------------------
         // Estado público

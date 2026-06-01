@@ -64,10 +64,19 @@ namespace BrainDuel.Match.UI
         // ----------------------------------------------------------
 
         [Header("Panel Reveal")]
-        [SerializeField] private GameObject panelReveal;
-        [SerializeField] private TMP_Text   escolhaJogador1Text;
-        [SerializeField] private TMP_Text   escolhaJogador2Text;
-        [SerializeField] private TMP_Text   damagePopupText;
+        [SerializeField] private GameObject    panelReveal;
+        // 4 RectTransforms dos slots de resposta no card do reveal (ordem A-B-C-D)
+        [SerializeField] private RectTransform[] revealOpcaoSlots;
+        // Deslocamento horizontal para separar J1 (esquerda) e J2 (direita) quando escolhem o mesmo slot
+        [SerializeField] private float revealIndicadorOffsetX = 40f;
+        // Imagens-indicador que são repositionadas sobre o slot certo
+        [SerializeField] private Image          respostaCorretaImage;   // RespostaCorreta
+        [SerializeField] private Image          escolhaJogador1Image;   // Escolhajogador1
+        [SerializeField] private Image          escolhaJogador2Image;   // Escolhajogador2
+        [SerializeField] private TMP_Text       danoJogador1Text;
+        [SerializeField] private TMP_Text       danoJogador2Text;
+        [SerializeField] private TMP_Text       damagePopupText;         // ComboPop — resultado do jogador local
+        [SerializeField] private TMP_Text       damagePopupJogador2Text; // resultado do oponente
 
         // ----------------------------------------------------------
         // Panel: Fim de Partida
@@ -116,7 +125,7 @@ namespace BrainDuel.Match.UI
         void Start()
         {
             if (stateMachine == null)
-                stateMachine = FindObjectOfType<MatchStateMachine>();
+                stateMachine = FindAnyObjectByType<MatchStateMachine>();
 
             _ctx = stateMachine.Context;
 
@@ -204,13 +213,20 @@ namespace BrainDuel.Match.UI
 
         void HandlePhaseChanged(MatchPhase fase)
         {
+            // Reveal: mantém o panelPergunta congelado como fundo — apenas sobrepõe o reveal
+            if (fase == MatchPhase.Reveal)
+            {
+                panelReveal.SetActive(true);
+                return;
+            }
+
             DesativarTodosPanels();
             PararTimer();
 
             switch (fase)
             {
                 case MatchPhase.ThemeAndPowerUp:
-                    InicializarHUD();   // atualiza nomes/nível/rodada toda vez que a rodada começa
+                    InicializarHUD();
                     panelTemaPoderes.SetActive(true);
                     IniciarTimer(timerTemaPoderesText, MatchConfig.ThemePhaseDurationMs / 1000f, IrParaPergunta);
                     AtualizarTextoRodada();
@@ -218,11 +234,8 @@ namespace BrainDuel.Match.UI
 
                 case MatchPhase.Question:
                     panelPergunta.SetActive(true);
-                    IniciarTimer(timerPerguntaText, MatchConfig.QuestionPhaseDurationMs / 1000f);
-                    break;
-
-                case MatchPhase.Reveal:
-                    panelReveal.SetActive(true);
+                    // Ao chegar em 0 congela o painel (botões + timer) sem escondê-lo
+                    IniciarTimer(timerPerguntaText, MatchConfig.QuestionPhaseDurationMs / 1000f, CongelarPainelPergunta);
                     break;
 
                 case MatchPhase.MatchEnd:
@@ -513,7 +526,20 @@ namespace BrainDuel.Match.UI
 
             string answerId = _perguntaAtual.Answers[index].Id;
             stateMachine.SubmitAnswer(answerId);
+            CongelarPainelPergunta();
+        }
 
+        // Congela o painel de pergunta: timer em 0, botões não-interativos.
+        // Chamado ao responder OU quando o tempo esgota.
+        void CongelarPainelPergunta()
+        {
+            PararTimer();
+            if (timerPerguntaText != null)
+            {
+                timerPerguntaText.text                = "0";
+                timerPerguntaText.color               = Color.red;
+                timerPerguntaText.enableVertexGradient = false;
+            }
             if (opcaoButtons != null)
                 foreach (var btn in opcaoButtons)
                     if (btn != null) btn.interactable = false;
@@ -530,36 +556,88 @@ namespace BrainDuel.Match.UI
             var localResult    = _ctx.GetLocalResult(payload);
             var oponenteResult = _ctx.GetOpponentResult(payload);
 
-            if (escolhaJogador1Text != null)
-                escolhaJogador1Text.text = $"Você: {TextoResposta(localResult.AnsweredId)}";
-            if (escolhaJogador2Text != null)
-                escolhaJogador2Text.text = $"Adversário: {TextoResposta(oponenteResult.AnsweredId)}";
+            // Posiciona indicadores sobre os slots de resposta
+            int correctIdx = AnswerIdToIndex(payload.CorrectAnswerId);
+            int j1Idx      = AnswerIdToIndex(localResult.AnsweredId);
+            int j2Idx      = AnswerIdToIndex(oponenteResult.AnsweredId);
 
-            if (damagePopupText == null) return;
+            // Resposta correta: centro do slot
+            MoverIndicador(respostaCorretaImage, correctIdx, ativo: true,  offsetX: 0f);
+            // Cérebros: posicionados sobre o slot escolhido, deslocados para não sobrepor
+            MoverIndicador(escolhaJogador1Image, j1Idx, ativo: localResult.Result    != AnswerResult.NotAnswered, offsetX: -revealIndicadorOffsetX);
+            MoverIndicador(escolhaJogador2Image, j2Idx, ativo: oponenteResult.Result != AnswerResult.NotAnswered, offsetX:  revealIndicadorOffsetX);
 
-            bool acertou = localResult.Result == AnswerResult.Correct;
-            int  dano    = localResult.DamageDealt;
+            // Dano sofrido por cada jogador (HPBefore − HPAfter do receptor)
+            int danoRecebido1 = localResult.HPBefore    - localResult.HPAfter;
+            int danoRecebido2 = oponenteResult.HPBefore - oponenteResult.HPAfter;
 
-            if (acertou)
+            if (danoJogador1Text != null)
             {
-                damagePopupText.text  = $"ACERTOU!  -{dano} HP";
-                damagePopupText.color = Color.green;
+                danoJogador1Text.text                = danoRecebido1 > 0 ? $"-{danoRecebido1} HP" : "0 HP";
+                danoJogador1Text.color               = danoRecebido1 > 0 ? Color.red : Color.white;
+                danoJogador1Text.enableVertexGradient = false;
             }
-            else
+            if (danoJogador2Text != null)
             {
-                damagePopupText.text  = "Errou!";
-                damagePopupText.color = Color.red;
+                danoJogador2Text.text                = danoRecebido2 > 0 ? $"-{danoRecebido2} HP" : "0 HP";
+                danoJogador2Text.color               = danoRecebido2 > 0 ? Color.red : Color.white;
+                danoJogador2Text.enableVertexGradient = false;
+            }
+
+            // Popup resultado — jogador local
+            ExibirPopupResultado(damagePopupText,         localResult.Result);
+            // Popup resultado — oponente
+            ExibirPopupResultado(damagePopupJogador2Text, oponenteResult.Result);
+        }
+
+        static void ExibirPopupResultado(TMP_Text label, AnswerResult resultado)
+        {
+            if (label == null) return;
+            bool acertou     = resultado == AnswerResult.Correct;
+            bool semResposta = resultado == AnswerResult.NotAnswered;
+            label.text                = acertou ? "ACERTOU!" : semResposta ? "TEMPO ESGOTADO!" : "ERROU!";
+            label.color               = acertou ? Color.green : Color.red;
+            label.enableVertexGradient = false;
+        }
+
+        // Move a imagem-indicador para cima do slot cujo índice é slotIdx.
+        // offsetX desloca horizontalmente (negativo = esquerda, positivo = direita).
+        void MoverIndicador(Image indicador, int slotIdx, bool ativo, float offsetX = 0f)
+        {
+            if (indicador == null) return;
+            bool valido = ativo
+                && slotIdx >= 0
+                && revealOpcaoSlots != null
+                && slotIdx < revealOpcaoSlots.Length
+                && revealOpcaoSlots[slotIdx] != null;
+
+            indicador.gameObject.SetActive(valido);
+            if (valido)
+            {
+                Vector3 pos = revealOpcaoSlots[slotIdx].position;
+                pos.x += offsetX;
+                indicador.transform.position = pos;
             }
         }
 
-        string TextoResposta(string answerId)
+
+        static void TintarIndicador(Image indicador, AnswerResult resultado)
         {
-            if (_perguntaAtual == null || string.IsNullOrEmpty(answerId)) return "—";
+            if (indicador == null || !indicador.gameObject.activeSelf) return;
+            indicador.color = resultado switch
+            {
+                AnswerResult.Correct   => new Color(0.4f, 1f, 0.4f),
+                AnswerResult.Incorrect => new Color(1f, 0.4f, 0.4f),
+                _                      => Color.white
+            };
+        }
 
-            foreach (var opt in _perguntaAtual.Answers)
-                if (opt.Id == answerId) return opt.Text;
-
-            return "—";
+        // "A" → 0, "B" → 1, "C" → 2, "D" → 3; qualquer outro → -1
+        static int AnswerIdToIndex(string id)
+        {
+            if (string.IsNullOrEmpty(id) || id.Length != 1) return -1;
+            char c = char.ToUpperInvariant(id[0]);
+            return (c >= 'A' && c <= 'D') ? c - 'A' : -1;
         }
 
         // ----------------------------------------------------------

@@ -857,7 +857,7 @@ MonoBehaviour:
   passwordA: senha123
   emailB: testeitens6@email.com
   passwordB: senha123
-  timeoutSeconds: 10
+  timeoutSeconds: 30
   pollIntervalSeconds: 2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
