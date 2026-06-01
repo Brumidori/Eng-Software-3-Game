@@ -15,11 +15,35 @@ namespace BrainDuel.Match.Core
         // ----------------------------------------------------------
         // Identidade
         // ----------------------------------------------------------
-        public string MatchId          { get; set; }
-        public string LocalPlayerId    { get; set; }
-        public string OpponentId       { get; set; }
-        public string LocalDisplayName { get; set; }
-        public string OpponentDisplayName { get; set; }
+        public string MatchId       { get; set; }
+        public string LocalPlayerId { get; set; }
+        public string OpponentId    { get; set; }
+
+        private string _localDisplayName    = "Você";
+        private string _opponentDisplayName = "Adversário";
+
+        public string LocalDisplayName
+        {
+            get
+            {
+                var s = LocalPlayer?.DisplayName;
+                return !string.IsNullOrEmpty(s) ? s : _localDisplayName;
+            }
+            set => _localDisplayName = value;
+        }
+
+        public string OpponentDisplayName
+        {
+            get
+            {
+                var s = OpponentPlayer?.DisplayName;
+                return !string.IsNullOrEmpty(s) ? s : _opponentDisplayName;
+            }
+            set => _opponentDisplayName = value;
+        }
+
+        public int LocalLevel    { get; set; } = 1;
+        public int OpponentLevel => OpponentPlayer?.Level ?? 0;
 
         // ----------------------------------------------------------
         // Estado autoritativo (sincronizado com servidor)
@@ -124,6 +148,8 @@ namespace BrainDuel.Match.Core
         // ----------------------------------------------------------
         // Helpers
         // ----------------------------------------------------------
+
+        public bool IsStubMode => BrainDuel.Match.Network.PartyNetworkManager.Instance?.IsStubMode == true;
 
         public bool IsLocalPlayer(string playerId) => playerId == LocalPlayerId;
 

@@ -48,9 +48,17 @@ namespace BrainDuel.Match.PowerUps
         // Ativação (chamado pela UI durante ThemeAndPowerUp)
         // ----------------------------------------------------------
 
-        public void TryActivate()
+        public void TryActivate() => TryActivate(EquippedPowerUp);
+
+        public void TryActivate(PowerUpType tipo)
         {
-            if (!CanActivate)
+            if (IsUsed)
+            {
+                OnPowerUpUnavailable?.Invoke();
+                return;
+            }
+
+            if (tipo == PowerUpType.None)
             {
                 OnPowerUpUnavailable?.Invoke();
                 return;
@@ -63,11 +71,12 @@ namespace BrainDuel.Match.PowerUps
                 return;
             }
 
-            IsUsed = true;
-            _machine.ActivatePowerUp(EquippedPowerUp);
-            OnPowerUpActivated?.Invoke(EquippedPowerUp);
+            IsUsed          = true;
+            EquippedPowerUp = tipo;
+            _machine.ActivatePowerUp(tipo);
+            OnPowerUpActivated?.Invoke(tipo);
 
-            Debug.Log($"[PowerUp] {EquippedPowerUp} ativado na rodada {_context.CurrentRound}");
+            Debug.Log($"[PowerUp] {tipo} ativado na rodada {_context?.CurrentRound}");
         }
 
         // ----------------------------------------------------------

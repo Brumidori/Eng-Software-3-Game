@@ -6,23 +6,512 @@
 //   2. Seu título → Build → CloudScript
 //   3. Cole TODO este arquivo na aba de edição
 //   4. Clique em "Save" e depois "Deploy to players"
-//
-// Este código roda nos servidores do próprio PlayFab.
-// Não é necessário Azure, servidor próprio ou conta extra.
 // ============================================================
 
+
 // ============================================================
-// CONSTANTES
+// SEÇÃO 1 — ECONOMY
+// ============================================================
+
+handlers.EconomyAddCurrency = function (args, context) {
+    var currencyCode = args && args.currencyCode ? args.currencyCode : null;
+    var amount = args && args.amount ? parseInt(args.amount, 10) : 0;
+
+    if (!currencyCode) return { success: false, error: "currencyCode is required" };
+    if (!amount || amount <= 0) return { success: false, error: "amount must be > 0" };
+
+    var addResult = server.AddUserVirtualCurrency({
+        PlayFabId: currentPlayerId,
+        VirtualCurrency: currencyCode,
+        Amount: amount
+    });
+
+    return { success: true, operation: "add", currencyCode: currencyCode, balance: addResult.Balance };
+};
+
+handlers.EconomySubtractCurrency = function (args, context) {
+    var currencyCode = args && args.currencyCode ? args.currencyCode : null;
+    var amount = args && args.amount ? parseInt(args.amount, 10) : 0;
+
+    if (!currencyCode) return { success: false, error: "currencyCode is required" };
+    if (!amount || amount <= 0) return { success: false, error: "amount must be > 0" };
+
+    var inventory = server.GetUserInventory({ PlayFabId: currentPlayerId });
+    var currentBalance = inventory.VirtualCurrency && inventory.VirtualCurrency[currencyCode]
+        ? inventory.VirtualCurrency[currencyCode] : 0;
+
+    if (currentBalance < amount) {
+        return { success: false, error: "insufficient balance", currencyCode: currencyCode, balance: currentBalance };
+    }
+
+    var subtractResult = server.SubtractUserVirtualCurrency({
+        PlayFabId: currentPlayerId,
+        VirtualCurrency: currencyCode,
+        Amount: amount
+    });
+
+    return { success: true, operation: "subtract", currencyCode: currencyCode, balance: subtractResult.Balance };
+};
+
+handlers.EconomyGetBalance = function (args, context) {
+    var currencyCode = args && args.currencyCode ? args.currencyCode : null;
+    if (!currencyCode) return { success: false, error: "currencyCode is required" };
+
+    var inventory = server.GetUserInventory({ PlayFabId: currentPlayerId });
+    var balance = inventory.VirtualCurrency && inventory.VirtualCurrency[currencyCode]
+        ? inventory.VirtualCurrency[currencyCode] : 0;
+
+    return { success: true, operation: "getBalance", currencyCode: currencyCode, balance: balance };
+};
+
+
+// ============================================================
+// SEÇÃO 2 — DECK ADMIN CRUD
+// ============================================================
+
+var DECK_INDEX_KEY         = "deck_index";
+var ROLE_KEY               = "role";
+var ADMIN_ROLE             = "admin";
+var DEFAULT_CATALOG_VERSION = "mainCatalog";
+
+handlers.ValidatePlayerRole = function (args, context) {
+    var roleResult = getCurrentPlayerRole();
+    if (!roleResult.success) return roleResult;
+    return { success: true, role: roleResult.role };
+};
+
+handlers.GrantStarterDecks = function (args, context) {
+    try {
+        var catalogVersion = args && args.catalogVersion ? String(args.catalogVersion) : DEFAULT_CATALOG_VERSION;
+        var catalogResult  = server.GetCatalogItems({ CatalogVersion: catalogVersion });
+        var eligibleItemIds = findStarterDeckItemIds(catalogResult);
+
+        if (eligibleItemIds.length === 0)
+            return fail("no starter decks configured for catalog version: " + catalogVersion);
+
+        var inventoryResult = server.GetUserInventory({ PlayFabId: currentPlayerId });
+        var ownedItemIds    = buildOwnedItemIdMap(inventoryResult);
+        var missingItemIds  = [];
+
+        for (var i = 0; i < eligibleItemIds.length; i++) {
+            if (!ownedItemIds[eligibleItemIds[i]]) missingItemIds.push(eligibleItemIds[i]);
+        }
+
+        if (missingItemIds.length === 0) {
+            return { success: true, alreadyGranted: true, catalogVersion: catalogVersion, grantedItemIds: eligibleItemIds, operation: "grantStarterDecks" };
+        }
+
+        server.GrantItemsToUser({
+            PlayFabId: currentPlayerId,
+            CatalogVersion: catalogVersion,
+            ItemIds: missingItemIds,
+            Annotation: "Starter deck grant on registration"
+        });
+
+        return { success: true, alreadyGranted: false, catalogVersion: catalogVersion, grantedItemIds: missingItemIds, eligibleItemIds: eligibleItemIds, operation: "grantStarterDecks" };
+    } catch (error) {
+        return fail("unexpected error while granting starter decks", error);
+    }
+};
+
+handlers.DeckAdminListCatalog = function (args) {
+    var guard = requireAdmin();
+    if (!guard.success) return guard;
+    var indexResult = loadDeckIndex();
+    if (!indexResult.success) return indexResult;
+    return { success: true, deckIndex: indexResult.deckIndex };
+};
+
+handlers.DeckAdminToggleDeck = function (args, context) {
+    var guard = requireAdmin();
+    if (!guard.success) return guard;
+
+    var key = args && args.key ? String(args.key) : "";
+    if (!key) return fail("key is required");
+
+    var indexResult = loadDeckIndex();
+    if (!indexResult.success) return indexResult;
+
+    var deckIndex = indexResult.deckIndex;
+    var category  = findCategoryByKey(deckIndex, key);
+    if (!category) return fail("key not found in deck_index: " + key);
+
+    category.ativo   = category.ativo === false ? true : false;
+    deckIndex.versao = toPositiveInt(deckIndex.versao, 1) + 1;
+
+    var saveResult = saveDeckIndex(deckIndex);
+    if (!saveResult.success) return saveResult;
+
+    return { success: true, operation: "toggle", key: key, ativo: category.ativo, versao: deckIndex.versao };
+};
+
+handlers.DeckAdminGetDeck = function (args, context) {
+    var guard = requireAdmin();
+    if (!guard.success) return guard;
+
+    var key = args && args.key ? String(args.key) : "";
+    if (!key) return fail("key is required");
+
+    var indexResult = loadDeckIndex();
+    if (!indexResult.success) return indexResult;
+
+    var category = findCategoryByKey(indexResult.deckIndex, key);
+    if (!category) return fail("deck key not found in deck_index");
+
+    var titleData = server.GetTitleData({ Keys: [key] });
+    var rawDeck   = titleData && titleData.Data ? titleData.Data[key] : null;
+    if (!rawDeck) return fail("deck not found in TitleData for key: " + key);
+
+    var parsed = safeJsonParse(rawDeck);
+    if (!parsed.success) return fail("invalid deck JSON in TitleData: " + key, parsed.error);
+
+    var validation = validateDeckPayload(parsed.value, category.nome, key);
+    if (!validation.success) return fail("deck payload is invalid", validation.errors);
+
+    return { success: true, operation: "get", key: key, nome: category.nome, deck: parsed.value, deckJson: JSON.stringify(parsed.value), validationWarnings: validation.warnings };
+};
+
+handlers.DeckAdminCreateDeck = function (args, context) {
+    var guard = requireAdmin();
+    if (!guard.success) return guard;
+
+    var nome        = args && args.nome ? String(args.nome) : "";
+    var key         = args && args.key  ? String(args.key)  : "";
+    var deckPayload = args ? args.deck : null;
+
+    if (!nome) return fail("nome is required");
+    if (!key)  return fail("key is required");
+
+    var keyValidation = validateDeckKey(key);
+    if (!keyValidation.success) return keyValidation;
+
+    var validation = validateDeckPayload(deckPayload, nome, key);
+    if (!validation.success) return fail("deck validation failed", validation.errors);
+
+    var indexResult = loadDeckIndex();
+    if (!indexResult.success) return indexResult;
+
+    var deckIndex = indexResult.deckIndex;
+    if (findCategoryByKey(deckIndex, key))  return fail("key already exists in deck_index");
+    if (findCategoryByName(deckIndex, nome)) return fail("nome already exists in deck_index");
+
+    var normalizedDeck = normalizeDeckPayload(deckPayload, nome);
+    server.SetTitleData({ Key: key, Value: JSON.stringify(normalizedDeck) });
+
+    deckIndex.categorias.push({ nome: nome, key: key });
+    deckIndex.versao = toPositiveInt(deckIndex.versao, 1) + 1;
+
+    var saveResult = saveDeckIndex(deckIndex);
+    if (!saveResult.success) return saveResult;
+
+    return { success: true, operation: "create", key: key, nome: nome, versao: deckIndex.versao, warnings: validation.warnings };
+};
+
+handlers.DeckAdminUpdateDeck = function (args, context) {
+    var guard = requireAdmin();
+    if (!guard.success) return guard;
+
+    var key         = args && args.key  ? String(args.key)  : "";
+    var novoNome    = args && args.nome ? String(args.nome) : null;
+    var deckPayload = args && args.deck ? args.deck : null;
+
+    if (!key) return fail("key is required");
+
+    var indexResult = loadDeckIndex();
+    if (!indexResult.success) return indexResult;
+
+    var deckIndex = indexResult.deckIndex;
+    var category  = findCategoryByKey(deckIndex, key);
+    if (!category) return fail("key not found in deck_index");
+    if (!novoNome && !deckPayload) return fail("nothing to update: send nome and/or deck");
+
+    if (novoNome) {
+        var duplicateByName = findCategoryByName(deckIndex, novoNome);
+        if (duplicateByName && duplicateByName.key !== key) return fail("nome already exists in another category");
+    }
+
+    var targetName = novoNome || category.nome;
+    var validation = null;
+
+    if (deckPayload) {
+        validation = validateDeckPayload(deckPayload, targetName, key);
+        if (!validation.success) return fail("deck validation failed", validation.errors);
+        var normalizedDeck = normalizeDeckPayload(deckPayload, targetName);
+        server.SetTitleData({ Key: key, Value: JSON.stringify(normalizedDeck) });
+    }
+
+    if (novoNome) category.nome = novoNome;
+    deckIndex.versao = toPositiveInt(deckIndex.versao, 1) + 1;
+
+    var saveResult = saveDeckIndex(deckIndex);
+    if (!saveResult.success) return saveResult;
+
+    return { success: true, operation: "update", key: key, nome: category.nome, versao: deckIndex.versao, warnings: validation ? validation.warnings : [] };
+};
+
+handlers.DeckAdminDeleteDeck = function (args, context) {
+    var guard = requireAdmin();
+    if (!guard.success) return guard;
+
+    var key              = args && args.key ? String(args.key) : "";
+    var clearDeckContent = !args || args.clearDeckContent !== false;
+    if (!key) return fail("key is required");
+
+    var indexResult = loadDeckIndex();
+    if (!indexResult.success) return indexResult;
+
+    var deckIndex = indexResult.deckIndex;
+    var category  = findCategoryByKey(deckIndex, key);
+    if (!category) return fail("key not found in deck_index");
+
+    var kept = [];
+    for (var i = 0; i < deckIndex.categorias.length; i++) {
+        if (deckIndex.categorias[i].key !== key) kept.push(deckIndex.categorias[i]);
+    }
+    deckIndex.categorias = kept;
+    deckIndex.versao = toPositiveInt(deckIndex.versao, 1) + 1;
+
+    var saveResult = saveDeckIndex(deckIndex);
+    if (!saveResult.success) return saveResult;
+
+    var keyDeleteResult = { success: true, keyDeleted: false, mode: "skipped" };
+    if (clearDeckContent) {
+        keyDeleteResult = deleteDeckTitleDataKey(key);
+        if (!keyDeleteResult.success) return fail("deck removed from deck_index but failed to delete TitleData key", keyDeleteResult.error);
+    }
+
+    return { success: true, operation: "delete", key: key, removedCategoryName: category.nome, versao: deckIndex.versao, contentCleared: clearDeckContent, keyDeleted: keyDeleteResult.keyDeleted, keyDeleteMode: keyDeleteResult.mode };
+};
+
+handlers.DeckAdminValidateDeckPayload = function (args, context) {
+    var guard = requireAdmin();
+    if (!guard.success) return guard;
+
+    var nome        = args && args.nome ? String(args.nome) : "";
+    var key         = args && args.key  ? String(args.key)  : "";
+    var deckPayload = args ? args.deck : null;
+
+    var result = validateDeckPayload(deckPayload, nome, key);
+    return { success: result.success, errors: result.errors, warnings: result.warnings };
+};
+
+// --- Deck Admin helpers ---
+
+function requireAdmin() {
+    var roleResult = getCurrentPlayerRole();
+    if (!roleResult.success) return roleResult;
+    if (String(roleResult.role).toLowerCase() !== ADMIN_ROLE) return fail("forbidden: admin role required");
+    return { success: true };
+}
+
+function getCurrentPlayerRole() {
+    try {
+        var userInternal = server.GetUserInternalData({ PlayFabId: currentPlayerId, Keys: [ROLE_KEY] });
+        if (!userInternal || !userInternal.Data || !userInternal.Data[ROLE_KEY] || !userInternal.Data[ROLE_KEY].Value)
+            return fail("role not found for current user");
+        return { success: true, role: String(userInternal.Data[ROLE_KEY].Value) };
+    } catch (error) {
+        return fail("failed to get user role", error);
+    }
+}
+
+// Carrega e valida o deck_index do TitleData.
+// Retorna { success, deckIndex } — usado tanto pelo Admin quanto pelo match.
+function loadDeckIndex() {
+    var titleData = server.GetTitleData({ Keys: [DECK_INDEX_KEY] });
+    var raw = titleData && titleData.Data ? titleData.Data[DECK_INDEX_KEY] : null;
+    if (!raw) return fail("deck_index not found in TitleData");
+
+    var parsed = safeJsonParse(raw);
+    if (!parsed.success) return fail("invalid JSON in deck_index", parsed.error);
+
+    var deckIndex = parsed.value;
+    if (!deckIndex || typeof deckIndex !== "object") return fail("deck_index payload must be an object");
+    if (!Array.isArray(deckIndex.categorias)) return fail("deck_index.categorias must be an array");
+    if (typeof deckIndex.versao !== "number") deckIndex.versao = 1;
+
+    return { success: true, deckIndex: deckIndex };
+}
+
+function findStarterDeckItemIds(catalogResult) {
+    var eligible = [];
+    var seen = {};
+    if (!catalogResult || !Array.isArray(catalogResult.Catalog)) return eligible;
+    for (var i = 0; i < catalogResult.Catalog.length; i++) {
+        var item = catalogResult.Catalog[i];
+        if (!item || !isStarterDeckCatalogItem(item)) continue;
+        var itemId = String(item.ItemId || "").trim();
+        if (!itemId || seen[itemId]) continue;
+        seen[itemId] = true;
+        eligible.push(itemId);
+    }
+    return eligible;
+}
+
+function isStarterDeckCatalogItem(item) {
+    if (!item || !isNonEmptyString(item.ItemId)) return false;
+    if (String(item.ItemId).toLowerCase().indexOf("deck") !== 0) return false;
+    if (!isNonEmptyString(item.CustomData)) return false;
+    var parsed = safeJsonParse(item.CustomData);
+    if (!parsed.success || !parsed.value || typeof parsed.value !== "object") return false;
+    return isTruthyStarterFlag(parsed.value.is_starter);
+}
+
+function isTruthyStarterFlag(value) {
+    return value === true || String(value).toLowerCase() === "true";
+}
+
+function buildOwnedItemIdMap(inventoryResult) {
+    var owned = {};
+    if (!inventoryResult || !Array.isArray(inventoryResult.Inventory)) return owned;
+    for (var i = 0; i < inventoryResult.Inventory.length; i++) {
+        var item = inventoryResult.Inventory[i];
+        if (item && isNonEmptyString(item.ItemId)) owned[String(item.ItemId)] = true;
+    }
+    return owned;
+}
+
+function saveDeckIndex(deckIndex) {
+    if (!deckIndex || typeof deckIndex !== "object") return fail("deckIndex is invalid");
+    if (!Array.isArray(deckIndex.categorias)) return fail("deckIndex.categorias must be array");
+    server.SetTitleData({ Key: DECK_INDEX_KEY, Value: JSON.stringify(deckIndex) });
+    return { success: true };
+}
+
+function deleteDeckTitleDataKey(key) {
+    if (!isNonEmptyString(key)) return fail("key is required for TitleData deletion");
+    try {
+        if (server && typeof server.DeleteTitleData === "function") {
+            server.DeleteTitleData({ Key: key });
+            return { success: true, keyDeleted: true, mode: "DeleteTitleData" };
+        }
+        server.SetTitleData({ Key: key, Value: null });
+        var check = server.GetTitleData({ Keys: [key] });
+        var hasKey = check && check.Data && Object.prototype.hasOwnProperty.call(check.Data, key);
+        var consideredDeleted = !hasKey || check.Data[key] === null || check.Data[key] === "";
+        if (!consideredDeleted) return fail("DeleteTitleData unavailable and fallback did not remove key");
+        return { success: true, keyDeleted: true, mode: "SetTitleData(null)" };
+    } catch (error) {
+        return fail("failed deleting deck TitleData key", error);
+    }
+}
+
+function validateDeckKey(key) {
+    if (!key) return fail("key is required");
+    return { success: true };
+}
+
+function validateDeckPayload(payload, categoriaNome, categoriaKey) {
+    var errors = []; var warnings = [];
+    if (!payload || typeof payload !== "object") { errors.push("deck payload must be an object"); return resultValidation(errors, warnings); }
+    if (!isNonEmptyString(payload.deck_id)) errors.push("deck_id is required");
+    if (!isNonEmptyString(payload.theme))   errors.push("theme is required");
+    if (!Array.isArray(payload.questions))  { errors.push("questions must be an array"); return resultValidation(errors, warnings); }
+    if (payload.questions.length === 0)     { errors.push("questions must have at least one entry"); return resultValidation(errors, warnings); }
+
+    var ids = {};
+    for (var i = 0; i < payload.questions.length; i++) {
+        var q = payload.questions[i];
+        var label = "questions[" + i + "]";
+        if (!q || typeof q !== "object") { errors.push(label + " must be an object"); continue; }
+        if (!isNonEmptyString(q.id))      errors.push(label + ".id is required");
+        else if (ids[q.id])               errors.push(label + ".id is duplicated: " + q.id);
+        else                              ids[q.id] = true;
+        if (!isNonEmptyString(q.text))    errors.push(label + ".text is required");
+        if (!Array.isArray(q.options))    { errors.push(label + ".options must be an array"); continue; }
+        if (q.options.length < 4)         errors.push(label + ".options must have at least 4 entries");
+        var correctCount = 0;
+        for (var j = 0; j < q.options.length; j++) {
+            var opt = q.options[j];
+            var optLabel = label + ".options[" + j + "]";
+            if (!opt || typeof opt !== "object") { errors.push(optLabel + " must be an object"); continue; }
+            if (!isNonEmptyString(opt.text)) errors.push(optLabel + ".text must be a non-empty string");
+            if (typeof opt.is_correct !== "boolean") errors.push(optLabel + ".is_correct must be boolean");
+            else if (opt.is_correct) correctCount++;
+        }
+        if (correctCount !== 1) errors.push(label + " must have exactly one option with is_correct=true");
+        if (typeof q.time_limit !== "number" || Math.floor(q.time_limit) !== q.time_limit || q.time_limit < 1)
+            errors.push(label + ".time_limit must be an integer >= 1");
+    }
+    if (isNonEmptyString(payload.theme) && isNonEmptyString(categoriaNome) && payload.theme !== categoriaNome)
+        warnings.push("theme differs from category name: " + payload.theme);
+    if (isNonEmptyString(categoriaKey)) {
+        var keyResult = validateDeckKey(categoriaKey);
+        if (!keyResult.success) errors.push(keyResult.error);
+    }
+    return resultValidation(errors, warnings);
+}
+
+function normalizeDeckPayload(payload, categoriaNome) {
+    var out = {
+        deck_id: String(payload.deck_id).trim(),
+        theme:   isNonEmptyString(payload.theme) ? String(payload.theme).trim() : String(categoriaNome || "").trim(),
+        questions: []
+    };
+    for (var i = 0; i < payload.questions.length; i++) {
+        var q = payload.questions[i];
+        var normalizedOptions = [];
+        for (var j = 0; j < q.options.length; j++) {
+            normalizedOptions.push({ text: String(q.options[j].text).trim(), is_correct: q.options[j].is_correct === true });
+        }
+        out.questions.push({ id: String(q.id).trim(), text: String(q.text).trim(), options: normalizedOptions, time_limit: parseInt(q.time_limit, 10) });
+    }
+    return out;
+}
+
+function findCategoryByKey(deckIndex, key) {
+    if (!deckIndex || !Array.isArray(deckIndex.categorias)) return null;
+    for (var i = 0; i < deckIndex.categorias.length; i++) {
+        if (deckIndex.categorias[i] && deckIndex.categorias[i].key === key) return deckIndex.categorias[i];
+    }
+    return null;
+}
+
+function findCategoryByName(deckIndex, nome) {
+    if (!deckIndex || !Array.isArray(deckIndex.categorias)) return null;
+    for (var i = 0; i < deckIndex.categorias.length; i++) {
+        if (deckIndex.categorias[i] && deckIndex.categorias[i].nome === nome) return deckIndex.categorias[i];
+    }
+    return null;
+}
+
+function safeJsonParse(raw) {
+    try { return { success: true, value: JSON.parse(raw) }; }
+    catch (error) { return fail("json parse error", error); }
+}
+
+function isNonEmptyString(value) {
+    return typeof value === "string" && value.trim().length > 0;
+}
+
+function toPositiveInt(value, fallback) {
+    if (typeof value === "number" && value >= 1 && Math.floor(value) === value) return value;
+    return fallback;
+}
+
+function resultValidation(errors, warnings) {
+    return { success: errors.length === 0, errors: errors, warnings: warnings };
+}
+
+function fail(message, details) {
+    var result = { success: false, error: message };
+    if (typeof details !== "undefined" && details !== null) result.details = details;
+    return result;
+}
+
+
+// ============================================================
+// SEÇÃO 3 — PARTIDA (match authoritative)
 // ============================================================
 
 var MATCH_CONFIG = {
-    InitialHP:              100,
-    MaxRounds:              20,
-    ThemePhaseDurationMs:   4000,
+    InitialHP:               100,
+    MaxRounds:               20,
+    ThemePhaseDurationMs:    4000,
     QuestionPhaseDurationMs: 20000,
-    SpeedBonusThresholdMs:  200,
-    AfkRoundLimit:          3,
-    ReconnectWindowMs:      30000
+    SpeedBonusThresholdMs:   200,
+    AfkRoundLimit:           3,
+    ReconnectWindowMs:       30000
 };
 
 var DAMAGE_CONFIG = {
@@ -40,23 +529,15 @@ function getStreakBonus(streak) {
     return 5;
 }
 
-// ============================================================
-// STORAGE — Title Internal Data
-// Cada partida salva com chave "match_{matchId}"
-// ============================================================
+// --- Storage ---
 
 function saveMatchState(state) {
-    server.SetTitleInternalData({
-        Key:   "match_" + state.MatchId,
-        Value: JSON.stringify(state)
-    });
+    server.SetTitleInternalData({ Key: "match_" + state.MatchId, Value: JSON.stringify(state) });
 }
 
 function loadMatchState(matchId) {
-    var result = server.GetTitleInternalData({
-        Keys: ["match_" + matchId]
-    });
-    var json = result.Data["match_" + matchId];
+    var result = server.GetTitleInternalData({ Keys: ["match_" + matchId] });
+    var json   = result.Data["match_" + matchId];
     return json ? JSON.parse(json) : null;
 }
 
@@ -65,7 +546,6 @@ function deleteMatchState(matchId) {
     removeFromActiveIndex(matchId);
 }
 
-// Índice de partidas ativas (usado pelo watchdog de AFK)
 function loadActiveIndex() {
     var result = server.GetTitleInternalData({ Keys: ["active_matches_index"] });
     var json   = result.Data["active_matches_index"];
@@ -73,10 +553,7 @@ function loadActiveIndex() {
 }
 
 function saveActiveIndex(ids) {
-    server.SetTitleInternalData({
-        Key:   "active_matches_index",
-        Value: JSON.stringify(ids)
-    });
+    server.SetTitleInternalData({ Key: "active_matches_index", Value: JSON.stringify(ids) });
 }
 
 function addToActiveIndex(matchId) {
@@ -90,13 +567,9 @@ function removeFromActiveIndex(matchId) {
     if (idx !== -1) { ids.splice(idx, 1); saveActiveIndex(ids); }
 }
 
-// ============================================================
-// HANDLER: CreateMatch
-// Chamado pelo cliente após matchmaking encontrar partida.
-// Idempotente — retorna estado existente se já criado.
-// ============================================================
+// --- Handlers de partida ---
 
-handlers.CreateMatch = function(args) {
+handlers.CreateMatch = function (args) {
     var matchId   = args.matchId;
     var player1Id = args.player1Id;
     var player2Id = args.player2Id;
@@ -110,11 +583,11 @@ handlers.CreateMatch = function(args) {
     var questionPool = buildQuestionPool(player1Id, player2Id);
 
     var state = {
-        MatchId:    matchId,
-        Player1Id:  player1Id,
-        Player2Id:  player2Id,
-        Player1State: makePlayerState(player1Id, p1PowerUp),
-        Player2State: makePlayerState(player2Id, p2PowerUp),
+        MatchId:               matchId,
+        Player1Id:             player1Id,
+        Player2Id:             player2Id,
+        Player1State:          makePlayerState(player1Id, p1PowerUp),
+        Player2State:          makePlayerState(player2Id, p2PowerUp),
         CurrentRound:          0,
         Phase:                 "Initializing",
         PhaseStartTimestampMs: 0,
@@ -130,37 +603,23 @@ handlers.CreateMatch = function(args) {
 
     saveMatchState(state);
     addToActiveIndex(matchId);
-
     return { success: true, matchId: matchId, networkDescriptor: state.PartyNetworkDescriptor };
 };
 
-// ============================================================
-// HANDLER: StartNextRound
-// Prepara rodada e retorna dados do tema ao cliente,
-// que faz o broadcast via Party.
-// ============================================================
+handlers.StartNextRound = function (args) {
+    var state = loadMatchState(args.matchId);
+    if (!state || !state.IsActive)            return { error: "Match inativo" };
+    if (state.CurrentRound >= args.roundNumber) return { status: "already_started" };
+    if (args.roundNumber > MATCH_CONFIG.MaxRounds) return finalizeMatch(state, determineWinnerByHP(state), "RoundsOver");
 
-handlers.StartNextRound = function(args) {
-    var matchId     = args.matchId;
-    var roundNumber = args.roundNumber;
+    var question = getQuestionForRound(state, args.roundNumber);
+    if (!question) return { error: "Pergunta nao encontrada para rodada " + args.roundNumber };
 
-    var state = loadMatchState(matchId);
-    if (!state || !state.IsActive)     return { error: "Match inativo" };
-    if (state.CurrentRound >= roundNumber) return { status: "already_started" };
-
-    if (roundNumber > MATCH_CONFIG.MaxRounds) {
-        var winner = determineWinnerByHP(state);
-        return finalizeMatch(state, winner, "RoundsOver");
-    }
-
-    var question = getQuestionForRound(state, roundNumber);
-    if (!question) return { error: "Pergunta nao encontrada para rodada " + roundNumber };
-
-    state.CurrentRound          = roundNumber;
+    state.CurrentRound          = args.roundNumber;
     state.Phase                 = "ThemeAndPowerUp";
     state.PhaseStartTimestampMs = Date.now();
     state.CurrentRoundState     = {
-        RoundNumber:     roundNumber,
+        RoundNumber:     args.roundNumber,
         QuestionId:      question.QuestionId,
         ThemeId:         question.ThemeId,
         ThemeName:       question.ThemeName,
@@ -173,24 +632,18 @@ handlers.StartNextRound = function(args) {
     };
 
     saveMatchState(state);
-
     return {
-        status:            "ok",
-        roundNumber:       roundNumber,
-        themeId:           question.ThemeId,
-        themeName:         question.ThemeName,
-        serverTimestampMs: state.PhaseStartTimestampMs,
-        themeDurationMs:   MATCH_CONFIG.ThemePhaseDurationMs,
+        status:             "ok",
+        roundNumber:        args.roundNumber,
+        themeId:            question.ThemeId,
+        themeName:          question.ThemeName,
+        serverTimestampMs:  state.PhaseStartTimestampMs,
+        themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
         questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs
     };
 };
 
-// ============================================================
-// HANDLER: StartQuestion
-// Transita para fase de pergunta e retorna dados da questão.
-// ============================================================
-
-handlers.StartQuestion = function(args) {
+handlers.StartQuestion = function (args) {
     var state = loadMatchState(args.matchId);
     if (!state || state.CurrentRound !== args.roundNumber) return { status: "ignored" };
     if (state.Phase !== "ThemeAndPowerUp") return { status: "wrong_phase" };
@@ -199,29 +652,24 @@ handlers.StartQuestion = function(args) {
     state.PhaseStartTimestampMs = Date.now();
     saveMatchState(state);
 
-    var question = loadQuestion(state.CurrentRoundState.QuestionId);
+    var question = loadQuestion(state, state.CurrentRoundState.QuestionId);
     return {
-        status:           "ok",
-        questionId:       question.QuestionId,
-        questionText:     question.Text,
-        answers:          question.Options,
+        status:            "ok",
+        questionId:        question.QuestionId,
+        questionText:      question.Text,
+        answers:           question.Options,
         serverTimestampMs: state.PhaseStartTimestampMs,
-        durationMs:       MATCH_CONFIG.QuestionPhaseDurationMs
+        durationMs:        MATCH_CONFIG.QuestionPhaseDurationMs
     };
 };
 
-// ============================================================
-// HANDLER: SubmitAnswer
-// Registra resposta. Se ambos responderam, processa a rodada.
-// ============================================================
-
-handlers.SubmitAnswer = function(args) {
+handlers.SubmitAnswer = function (args) {
     var playerId = currentPlayerId;
     var state    = loadMatchState(args.matchId);
 
-    if (!state || !state.IsActive)              return { error: "Match inativo" };
-    if (state.CurrentRound !== args.roundNumber) return { status: "wrong_round" };
-    if (state.Phase !== "Question")              return { status: "wrong_phase" };
+    if (!state || !state.IsActive)               return { error: "Match inativo" };
+    if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round" };
+    if (state.Phase !== "Question")               return { status: "wrong_phase" };
 
     var action = getPlayerAction(state, playerId);
     if (action.HasAnswered) return { status: "already_answered" };
@@ -229,96 +677,65 @@ handlers.SubmitAnswer = function(args) {
     action.AnswerId          = args.answerId;
     action.AnswerTimestampMs = args.clientTimestampMs || Date.now();
     action.HasAnswered       = true;
-
     saveMatchState(state);
 
     var roundResult = null;
-    if (bothPlayersAnswered(state))
-        roundResult = processRoundInternal(state);
-
+    if (bothPlayersAnswered(state)) roundResult = processRoundInternal(state);
     return { status: "ok", roundResult: roundResult };
 };
 
-// ============================================================
-// HANDLER: ActivatePowerUp
-// Só aceito durante ThemeAndPowerUp (janela de 4s).
-// ============================================================
-
-handlers.ActivatePowerUp = function(args) {
+handlers.ActivatePowerUp = function (args) {
     var playerId = currentPlayerId;
     var state    = loadMatchState(args.matchId);
 
-    if (!state || !state.IsActive)              return { error: "Match inativo" };
-    if (state.CurrentRound !== args.roundNumber) return { status: "wrong_round" };
-    if (state.Phase !== "ThemeAndPowerUp")       return { error: "Fora da janela de power-up" };
+    if (!state || !state.IsActive)               return { error: "Match inativo" };
+    if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round" };
+    if (state.Phase !== "ThemeAndPowerUp")        return { error: "Fora da janela de power-up" };
 
     var ps     = getPlayerState(state, playerId);
     var action = getPlayerAction(state, playerId);
 
-    if (ps.HasUsedPowerUp)              return { error: "Power-up ja usado nesta partida" };
-    if (ps.EquippedPowerUp !== args.powerUp) return { error: "Power-up nao equipado" };
+    if (ps.HasUsedPowerUp)                       return { error: "Power-up ja usado nesta partida" };
+    if (ps.EquippedPowerUp !== args.powerUp)      return { error: "Power-up nao equipado" };
 
     action.ActivatedPowerUp = args.powerUp;
     saveMatchState(state);
-
     return { status: "ok" };
 };
 
-// ============================================================
-// HANDLER: ProcessRound
-// Chamado por ambos os clientes quando o timer de 20s acaba.
-// Idempotente: segunda chamada retorna resultado cacheado.
-// ============================================================
-
-handlers.ProcessRound = function(args) {
+handlers.ProcessRound = function (args) {
     var state = loadMatchState(args.matchId);
-    if (!state || !state.IsActive)              return { error: "Match inativo" };
-    if (state.CurrentRound !== args.roundNumber) return { status: "wrong_round" };
-
-    if (state.CurrentRoundState.IsProcessed)
-        return buildRoundResponse(state, true);
-
+    if (!state || !state.IsActive)               return { error: "Match inativo" };
+    if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round" };
+    if (state.CurrentRoundState.IsProcessed)      return buildRoundResponse(state, true);
     return processRoundInternal(state);
 };
 
-// ============================================================
-// HANDLER: RejoinMatch
-// Reconecta jogador e retorna estado completo da partida.
-// ============================================================
-
-handlers.RejoinMatch = function(args) {
+handlers.RejoinMatch = function (args) {
     var playerId = currentPlayerId;
     var state    = loadMatchState(args.matchId);
     if (!state || !state.IsActive) return { error: "Match nao encontrado" };
 
     var ps = getPlayerState(state, playerId);
     if (ps) { ps.IsConnected = true; ps.ConsecutiveMissedRounds = 0; }
-
     saveMatchState(state);
 
     return {
         status:           "ok",
         fullState:        state,
-        currentQuestion:  state.Phase === "Question" ? loadQuestion(state.CurrentRoundState.QuestionId) : null,
+        currentQuestion:  state.Phase === "Question" ? loadQuestion(state, state.CurrentRoundState.QuestionId) : null,
         serverTimestampMs: Date.now()
     };
 };
 
-// ============================================================
-// HANDLER: FinalizeMatch
-// Chamado pelo cliente após MatchEnd para registrar resultado.
-// ============================================================
-
-handlers.FinalizeMatch = function(args) {
+handlers.FinalizeMatch = function (args) {
     var state = loadMatchState(args.matchId);
     if (!state) return { error: "Match nao encontrado" };
     finalizeMatch(state, args.winnerId, "HPDepleted");
     return { status: "ok" };
 };
 
-// ============================================================
-// LÓGICA INTERNA DE RODADA (server-authoritative)
-// ============================================================
+// --- Lógica interna de rodada ---
 
 function processRoundInternal(state) {
     var round   = state.CurrentRoundState;
@@ -333,15 +750,12 @@ function processRoundInternal(state) {
     var p1HPBefore = p1State.HP;
     var p2HPBefore = p2State.HP;
 
-    // Aplica dano base
     if (!p2Result.WasShielded) p2State.HP -= p1Result.DamageDealt;
     if (!p1Result.WasShielded) p1State.HP -= p2Result.DamageDealt;
 
-    // Steal (independente do shield — roubo direto)
     if (p1Act.ActivatedPowerUp === "Steal") { p1State.HP += DAMAGE_CONFIG.StealAmount; p2State.HP -= DAMAGE_CONFIG.StealAmount; }
     if (p2Act.ActivatedPowerUp === "Steal") { p2State.HP += DAMAGE_CONFIG.StealAmount; p1State.HP -= DAMAGE_CONFIG.StealAmount; }
 
-    // Self-damage por não responder
     if (!p1Act.HasAnswered) p1State.HP -= DAMAGE_CONFIG.SelfDamageNoAnswer;
     if (!p2Act.HasAnswered) p2State.HP -= DAMAGE_CONFIG.SelfDamageNoAnswer;
 
@@ -351,19 +765,14 @@ function processRoundInternal(state) {
     p1Result.HPBefore = p1HPBefore; p1Result.HPAfter = p1State.HP;
     p2Result.HPBefore = p2HPBefore; p2Result.HPAfter = p2State.HP;
 
-    // Streaks
     p1State.Streak = p1Result.Result === "Correct" ? p1State.Streak + 1 : 0;
     p2State.Streak = p2Result.Result === "Correct" ? p2State.Streak + 1 : 0;
     p1Result.StreakAfter = p1State.Streak;
     p2Result.StreakAfter = p2State.Streak;
 
-    // AFK tracking
-    if (!p1Act.HasAnswered) p1State.ConsecutiveMissedRounds++;
-    else p1State.ConsecutiveMissedRounds = 0;
-    if (!p2Act.HasAnswered) p2State.ConsecutiveMissedRounds++;
-    else p2State.ConsecutiveMissedRounds = 0;
+    if (!p1Act.HasAnswered) p1State.ConsecutiveMissedRounds++; else p1State.ConsecutiveMissedRounds = 0;
+    if (!p2Act.HasAnswered) p2State.ConsecutiveMissedRounds++; else p2State.ConsecutiveMissedRounds = 0;
 
-    // Atualiza cargas de shield
     updatePowerUpCharges(p1State, p1Act);
     updatePowerUpCharges(p2State, p2Act);
 
@@ -372,22 +781,19 @@ function processRoundInternal(state) {
     round.IsProcessed   = true;
     state.LastProcessedRound = round.RoundNumber;
 
-    // Verifica fim de partida
     var afkP1     = p1State.ConsecutiveMissedRounds >= MATCH_CONFIG.AfkRoundLimit;
     var afkP2     = p2State.ConsecutiveMissedRounds >= MATCH_CONFIG.AfkRoundLimit;
     var hpOver    = p1State.HP <= 0 || p2State.HP <= 0;
     var roundsMax = round.RoundNumber >= MATCH_CONFIG.MaxRounds;
     var matchOver = hpOver || roundsMax || afkP1 || afkP2;
-
     var winnerId  = null;
     var endReason = "HPDepleted";
 
     if (matchOver) {
-        if      (afkP1) { winnerId = state.Player2Id; endReason = "Abandonment"; }
-        else if (afkP2) { winnerId = state.Player1Id; endReason = "Abandonment"; }
+        if      (afkP1)     { winnerId = state.Player2Id; endReason = "Abandonment"; }
+        else if (afkP2)     { winnerId = state.Player1Id; endReason = "Abandonment"; }
         else if (roundsMax) { winnerId = determineWinnerByHP(state); endReason = "RoundsOver"; }
-        else    { winnerId = determineWinnerByHP(state); }
-
+        else                { winnerId = determineWinnerByHP(state); }
         state.IsActive  = false;
         state.WinnerId  = winnerId;
         state.EndReason = endReason;
@@ -396,7 +802,6 @@ function processRoundInternal(state) {
 
     saveMatchState(state);
     if (matchOver) { removeFromActiveIndex(state.MatchId); updatePlayerStats(state, winnerId); }
-
     return buildRoundResponse(state, false);
 }
 
@@ -406,41 +811,30 @@ function computePlayerResult(attackerAct, attackerState, defenderAct, defenderSt
         AnsweredId:  attackerAct.AnswerId,
         WasShielded: false,
         DamageDealt: 0,
-        Breakdown: { BaseDamage: 0, SpeedBonus: 0, StreakBonus: 0, PowerUpBonus: 0, StolenHP: 0, SelfDamage: 0 }
+        Breakdown:   { BaseDamage: 0, SpeedBonus: 0, StreakBonus: 0, PowerUpBonus: 0, StolenHP: 0, SelfDamage: 0 }
     };
 
-    if (!attackerAct.HasAnswered) {
-        result.Result = "NotAnswered";
-        return result; // self-damage aplicado em processRoundInternal
-    }
+    if (!attackerAct.HasAnswered) { result.Result = "NotAnswered"; return result; }
 
-    var correct  = (attackerAct.AnswerId === correctId);
+    var correct   = (attackerAct.AnswerId === correctId);
     result.Result = correct ? "Correct" : "Incorrect";
-
     if (!correct) return result;
 
     var streak = attackerState.Streak + 1;
     result.Breakdown.BaseDamage  = DAMAGE_CONFIG.BaseDamage;
     result.Breakdown.StreakBonus = getStreakBonus(streak);
 
-    // Bônus de velocidade (ambos acertaram e diferença > 200ms)
     if (defenderAct.HasAnswered && defenderAct.AnswerId === correctId) {
         var diff = Math.abs(attackerAct.AnswerTimestampMs - defenderAct.AnswerTimestampMs);
         if (diff > MATCH_CONFIG.SpeedBonusThresholdMs && attackerAct.AnswerTimestampMs < defenderAct.AnswerTimestampMs)
             result.Breakdown.SpeedBonus = DAMAGE_CONFIG.SpeedBonus;
     }
 
-    // Power-up Bet
-    if (attackerAct.ActivatedPowerUp === "Bet")
-        result.Breakdown.PowerUpBonus = DAMAGE_CONFIG.BetBonus;
+    if (attackerAct.ActivatedPowerUp === "Bet") result.Breakdown.PowerUpBonus = DAMAGE_CONFIG.BetBonus;
 
-    // Shield do defensor
     if (isShielded(defenderState, defenderAct)) {
-        result.WasShielded               = true;
-        result.Breakdown.BaseDamage      = 0;
-        result.Breakdown.SpeedBonus      = 0;
-        result.Breakdown.StreakBonus     = 0;
-        result.Breakdown.PowerUpBonus   = 0;
+        result.WasShielded = true;
+        result.Breakdown.BaseDamage = result.Breakdown.SpeedBonus = result.Breakdown.StreakBonus = result.Breakdown.PowerUpBonus = 0;
     }
 
     var bd = result.Breakdown;
@@ -448,9 +842,7 @@ function computePlayerResult(attackerAct, attackerState, defenderAct, defenderSt
     return result;
 }
 
-// ============================================================
-// HELPERS
-// ============================================================
+// --- Helpers de partida ---
 
 function isShielded(state, action) {
     return action.ActivatedPowerUp === "SimpleShield"
@@ -460,8 +852,8 @@ function isShielded(state, action) {
 
 function updatePowerUpCharges(state, action) {
     if (isShielded(state, action) && state.DoubleShieldCharges > 0) state.DoubleShieldCharges--;
-    if (action.ActivatedPowerUp === "DoubleShield") { state.DoubleShieldCharges = 1; state.HasUsedPowerUp = true; }
-    else if (action.ActivatedPowerUp !== "None")    { state.HasUsedPowerUp = true; }
+    if (action.ActivatedPowerUp === "DoubleShield")   { state.DoubleShieldCharges = 1; state.HasUsedPowerUp = true; }
+    else if (action.ActivatedPowerUp !== "None")       { state.HasUsedPowerUp = true; }
 }
 
 function bothPlayersAnswered(state) {
@@ -470,9 +862,7 @@ function bothPlayersAnswered(state) {
 }
 
 function getPlayerAction(state, playerId) {
-    return playerId === state.Player1Id
-        ? state.CurrentRoundState.Player1Action
-        : state.CurrentRoundState.Player2Action;
+    return playerId === state.Player1Id ? state.CurrentRoundState.Player1Action : state.CurrentRoundState.Player2Action;
 }
 
 function getPlayerState(state, playerId) {
@@ -489,6 +879,7 @@ function buildRoundResponse(state, alreadyProcessed) {
     var round = state.CurrentRoundState;
     return {
         AlreadyProcessed: alreadyProcessed,
+        CorrectAnswerId:  round.CorrectAnswerId,
         Player1Result:    round.Player1Result,
         Player2Result:    round.Player2Result,
         Player1HP:        state.Player1State.HP,
@@ -512,13 +903,13 @@ function finalizeMatch(state, winnerId, reason) {
 
 function makePlayerState(playerId, equippedPowerUp) {
     return {
-        PlayerId:               playerId,
-        HP:                     MATCH_CONFIG.InitialHP,
-        Streak:                 0,
-        HasUsedPowerUp:         false,
-        EquippedPowerUp:        equippedPowerUp || "None",
-        DoubleShieldCharges:    0,
-        IsConnected:            true,
+        PlayerId:                playerId,
+        HP:                      MATCH_CONFIG.InitialHP,
+        Streak:                  0,
+        HasUsedPowerUp:          false,
+        EquippedPowerUp:         equippedPowerUp || "None",
+        DoubleShieldCharges:     0,
+        IsConnected:             true,
         ConsecutiveMissedRounds: 0
     };
 }
@@ -527,9 +918,7 @@ function makeAction(playerId) {
     return { PlayerId: playerId, AnswerId: null, AnswerTimestampMs: 0, HasAnswered: false, ActivatedPowerUp: "None" };
 }
 
-// ============================================================
-// DADOS — implementar com seu sistema de perguntas/decks
-// ============================================================
+// --- Carregamento de decks e perguntas ---
 
 function getEquippedPowerUp(playerId) {
     var result = server.GetUserInternalData({ PlayFabId: playerId, Keys: ["EquippedPowerUp"] });
@@ -538,39 +927,207 @@ function getEquippedPowerUp(playerId) {
     return "None";
 }
 
+// Retorna IDs de decks possuídos pelo jogador (ex: ["deckHistoria", "deckGeografia"])
+function getPlayerOwnedDeckIds(playerId) {
+    try {
+        var result = server.GetUserData({ PlayFabId: playerId, Keys: ["player_profile"] });
+        if (!result.Data || !result.Data["player_profile"]) return [];
+        var profile = JSON.parse(result.Data["player_profile"].Value);
+        if (!profile || !profile.decks) return [];
+        var ids = [];
+        for (var i = 0; i < profile.decks.length; i++)
+            if (profile.decks[i].isOwned) ids.push(profile.decks[i].id);
+        return ids;
+    } catch (e) { return []; }
+}
+
+// Mapeia "deckHistoria" → { key: "deck_historia", nome: "Historia" } usando o DeckIndex
+function resolveDeckCategory(deckId, deckIndex) {
+    var suffix = (deckId.indexOf("deck") === 0) ? deckId.substring(4) : deckId;
+    for (var i = 0; i < deckIndex.categorias.length; i++) {
+        var cat = deckIndex.categorias[i];
+        if (cat.nome.toLowerCase() === suffix.toLowerCase())
+            return { key: cat.key, nome: cat.nome };
+    }
+    return null;
+}
+
+// Converte DeckSchemaV2 em array de perguntas prontas para o pool
+function parseDeckQuestions(deckData, themeName) {
+    if (!deckData || !deckData.questions) return [];
+    var questions = [];
+    for (var i = 0; i < deckData.questions.length; i++) {
+        var q = deckData.questions[i];
+        if (!q || !q.options || q.options.length < 2) continue;
+        var options   = [];
+        var correctId = null;
+        for (var j = 0; j < q.options.length; j++) {
+            var optId = String.fromCharCode(65 + j); // A, B, C, D
+            options.push({ Id: optId, Text: q.options[j].text || "" });
+            if (q.options[j].is_correct && !correctId) correctId = optId;
+        }
+        if (!correctId) continue;
+        questions.push({
+            QuestionId:      q.id || (themeName + "_" + i),
+            Text:            q.text || "",
+            ThemeId:         themeName,
+            ThemeName:       themeName,
+            Options:         options,
+            CorrectOptionId: correctId
+        });
+    }
+    return questions;
+}
+
+// Monta o pool de 20 perguntas combinando os decks de ambos os jogadores
 function buildQuestionPool(p1Id, p2Id) {
-    // TODO: carregar os decks dos dois jogadores, combinar e embaralhar
-    // Por ora usa IDs fixos para teste
+    // Carrega o índice de categorias (reutiliza loadDeckIndex da seção Admin)
+    var indexResult = loadDeckIndex();
+    var deckIndex   = indexResult.success ? indexResult.deckIndex : null;
+
+    // Coleta IDs de decks de cada jogador e une sem duplicatas
+    var p1DeckIds  = getPlayerOwnedDeckIds(p1Id);
+    var p2DeckIds  = getPlayerOwnedDeckIds(p2Id);
+    var allDeckIds = p1DeckIds.slice();
+    for (var i = 0; i < p2DeckIds.length; i++) {
+        if (allDeckIds.indexOf(p2DeckIds[i]) === -1) allDeckIds.push(p2DeckIds[i]);
+    }
+
+    // Resolve quais TitleData keys precisam ser carregadas
+    var keysToLoad = [];
+    var keyToTheme = {};
+
+    if (deckIndex) {
+        if (allDeckIds.length > 0) {
+            for (var i = 0; i < allDeckIds.length; i++) {
+                var catInfo = resolveDeckCategory(allDeckIds[i], deckIndex);
+                if (catInfo && keysToLoad.indexOf(catInfo.key) === -1) {
+                    keysToLoad.push(catInfo.key);
+                    keyToTheme[catInfo.key] = catInfo.nome;
+                }
+            }
+        }
+        // Fallback: nenhum deck encontrado → usa todas as categorias ativas
+        if (keysToLoad.length === 0) {
+            for (var i = 0; i < deckIndex.categorias.length; i++) {
+                var cat = deckIndex.categorias[i];
+                if (cat.ativo !== false) {
+                    keysToLoad.push(cat.key);
+                    keyToTheme[cat.key] = cat.nome;
+                }
+            }
+        }
+    }
+
+    // Carrega todos os decks de uma única chamada ao TitleData
+    var allQuestions = [];
+    var seenIds      = {};
+
+    if (keysToLoad.length > 0) {
+        try {
+            var deckResult = server.GetTitleData({ Keys: keysToLoad });
+            for (var k = 0; k < keysToLoad.length; k++) {
+                var key = keysToLoad[k];
+                if (!deckResult.Data || !deckResult.Data[key]) continue;
+                try {
+                    var deckData  = JSON.parse(deckResult.Data[key]);
+                    var questions = parseDeckQuestions(deckData, keyToTheme[key]);
+                    for (var q = 0; q < questions.length; q++) {
+                        if (!seenIds[questions[q].QuestionId]) {
+                            seenIds[questions[q].QuestionId] = true;
+                            allQuestions.push(questions[q]);
+                        }
+                    }
+                } catch (e) { /* deck corrompido: ignora */ }
+            }
+        } catch (e) { /* GetTitleData falhou: cai no fallback */ }
+    }
+
+    // Fallback estático se nenhuma pergunta foi carregada
+    if (allQuestions.length === 0) {
+        for (var i = 0; i < MATCH_CONFIG.MaxRounds; i++) {
+            allQuestions.push({
+                QuestionId:      "fallback_" + (i + 1),
+                Text:            "Qual é a capital do Brasil?",
+                ThemeId:         "Historia", ThemeName: "Historia",
+                Options:         [{ Id: "A", Text: "Brasília" }, { Id: "B", Text: "São Paulo" }, { Id: "C", Text: "Rio de Janeiro" }, { Id: "D", Text: "Salvador" }],
+                CorrectOptionId: "A"
+            });
+        }
+        return allQuestions;
+    }
+
+    // Embaralha Fisher-Yates
+    for (var i = allQuestions.length - 1; i > 0; i--) {
+        var j   = Math.floor(Math.random() * (i + 1));
+        var tmp = allQuestions[i]; allQuestions[i] = allQuestions[j]; allQuestions[j] = tmp;
+    }
+
+    // Garante exatamente MaxRounds perguntas (cicla se necessário)
     var pool = [];
-    for (var i = 1; i <= MATCH_CONFIG.MaxRounds; i++) pool.push("question_" + i);
+    for (var i = 0; i < MATCH_CONFIG.MaxRounds; i++)
+        pool.push(allQuestions[i % allQuestions.length]);
     return pool;
 }
 
+// Retorna a pergunta completa para a rodada (pool armazena objetos, não IDs)
 function getQuestionForRound(state, roundNumber) {
     var idx = roundNumber - 1;
     if (idx < 0 || idx >= state.QuestionPool.length) return null;
-    return loadQuestion(state.QuestionPool[idx]);
+    return state.QuestionPool[idx];
 }
 
-function loadQuestion(questionId) {
-    // TODO: buscar do Title Data ou Catalog usando server.GetTitleData / server.GetCatalogItems
-    // Estrutura obrigatória do retorno:
-    // { QuestionId, Text, ThemeId, ThemeName, Options:[{Id,Text}], CorrectOptionId }
-    return {
-        QuestionId:       questionId,
-        Text:             "Pergunta de exemplo: " + questionId,
-        ThemeId:          "tema_historia",
-        ThemeName:        "Historia",
-        Options:          [
-            { Id: "a", Text: "Opcao A" },
-            { Id: "b", Text: "Opcao B" },
-            { Id: "c", Text: "Opcao C" },
-            { Id: "d", Text: "Opcao D" }
-        ],
-        CorrectOptionId:  "a"
-    };
+// Busca pergunta pelo ID dentro do pool da partida
+function loadQuestion(state, questionId) {
+    if (!state || !state.QuestionPool) return null;
+    for (var i = 0; i < state.QuestionPool.length; i++) {
+        if (state.QuestionPool[i].QuestionId === questionId) return state.QuestionPool[i];
+    }
+    return null;
 }
 
 function updatePlayerStats(state, winnerId) {
     // TODO: server.UpdatePlayerStatistics para wins/losses/ELO
 }
+
+
+// ============================================================
+// SEÇÃO 4 — LOJA
+// ============================================================
+
+handlers.PurchaseItemSecure = function (args, context) {
+    var itemId          = args && args.itemId          ? String(args.itemId)          : null;
+    var virtualCurrency = args && args.virtualCurrency ? String(args.virtualCurrency) : null;
+    var price           = args && args.price           ? parseInt(args.price, 10)     : 0;
+    var storeId         = args && args.storeId         ? String(args.storeId)         : "store_default";
+
+    if (!itemId)          return { success: false, error: "itemId is required" };
+    if (!virtualCurrency) return { success: false, error: "virtualCurrency is required" };
+    if (!price || price <= 0) return { success: false, error: "price must be > 0" };
+
+    var inventory      = server.GetUserInventory({ PlayFabId: currentPlayerId });
+    var currentBalance = inventory.VirtualCurrency && inventory.VirtualCurrency[virtualCurrency]
+        ? inventory.VirtualCurrency[virtualCurrency] : 0;
+
+    if (currentBalance < price) {
+        return { success: false, error: "insufficient_balance", itemId: itemId, currencyCode: virtualCurrency, price: price, currentBalance: currentBalance };
+    }
+
+    var catalogItems = server.GetCatalogItems({ CatalogVersion: "mainCatalog" });
+    var itemFound    = false;
+    if (catalogItems && catalogItems.Catalog) {
+        for (var i = 0; i < catalogItems.Catalog.length; i++) {
+            if (catalogItems.Catalog[i].ItemId === itemId) { itemFound = true; break; }
+        }
+    }
+    if (!itemFound) return { success: false, error: "item_not_found", itemId: itemId };
+
+    var subtractResult = server.SubtractUserVirtualCurrency({
+        PlayFabId: currentPlayerId,
+        VirtualCurrency: virtualCurrency,
+        Amount: price
+    });
+
+    var newBalance = subtractResult.Balance !== undefined ? subtractResult.Balance : (currentBalance - price);
+    return { success: true, operation: "purchase", itemId: itemId, currencyCode: virtualCurrency, priceDeducted: price, newBalance: newBalance, storeId: storeId };
+};

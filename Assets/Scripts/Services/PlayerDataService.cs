@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using PlayFab;
 using PlayFab.ClientModels;
 using UnityEngine;
+using BrainDuel.Match;
 
 public class PlayerDataService : MonoBehaviour
 {
@@ -87,6 +88,60 @@ public class PlayerDataService : MonoBehaviour
     {
         cachedProfile = PlayerProfileData.CreateDefault();
         SaveProgress(cachedProfile.level, cachedProfile.currentXp, cachedProfile.settings);
+    }
+
+    /// <summary>
+    /// Persiste o power-up equipado pelo jogador no PlayFab User Data.
+    /// </summary>
+    public void EquipPowerUp(PowerUpType type)
+    {
+        cachedProfile ??= PlayerProfileData.CreateDefault();
+        cachedProfile.equippedPowerUp = type.ToString();
+
+        string json = JsonUtility.ToJson(cachedProfile);
+        PlayFabService.Client.UpdateUserData(
+            new UpdateUserDataRequest
+            {
+                Data = new Dictionary<string, string> { { PlayerProfileKey, json } }
+            },
+            _ => Debug.Log($"[PlayerDataService] Power-up equipado salvo: {type}"),
+            e => Debug.LogError($"[PlayerDataService] Falha ao salvar power-up: {e.GenerateErrorReport()}")
+        );
+    }
+
+    /// <summary>
+    /// Cria e persiste o perfil inicial de um novo jogador no PlayFab.
+    /// Deve ser chamado uma única vez, logo após o registro bem-sucedido.
+    /// </summary>
+    public void InitializeForNewPlayer(string displayName)
+    {
+        cachedProfile = PlayerProfileData.CreateDefault();
+        if (!string.IsNullOrWhiteSpace(displayName))
+            cachedProfile.displayName = displayName;
+
+        cachedProfile.equippedDeckId = "deckHistoria";
+        cachedProfile.decks = new List<PlayerDeckData>
+        {
+            new PlayerDeckData { id = "deckHistoria",  category = "HISTÓRIA",  isOwned = true, isEquipped = true,  colorHex = "#8B2020", iconName = "history" },
+            new PlayerDeckData { id = "deckGeografia", category = "GEOGRAFIA", isOwned = true, isEquipped = false, colorHex = "#1E5D9A", iconName = "geography" },
+            new PlayerDeckData { id = "deckCiencia",   category = "CIÊNCIA",   isOwned = true, isEquipped = false, colorHex = "#2E8B57", iconName = "science" },
+        };
+
+        string json = JsonUtility.ToJson(cachedProfile);
+
+        // Salva player_profile (JSON completo) e equippedDeckId (chave direta lida pelo ProfileManager)
+        PlayFabService.Client.UpdateUserData(
+            new UpdateUserDataRequest
+            {
+                Data = new Dictionary<string, string>
+                {
+                    { PlayerProfileKey, json },
+                    { "equippedDeckId",  "deckHistoria" }
+                }
+            },
+            _ => Debug.Log("[PlayerDataService] Perfil inicial salvo com decks iniciais."),
+            e => Debug.LogError($"[PlayerDataService] Falha ao salvar perfil inicial: {e.GenerateErrorReport()}")
+        );
     }
 
     private void OnGetUserDataSuccess(GetUserDataResult result)

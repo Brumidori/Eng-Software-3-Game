@@ -40,13 +40,14 @@ namespace BrainDuel.Match.States
         // Solicita ao servidor que revele a pergunta (idempotente)
         private void RequestQuestion()
         {
+            if (Context.IsStubMode) return;
+
             CloudScriptClient.Call("StartQuestion", new
             {
                 matchId     = Context.MatchId,
                 roundNumber = Context.CurrentRound
             }, onSuccess: result =>
             {
-                // O servidor responderá com QuestionReveal via Party broadcast
                 Debug.Log("[State] StartQuestion confirmado pelo servidor");
             }, onError: err =>
             {

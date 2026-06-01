@@ -110,6 +110,8 @@ public class RegisterScreenHandler : MonoBehaviour
         _isSubmitting = true;
         SetInteractable(false);
         SetFeedback("Criando conta...", false);
+
+        EnsurePlayFabService();
         EnsureAuthorizationService();
         AuthorizationService.Instance.ResetRoleState();
 
@@ -172,34 +174,18 @@ public class RegisterScreenHandler : MonoBehaviour
     {
         _isSubmitting = false;
         _registrationSucceeded = true;
-        SetFeedback("Conta criada! Concedendo decks iniciais...", false);
-        EnsureStarterDeckGrantService();
+        SetFeedback("Conta criada! Inicializando perfil...", false);
 
-        StarterDeckGrantService.Instance.GrantStarterDecks(result =>
-        {
-            if (result == null || !result.Success)
-            {
-                _registrationSucceeded = false;
-                _isSubmitting = false;
-                SetInteractable(true);
-                SetFeedback(result != null && !string.IsNullOrWhiteSpace(result.Error)
-                    ? result.Error
-                    : "Nao foi possivel conceder os decks iniciais.", true);
-                return;
-            }
+        var nickname = nicknameInput != null ? nicknameInput.text.Trim() : string.Empty;
 
-            if (InventoryService.Instance != null)
-            {
-                InventoryService.Instance.LoadInventory();
-            }
+        EnsurePlayerDataService();
+        PlayerDataService.Instance.InitializeForNewPlayer(nickname);
 
-            SetFeedback(result.AlreadyGranted
-                ? "Decks iniciais ja confirmados. Validando perfil..."
-                : "Decks iniciais concedidos. Validando perfil...", false);
+        EnsureRankingService();
+        RankingService.Instance.RegistroRanking();
 
-            EnsureAuthorizationService();
-            AuthorizationService.Instance.ValidatePlayerRole();
-        });
+        EnsureAuthorizationService();
+        AuthorizationService.Instance.ValidatePlayerRole();
     }
 
     private void HandleRegisterFailure(PlayFabError error)
@@ -312,9 +298,17 @@ public class RegisterScreenHandler : MonoBehaviour
         new GameObject("AuthorizationService").AddComponent<AuthorizationService>();
     }
 
-    private static void EnsureStarterDeckGrantService()
+
+
+    private static void EnsurePlayerDataService()
     {
-        if (StarterDeckGrantService.Instance != null) return;
-        new GameObject("StarterDeckGrantService").AddComponent<StarterDeckGrantService>();
+        if (PlayerDataService.Instance != null) return;
+        new GameObject("PlayerDataService").AddComponent<PlayerDataService>();
     }
+
+    private static void EnsureRankingService()
+    {
+        if (RankingService.Instance != null) return;
+        new GameObject("RankingService").AddComponent<RankingService>();
+    }
 }

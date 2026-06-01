@@ -107,7 +107,7 @@ public class MatchmakingService : MonoBehaviour
             }
         };
 
-        Debug.Log($"[MatchmakingService] Iniciando matchmaking individual | fila='{queueName}' entity={authContext.EntityType}/{authContext.EntityId}");
+        Debug.Log($"[MatchmakingService] Iniciando matchmaking individual | fila='{queueName}' timeout={timeoutSeconds}s entity={authContext.EntityType}/{authContext.EntityId}");
         SetState(MatchmakingState.Searching);
         matchmakingRoutine = StartCoroutine(RunSinglePlayerMatchmaking());
     }
@@ -192,13 +192,17 @@ public class MatchmakingService : MonoBehaviour
     {
         yield return CancelAllTicketsForUser(singleUser);
 
-        yield return CreateTicket(singleUser);
+        // Aguarda PlayFab processar o cancelamento antes de criar novo ticket
+        yield return new WaitForSeconds(2f);
+
+        yield return CreateTicketWithRetry(singleUser);
         if (CurrentState == MatchmakingState.Failed)
         {
             FinishRoutine();
             yield break;
         }
 
+        Debug.Log($"[MatchmakingService] Ticket criado com GiveUpAfterSeconds={timeoutSeconds}. Deadline do cliente em {timeoutSeconds}s.");
         var deadline = Time.time + timeoutSeconds;
         while (Time.time < deadline && !cancellationRequested)
         {
@@ -214,6 +218,15 @@ public class MatchmakingService : MonoBehaviour
                 FinishRoutine();
                 yield break;
             }
+
+            // Ticket cancelado pelo servidor (GiveUpAfterSeconds expirou ou fila recusou)
+            if (singleUser.status == "Cancelled")
+            {
+                Debug.LogWarning($"[MatchmakingService] Ticket cancelado pelo servidor após ~{timeoutSeconds - (deadline - Time.time):F0}s. Verifique o MaxTicketLifetimeSeconds da fila no PlayFab Game Manager.");
+                SetState(MatchmakingState.TimedOut);
+                FinishRoutine();
+                yield break;
+            }
         }
 
         if (cancellationRequested)
@@ -226,7 +239,7 @@ public class MatchmakingService : MonoBehaviour
 
         yield return CancelTicketIfNeeded(singleUser);
         SetState(MatchmakingState.TimedOut);
-        Debug.LogWarning($"[MatchmakingService] Timeout após {timeoutSeconds}s sem match.");
+        Debug.LogWarning($"[MatchmakingService] Timeout do cliente após {timeoutSeconds}s sem match.");
         FinishRoutine();
     }
 
@@ -482,6 +495,51 @@ public class MatchmakingService : MonoBehaviour
         Debug.Log($"[MatchmakingService] Ticket criado para '{user.customId}': {user.ticketId}");
     }
 
+    private IEnumerator CreateTicketWithRetry(MatchmakingTestUser user)
+    {
+        int   maxRetries = 3;
+        float[] delays   = { 2f, 4f, 8f };
+
+        for (int attempt = 0; attempt < maxRetries; attempt++)
+        {
+            bool          done        = false;
+            CreateMatchmakingTicketResult ticketResult = null;
+            PlayFabError  ticketError  = null;
+
+            user.multiplayerApi.CreateMatchmakingTicket(new CreateMatchmakingTicketRequest
+            {
+                QueueName          = queueName,
+                GiveUpAfterSeconds = timeoutSeconds,
+                Creator            = new MatchmakingPlayer { Entity = user.entity }
+            },
+            result => { ticketResult = result; done = true; },
+            error  => { ticketError  = error;  done = true; });
+
+            while (!done) yield return null;
+
+            if (ticketError == null)
+            {
+                user.ticketId = ticketResult.TicketId;
+                user.status   = "WaitingForMatch";
+                user.matchId  = null;
+                Debug.Log($"[MatchmakingService] Ticket criado: {user.ticketId}");
+                yield break;
+            }
+
+            bool throttled = ticketError.HttpCode == 429;
+
+            if (!throttled || attempt == maxRetries - 1)
+            {
+                HandlePlayFabFailure("Falha ao criar ticket", ticketError);
+                yield break;
+            }
+
+            float wait = delays[Mathf.Min(attempt, delays.Length - 1)];
+            Debug.LogWarning($"[MatchmakingService] Throttling em CreateTicket. Tentativa {attempt + 1}/{maxRetries}. Aguardando {wait}s...");
+            yield return new WaitForSeconds(wait);
+        }
+    }
+
     private IEnumerator PollTicket(MatchmakingTestUser user)
     {
         if (string.IsNullOrWhiteSpace(user.ticketId))
@@ -614,7 +672,9 @@ public class MatchmakingService : MonoBehaviour
         error =>
         {
             done = true;
-            Debug.LogWarning($"[MatchmakingService] Cancelamento do ticket '{user.ticketId}' de '{user.customId}' retornou: {error.GenerateErrorReport()}");
+            // "already completed" é esperado quando o ticket foi concluído antes do cancelamento
+            if (error.Error != PlayFabErrorCode.MatchmakingTicketNotFound && !error.ErrorMessage.Contains("already completed"))
+                Debug.LogWarning($"[MatchmakingService] Cancelamento do ticket '{user.ticketId}' retornou: {error.GenerateErrorReport()}");
         });
 
         while (!done)
