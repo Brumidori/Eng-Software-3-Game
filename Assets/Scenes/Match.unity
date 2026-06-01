@@ -275,7 +275,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 200, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_SizeDelta: {x: 90, y: 70}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &67783736
 MonoBehaviour:
@@ -1700,7 +1700,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &490371941
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2566,7 +2566,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_SizeDelta: {x: 79, y: 65}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &945622973
 MonoBehaviour:
@@ -5249,12 +5249,14 @@ MonoBehaviour:
   - {fileID: 2146216522}
   - {fileID: 1240954155}
   - {fileID: 1628159963}
+  revealIndicadorOffsetX: 100
   respostaCorretaImage: {fileID: 945622973}
   escolhaJogador1Image: {fileID: 1931095396}
   escolhaJogador2Image: {fileID: 67783736}
   danoJogador1Text: {fileID: 2127703627}
   danoJogador2Text: {fileID: 694653906}
   damagePopupText: {fileID: 210301084}
+  damagePopupJogador2Text: {fileID: 1210296780}
   panelFimPartida: {fileID: 1073424860}
   panelVitoria: {fileID: 230463002}
   xpGanhoVitoriaText: {fileID: 1718724670}
@@ -6748,7 +6750,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: -200, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_SizeDelta: {x: 90, y: 70}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1931095396
 MonoBehaviour:
