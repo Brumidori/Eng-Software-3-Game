@@ -64,10 +64,16 @@ namespace BrainDuel.Match.UI
         // ----------------------------------------------------------
 
         [Header("Panel Reveal")]
-        [SerializeField] private GameObject panelReveal;
-        [SerializeField] private TMP_Text   escolhaJogador1Text;
-        [SerializeField] private TMP_Text   escolhaJogador2Text;
-        [SerializeField] private TMP_Text   damagePopupText;
+        [SerializeField] private GameObject    panelReveal;
+        // 4 RectTransforms dos slots de resposta no card do reveal (ordem A-B-C-D)
+        [SerializeField] private RectTransform[] revealOpcaoSlots;
+        // Imagens-indicador que são repositionadas sobre o slot certo
+        [SerializeField] private Image          respostaCorretaImage;   // RespostaCorreta
+        [SerializeField] private Image          escolhaJogador1Image;   // Escolhajogador1
+        [SerializeField] private Image          escolhaJogador2Image;   // Escolhajogador2
+        [SerializeField] private TMP_Text       danoJogador1Text;
+        [SerializeField] private TMP_Text       danoJogador2Text;
+        [SerializeField] private TMP_Text       damagePopupText;        // ComboPop
 
         // ----------------------------------------------------------
         // Panel: Fim de Partida
@@ -116,7 +122,7 @@ namespace BrainDuel.Match.UI
         void Start()
         {
             if (stateMachine == null)
-                stateMachine = FindObjectOfType<MatchStateMachine>();
+                stateMachine = FindAnyObjectByType<MatchStateMachine>();
 
             _ctx = stateMachine.Context;
 
@@ -530,36 +536,66 @@ namespace BrainDuel.Match.UI
             var localResult    = _ctx.GetLocalResult(payload);
             var oponenteResult = _ctx.GetOpponentResult(payload);
 
-            if (escolhaJogador1Text != null)
-                escolhaJogador1Text.text = $"Você: {TextoResposta(localResult.AnsweredId)}";
-            if (escolhaJogador2Text != null)
-                escolhaJogador2Text.text = $"Adversário: {TextoResposta(oponenteResult.AnsweredId)}";
+            // Posiciona indicadores sobre os slots de resposta
+            int correctIdx = AnswerIdToIndex(payload.CorrectAnswerId);
+            int j1Idx      = AnswerIdToIndex(localResult.AnsweredId);
+            int j2Idx      = AnswerIdToIndex(oponenteResult.AnsweredId);
 
-            if (damagePopupText == null) return;
+            MoverIndicador(respostaCorretaImage,  correctIdx, ativo: true);
+            MoverIndicador(escolhaJogador1Image,  j1Idx,      ativo: localResult.Result    != AnswerResult.NotAnswered);
+            MoverIndicador(escolhaJogador2Image,  j2Idx,      ativo: oponenteResult.Result != AnswerResult.NotAnswered);
 
-            bool acertou = localResult.Result == AnswerResult.Correct;
-            int  dano    = localResult.DamageDealt;
+            // Dano sofrido por cada jogador (HPBefore − HPAfter do receptor)
+            int danoRecebido1 = localResult.HPBefore    - localResult.HPAfter;
+            int danoRecebido2 = oponenteResult.HPBefore - oponenteResult.HPAfter;
 
-            if (acertou)
+            if (danoJogador1Text != null)
             {
-                damagePopupText.text  = $"ACERTOU!  -{dano} HP";
-                damagePopupText.color = Color.green;
+                danoJogador1Text.text                = danoRecebido1 > 0 ? $"-{danoRecebido1} HP" : "0 HP";
+                danoJogador1Text.color               = danoRecebido1 > 0 ? Color.red : Color.white;
+                danoJogador1Text.enableVertexGradient = false;
             }
-            else
+            if (danoJogador2Text != null)
             {
-                damagePopupText.text  = "Errou!";
-                damagePopupText.color = Color.red;
+                danoJogador2Text.text                = danoRecebido2 > 0 ? $"-{danoRecebido2} HP" : "0 HP";
+                danoJogador2Text.color               = danoRecebido2 > 0 ? Color.red : Color.white;
+                danoJogador2Text.enableVertexGradient = false;
+            }
+
+            // Popup principal (resultado do jogador local)
+            if (damagePopupText != null)
+            {
+                bool acertou     = localResult.Result == AnswerResult.Correct;
+                bool semResposta = localResult.Result == AnswerResult.NotAnswered;
+                damagePopupText.text                = acertou ? "ACERTOU!" : semResposta ? "TEMPO ESGOTADO!" : "ERROU!";
+                damagePopupText.color               = acertou ? Color.green : Color.red;
+                damagePopupText.enableVertexGradient = false;
             }
         }
 
-        string TextoResposta(string answerId)
+        // Move a imagem-indicador para cima do slot cujo índice é slotIdx.
+        // Se não houver slot válido ou ativo=false, desativa o indicador.
+        void MoverIndicador(Image indicador, int slotIdx, bool ativo)
         {
-            if (_perguntaAtual == null || string.IsNullOrEmpty(answerId)) return "—";
+            if (indicador == null) return;
+            bool valido = ativo
+                && slotIdx >= 0
+                && revealOpcaoSlots != null
+                && slotIdx < revealOpcaoSlots.Length
+                && revealOpcaoSlots[slotIdx] != null;
 
-            foreach (var opt in _perguntaAtual.Answers)
-                if (opt.Id == answerId) return opt.Text;
+            indicador.gameObject.SetActive(valido);
+            if (valido)
+                indicador.transform.position = revealOpcaoSlots[slotIdx].position;
+        }
 
-            return "—";
+
+        // "A" → 0, "B" → 1, "C" → 2, "D" → 3; qualquer outro → -1
+        static int AnswerIdToIndex(string id)
+        {
+            if (string.IsNullOrEmpty(id) || id.Length != 1) return -1;
+            char c = char.ToUpperInvariant(id[0]);
+            return (c >= 'A' && c <= 'D') ? c - 'A' : -1;
         }
 
         // ----------------------------------------------------------

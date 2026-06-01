@@ -74,6 +74,7 @@ public class MatchMakingScreenController : MonoBehaviour
             service = go.AddComponent<MatchmakingService>();
         }
 
+        Debug.Log($"[MatchMaking] Iniciando com timeoutSeconds={timeoutSeconds} (valor do Inspector)");
         service.StartSinglePlayerMatchmaking(queueName, timeoutSeconds, pollIntervalSeconds);
     }
 
@@ -93,7 +94,7 @@ public class MatchMakingScreenController : MonoBehaviour
     {
         // Busca o Canvas da própria cena ativa, ignorando DontDestroyOnLoad
         Canvas canvas = null;
-        foreach (var c in FindObjectsOfType<Canvas>())
+        foreach (var c in FindObjectsByType<Canvas>(FindObjectsSortMode.None))
         {
             if (c.gameObject.scene == gameObject.scene)
             {
