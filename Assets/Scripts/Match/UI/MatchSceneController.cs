@@ -53,6 +53,7 @@ namespace BrainDuel.Match.UI
 
         [Header("Panel Pergunta")]
         [SerializeField] private GameObject panelPergunta;
+        [SerializeField] private Image      cardTemaPerguntaImage;
         [SerializeField] private TMP_Text   perguntaText;
         [SerializeField] private Button[]   opcaoButtons;         // 4 botões de resposta
         [SerializeField] private TMP_Text[] opcaoTexts;           // textos dos 4 botões
@@ -105,8 +106,8 @@ namespace BrainDuel.Match.UI
         private QuestionRevealPayload     _perguntaAtual;
         private Coroutine                 _timerCoroutine;
         private bool                      _poderJaUsado;
-        private HashSet<PowerUpType>      _poderesNoInventario = new HashSet<PowerUpType>();
-        private bool                      _hudNomesPreenchidos;
+        private Dictionary<PowerUpType, int> _poderesNoInventario = new Dictionary<PowerUpType, int>();
+        private string                    _currentThemeName;
 
         // ----------------------------------------------------------
         // Unity lifecycle
@@ -130,7 +131,11 @@ namespace BrainDuel.Match.UI
                 powerUpManager.OnPowerUpActivated += HandlePoderAtivado;
 
             InventoryService.OnInventoryLoaded += PopularInventarioPoderes;
-            InventoryService.Instance?.LoadInventory();
+
+            // Garante que o InventoryService existe mesmo sem ter passado pelas cenas anteriores
+            if (InventoryService.Instance == null)
+                new GameObject("InventoryService").AddComponent<InventoryService>();
+            InventoryService.Instance.LoadInventory();
 
             ConfigurarBotoesPoder();
             ConfigurarBotoesResposta();
@@ -168,12 +173,18 @@ namespace BrainDuel.Match.UI
         {
             if (_ctx == null) return;
 
-            nomeJogador1Text.text  = _ctx.LocalDisplayName;
-            nivelJogador1Text.text = $"Nv. {_ctx.LocalLevel}";
-            nomeJogador2Text.text  = _ctx.OpponentDisplayName;
-            nivelJogador2Text.text = _ctx.OpponentLevel > 0
-                ? $"Nv. {_ctx.OpponentLevel}"
-                : "Nv. ?";
+            // Fallback: se o contexto não tiver nome, usa o perfil local carregado
+            string nomeLocal = _ctx.LocalDisplayName;
+            if (string.IsNullOrEmpty(nomeLocal))
+                nomeLocal = PlayerDataService.Instance?.CurrentProfile?.displayName ?? "Você";
+
+            SetTMPText(nomeJogador1Text,  nomeLocal);
+            SetTMPText(nivelJogador1Text, $"Nv. {_ctx.LocalLevel}");
+
+            string nomeOponente = _ctx.OpponentDisplayName;
+            if (string.IsNullOrEmpty(nomeOponente)) nomeOponente = "Adversário";
+            SetTMPText(nomeJogador2Text,  nomeOponente);
+            SetTMPText(nivelJogador2Text, _ctx.OpponentLevel > 0 ? $"Nv. {_ctx.OpponentLevel}" : "Nv. ?");
 
             AtualizarBarrasHP(_ctx.LocalHP, _ctx.OpponentHP);
             AtualizarTextoRodada();
@@ -193,20 +204,13 @@ namespace BrainDuel.Match.UI
 
         void HandlePhaseChanged(MatchPhase fase)
         {
-            if (!_hudNomesPreenchidos
-                && _ctx?.ServerState != null
-                && !string.IsNullOrEmpty(_ctx.LocalDisplayName))
-            {
-                InicializarHUD();
-                _hudNomesPreenchidos = true;
-            }
-
             DesativarTodosPanels();
             PararTimer();
 
             switch (fase)
             {
                 case MatchPhase.ThemeAndPowerUp:
+                    InicializarHUD();   // atualiza nomes/nível/rodada toda vez que a rodada começa
                     panelTemaPoderes.SetActive(true);
                     IniciarTimer(timerTemaPoderesText, MatchConfig.ThemePhaseDurationMs / 1000f, IrParaPergunta);
                     AtualizarTextoRodada();
@@ -244,8 +248,16 @@ namespace BrainDuel.Match.UI
 
         void AtualizarTextoRodada()
         {
-            if (_ctx != null)
-                rodadaText.text = $"{_ctx.CurrentRound} / {MatchConfig.MaxRounds}";
+            if (_ctx == null) return;
+            SetTMPText(rodadaText, $"{_ctx.CurrentRound} / {MatchConfig.MaxRounds}");
+        }
+
+        static void SetTMPText(TMP_Text label, string text)
+        {
+            if (label == null) return;
+            label.text                = text;
+            label.color               = Color.white;
+            label.enableVertexGradient = false;
         }
 
         // ----------------------------------------------------------
@@ -254,6 +266,12 @@ namespace BrainDuel.Match.UI
 
         void HandleRodadaIniciada(RoundStartPayload payload)
         {
+            _currentThemeName = payload.ThemeName;
+
+            // Inicializa o PowerUpManager na primeira rodada (ServerState já está populado)
+            if (payload.RoundNumber == 1 && powerUpManager != null)
+                powerUpManager.Initialize(_ctx, stateMachine, _ctx.EquippedPowerUp);
+
             ExibirSpriteTema(payload.ThemeName);
             AtualizarEstadoBotoesPoder();
         }
@@ -266,6 +284,16 @@ namespace BrainDuel.Match.UI
                 temaIcon.sprite = sprite;
             else
                 Debug.LogWarning($"[Match] Sprite não encontrado: Temas/Tema-{themeName}");
+        }
+
+        void ExibirCardTema(string themeName)
+        {
+            if (cardTemaPerguntaImage == null || string.IsNullOrEmpty(themeName)) return;
+            Sprite sprite = Resources.Load<Sprite>($"Temas/Card{themeName}");
+            if (sprite != null)
+                cardTemaPerguntaImage.sprite = sprite;
+            else
+                Debug.LogWarning($"[Match] Card de tema não encontrado: Temas/Card{themeName}");
         }
 
         // ----------------------------------------------------------
@@ -287,20 +315,81 @@ namespace BrainDuel.Match.UI
         {
             _poderesNoInventario.Clear();
 
-            for (int i = 0; i < OrdemPoderes.Length; i++)
+            // Conta quantidades por tipo usando mapeamento do Inspector (powerUpItemIds)
+            if (powerUpItemIds != null)
             {
-                if (i >= powerUpItemIds.Length) break;
-
-                string itemId = powerUpItemIds[i];
-                bool possuiItem = itens.Exists(it => it.ItemId == itemId);
-
-                if (possuiItem)
-                    _poderesNoInventario.Add(OrdemPoderes[i]);
+                for (int i = 0; i < OrdemPoderes.Length; i++)
+                {
+                    if (i >= powerUpItemIds.Length) break;
+                    string itemId = powerUpItemIds[i];
+                    int count = 0;
+                    foreach (var it in itens)
+                        if (it.ItemId == itemId) count++;
+                    if (count > 0)
+                        _poderesNoInventario[OrdemPoderes[i]] = count;
+                }
             }
 
-            // Atualiza os botões caso o panel já esteja visível
+            // Se o EquippedPowerUp no contexto ainda é None (perfil não estava disponível
+            // quando a partida inicializou), resolve agora que o inventário carregou
+            if (_ctx?.LocalPlayer != null && _ctx.LocalPlayer.EquippedPowerUp == PowerUpType.None)
+            {
+                var equipado = ResolveEquippedPowerUpFromProfile();
+
+                // Último recurso: usa o primeiro poder encontrado no inventário
+                if (equipado == PowerUpType.None)
+                {
+                    foreach (var kv in _poderesNoInventario)
+                    {
+                        if (kv.Key != PowerUpType.None) { equipado = kv.Key; break; }
+                    }
+                }
+
+                if (equipado != PowerUpType.None)
+                {
+                    _ctx.LocalPlayer.EquippedPowerUp = equipado;
+                    powerUpManager?.Initialize(_ctx, stateMachine, equipado);
+                    Debug.Log($"[Match] EquippedPowerUp resolvido após inventário: {equipado}");
+                }
+            }
+
+            // Garante que o poder equipado aparece no inventário visual (mesmo sem item cadastrado)
+            if (_ctx != null && _ctx.EquippedPowerUp != PowerUpType.None)
+            {
+                if (!_poderesNoInventario.ContainsKey(_ctx.EquippedPowerUp))
+                    _poderesNoInventario[_ctx.EquippedPowerUp] = 1;
+            }
+
+            AtualizarQuantidadesTexto();
+
             if (panelTemaPoderes.activeSelf)
                 AtualizarEstadoBotoesPoder();
+        }
+
+        private static PowerUpType ResolveEquippedPowerUpFromProfile()
+        {
+            var raw = PlayerDataService.Instance?.CurrentProfile?.equippedPowerUp;
+            if (!string.IsNullOrWhiteSpace(raw) &&
+                Enum.TryParse<PowerUpType>(raw, ignoreCase: true, out var t) &&
+                t != PowerUpType.None)
+                return t;
+            return PowerUpType.None;
+        }
+
+        void AtualizarQuantidadesTexto()
+        {
+            if (powerUpButtons == null) return;
+            for (int i = 0; i < powerUpButtons.Length; i++)
+            {
+                if (powerUpButtons[i] == null) continue;
+                PowerUpType tipo = i < OrdemPoderes.Length ? OrdemPoderes[i] : PowerUpType.None;
+                var label = powerUpButtons[i].GetComponentInChildren<TMP_Text>();
+                if (label == null) continue;
+                if (_poderesNoInventario.TryGetValue(tipo, out int qtd))
+                    label.text = $"x{qtd}";
+                else
+                    label.text = string.Empty;
+            }
         }
 
         void AtualizarEstadoBotoesPoder()
@@ -315,20 +404,21 @@ namespace BrainDuel.Match.UI
             if (_ctx == null) return;
             if (powerUpButtons == null) return;
 
-            PowerUpType equipado = _ctx.EquippedPowerUp;
-            bool        podeUsar = _ctx.CanUsePowerUp;
+            bool podeUsar = _ctx.LocalPlayer != null && !_ctx.LocalPlayer.HasUsedPowerUp;
 
             for (int i = 0; i < powerUpButtons.Length; i++)
             {
                 if (powerUpButtons[i] == null) continue;
 
-                PowerUpType tipo          = i < OrdemPoderes.Length ? OrdemPoderes[i] : PowerUpType.None;
-                bool        esteEquipado  = tipo == equipado;
-                bool        temInventario = _poderesNoInventario.Contains(tipo);
-                bool        habilitado    = esteEquipado && podeUsar && temInventario;
+                PowerUpType tipo         = i < OrdemPoderes.Length ? OrdemPoderes[i] : PowerUpType.None;
+                bool        temInventario = _poderesNoInventario.ContainsKey(tipo);
+
+                bool habilitado = temInventario && podeUsar;
 
                 powerUpButtons[i].interactable = habilitado;
-                SetAlpha(powerUpButtons[i], temInventario ? (esteEquipado ? 1f : 0.35f) : 0.15f);
+
+                float alpha = temInventario ? 1f : 0.15f;
+                SetAlpha(powerUpButtons[i], alpha);
             }
 
             if (powerUpDescricaoText != null)
@@ -340,6 +430,8 @@ namespace BrainDuel.Match.UI
             if (_poderJaUsado) return;
             if (index >= OrdemPoderes.Length) return;
 
+            PowerUpType tipo = OrdemPoderes[index];
+
             // Desabilita os outros botões imediatamente ao clicar
             for (int i = 0; i < powerUpButtons.Length; i++)
             {
@@ -350,9 +442,10 @@ namespace BrainDuel.Match.UI
                 }
             }
 
-            PowerUpType tipo = OrdemPoderes[index];
-            powerUpDescricaoText.text = PowerUpManager.GetDescription(tipo);
-            powerUpManager?.TryActivate();
+            if (powerUpDescricaoText != null)
+                powerUpDescricaoText.text = PowerUpManager.GetDescription(tipo);
+
+            powerUpManager?.TryActivate(tipo);
         }
 
         void HandlePoderAtivado(PowerUpType tipo)
@@ -393,7 +486,13 @@ namespace BrainDuel.Match.UI
         {
             _perguntaAtual = payload;
             if (perguntaText != null)
-                perguntaText.text = payload.QuestionText;
+            {
+                perguntaText.text               = payload.QuestionText;
+                perguntaText.color              = Color.black;
+                perguntaText.enableVertexGradient = false;
+            }
+
+            ExibirCardTema(_currentThemeName);
 
             if (opcaoButtons == null || opcaoTexts == null) return;
             for (int i = 0; i < opcaoButtons.Length && i < payload.Answers.Length; i++)
@@ -531,6 +630,7 @@ namespace BrainDuel.Match.UI
 
         IEnumerator TimerRoutine(TMP_Text label, float duracao, Action aoTerminar)
         {
+            if (label != null) { label.text = Mathf.CeilToInt(duracao).ToString(); label.color = Color.white; }
             float restante = duracao;
             while (restante > 0f)
             {
@@ -542,7 +642,7 @@ namespace BrainDuel.Match.UI
                 restante -= Time.deltaTime;
                 yield return null;
             }
-            if (label != null) label.text = "0";
+            if (label != null) { label.text = "0"; label.color = Color.red; }
             aoTerminar?.Invoke();
         }
 

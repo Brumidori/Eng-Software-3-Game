@@ -114,6 +114,12 @@ namespace BrainDuel.Match.Core
                 yield break;
             }
 
+            // Garante que todos os Start() dos outros MonoBehaviours já rodaram e
+            // subscreveram aos eventos antes de disparar a primeira rodada.
+            // Necessário porque em stub mode JoinNetwork chama onJoined de forma
+            // síncrona, não dando tempo para o Start() do MatchSceneController rodar.
+            yield return null;
+
             // Modo stub: cria ServerState mínimo para que HP / round funcionem na UI
             if (party.IsStubMode && Context.ServerState == null)
             {
@@ -346,6 +352,8 @@ namespace BrainDuel.Match.Core
 
             Context.SubmitAnswer(answerId);
 
+            if (Context.IsStubMode) return;
+
             // Envia ao servidor via CloudScript (autoritativo)
             CloudScriptClient.Call("SubmitAnswer", new SubmitAnswerRequest
             {
@@ -368,9 +376,11 @@ namespace BrainDuel.Match.Core
         public void ActivatePowerUp(PowerUpType type)
         {
             if (Phase != MatchPhase.ThemeAndPowerUp) return;
-            if (!Context.CanUsePowerUp) return;
+            if (Context.LocalPlayer == null || Context.LocalPlayer.HasUsedPowerUp) return;
 
             Context.ActivatePowerUp(type);
+
+            if (Context.IsStubMode) return;
 
             CloudScriptClient.Call("ActivatePowerUp", new ActivatePowerUpRequest
             {

@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 05727f382c0e547ef82b04e585a18bd9
+guid: 9a3d6b686731542dda5f0b99fd625df8
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 789224961138507704
-    second: CardLiteratura_0
+      213: -5552033822331656447
+    second: CardAstronomia_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -113,7 +113,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: CardLiteratura_0
+      name: CardAstronomia_0
       rect:
         serializedVersion: 2
         x: 0
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 8bf3880bbe3e3fa00800000000000000
-      internalID: 789224961138507704
+      spriteID: 107a7fe87a633f2b0800000000000000
+      internalID: -5552033822331656447
       vertices: []
       indices: 
       edges: []
@@ -148,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      CardLiteratura_0: 789224961138507704
+      CardAstronomia_0: -5552033822331656447
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
