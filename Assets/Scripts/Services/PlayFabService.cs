@@ -48,6 +48,7 @@ public class PlayFabService : MonoBehaviour
     public void ConfigureTitleId()
     {
         PlayFabSettings.staticSettings.TitleId = PlayFabConfig.GetTitleId();
+        PlayFabSettings.DisableFocusTimeCollection = true;
         Debug.Log($"[PlayFabService] TitleId configurado: {PlayFabConfig.GetTitleId()} (Ambiente: {PlayFabConfig.CurrentEnv})");
     }
 
