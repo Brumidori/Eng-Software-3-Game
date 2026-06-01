@@ -10,17 +10,15 @@ public class ProfileManager : MonoBehaviour
     private static readonly string[] AllDeckIds =
     {
         "deckHistoria",
-        "deckEntretenimento",
         "deckGeografia",
         "deckCiencia"
     };
 
     private static readonly Dictionary<string, string> DeckCategories = new Dictionary<string, string>
     {
-        { "deckHistoria", "HISTÓRIA" },
-        { "deckEntretenimento", "ENTRETENIMENTO" },
+        { "deckHistoria",  "HISTÓRIA" },
         { "deckGeografia", "GEOGRAFIA" },
-        { "deckCiencia", "CIÊNCIA" }
+        { "deckCiencia",   "CIÊNCIA" }
     };
 
     [SerializeField, FormerlySerializedAs("uiBinder")]
@@ -31,6 +29,7 @@ public class ProfileManager : MonoBehaviour
     private string equippedDeckId = string.Empty;
     private bool inventoryLoaded;
     private bool equippedLoaded;
+    private bool profileDecksLoaded;
     private bool statsLoaded;
     private bool accountLoaded;
 
@@ -50,15 +49,17 @@ public class ProfileManager : MonoBehaviour
     private void LoadProfile()
     {
         currentProfile = PlayerProfileData.CreateDefault();
-        inventoryLoaded = false;
-        equippedLoaded  = false;
-        statsLoaded     = false;
-        accountLoaded   = false;
+        inventoryLoaded    = false;
+        equippedLoaded     = false;
+        profileDecksLoaded = false;
+        statsLoaded        = false;
+        accountLoaded      = false;
         ownedDeckIds.Clear();
         equippedDeckId = string.Empty;
 
         RequestInventory();
         RequestEquippedDeck();
+        RequestProfileDecks();
         RequestPlayerStats();
         RequestAccountInfo();
     }
@@ -69,9 +70,7 @@ public class ProfileManager : MonoBehaviour
             new GetUserInventoryRequest(),
             result =>
             {
-                ownedDeckIds.Clear();
-
-                if (result != null && result.Inventory != null)
+                if (result?.Inventory != null)
                 {
                     foreach (var item in result.Inventory)
                     {
@@ -107,6 +106,43 @@ public class ProfileManager : MonoBehaviour
                 TryBuildProfile();
             },
             HandlePlayFabError);
+    }
+
+    private void RequestProfileDecks()
+    {
+        PlayFabClientAPI.GetUserData(
+            new GetUserDataRequest { Keys = new List<string> { "player_profile" } },
+            result =>
+            {
+                if (result?.Data != null && result.Data.TryGetValue("player_profile", out var entry)
+                    && !string.IsNullOrWhiteSpace(entry.Value))
+                {
+                    try
+                    {
+                        var profile = JsonUtility.FromJson<PlayerProfileData>(entry.Value);
+                        if (profile?.decks != null)
+                        {
+                            foreach (var deck in profile.decks)
+                            {
+                                if (deck != null && !string.IsNullOrWhiteSpace(deck.id) && deck.isOwned)
+                                    ownedDeckIds.Add(deck.id);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[ProfileManager] Erro ao ler player_profile: {ex.Message}");
+                    }
+                }
+
+                profileDecksLoaded = true;
+                TryBuildProfile();
+            },
+            _ =>
+            {
+                profileDecksLoaded = true;
+                TryBuildProfile();
+            });
     }
 
     private void RequestPlayerStats()
@@ -154,7 +190,7 @@ public class ProfileManager : MonoBehaviour
 
     private void TryBuildProfile()
     {
-        if (!inventoryLoaded || !equippedLoaded || !statsLoaded || !accountLoaded || currentProfile == null)
+        if (!inventoryLoaded || !equippedLoaded || !profileDecksLoaded || !statsLoaded || !accountLoaded || currentProfile == null)
         {
             return;
         }
