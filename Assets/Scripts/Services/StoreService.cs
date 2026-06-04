@@ -121,15 +121,27 @@ public class StoreService : MonoBehaviour
 
     private void OnDirectPurchaseSuccess(PurchaseItemResult result, StoreItemData item, Action<PurchaseResult> onComplete)
     {
-        Debug.Log($"[StoreService] ✅ Compra concluída com sucesso! ItemId={item.itemId}");
+        Debug.Log($"[StoreService] ✅ Compra concluída: ItemId={item.itemId}");
 
-        var resolvedPowerUp = ResolvePowerUpFromItemId(item.itemId);
-        if (resolvedPowerUp != PowerUpType.None)
+        if (item.itemId.StartsWith("deck", StringComparison.OrdinalIgnoreCase))
         {
+            // Deck: adiciona ao player_profile usando o ItemId exato do catálogo
             if (PlayerDataService.Instance != null)
-                PlayerDataService.Instance.EquipPowerUp(resolvedPowerUp);
+                PlayerDataService.Instance.AddDeckToProfile(item.itemId);
             else
-                Debug.LogWarning("[StoreService] PlayerDataService não encontrado para equipar power-up.");
+                Debug.LogWarning("[StoreService] PlayerDataService não encontrado para atualizar deck no perfil.");
+        }
+        else
+        {
+            // Power-up ou outro item
+            var resolvedPowerUp = ResolvePowerUpFromItemId(item.itemId);
+            if (resolvedPowerUp != PowerUpType.None)
+            {
+                if (PlayerDataService.Instance != null)
+                    PlayerDataService.Instance.EquipPowerUp(resolvedPowerUp);
+                else
+                    Debug.LogWarning("[StoreService] PlayerDataService não encontrado para equipar power-up.");
+            }
         }
 
         var successResult = new PurchaseResult

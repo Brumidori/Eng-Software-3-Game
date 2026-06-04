@@ -216,6 +216,7 @@ namespace BrainDuel.Match.UI
             // Reveal: mantém o panelPergunta congelado como fundo — apenas sobrepõe o reveal
             if (fase == MatchPhase.Reveal)
             {
+                CongelarPainelPergunta();  // garante timer=0 e botões bloqueados
                 panelReveal.SetActive(true);
                 return;
             }
@@ -250,13 +251,21 @@ namespace BrainDuel.Match.UI
 
         void HandleHPAtualizado(int localHP, int oponenteHP)
         {
+            Debug.Log($"[HUD] HP atualizado → local={localHP} oponente={oponenteHP}");
             AtualizarBarrasHP(localHP, oponenteHP);
         }
 
         void AtualizarBarrasHP(int localHP, int oponenteHP)
         {
-            hpBarFillJogador1.fillAmount = localHP   / (float)MatchConfig.InitialHP;
-            hpBarFillJogador2.fillAmount = oponenteHP / (float)MatchConfig.InitialHP;
+            if (hpBarFillJogador1 == null)
+                Debug.LogWarning("[HUD] hpBarFillJogador1 não está referenciado no Inspector!");
+            else
+                hpBarFillJogador1.fillAmount = localHP / (float)MatchConfig.InitialHP;
+
+            if (hpBarFillJogador2 == null)
+                Debug.LogWarning("[HUD] hpBarFillJogador2 não está referenciado no Inspector!");
+            else
+                hpBarFillJogador2.fillAmount = oponenteHP / (float)MatchConfig.InitialHP;
         }
 
         void AtualizarTextoRodada()
@@ -543,6 +552,9 @@ namespace BrainDuel.Match.UI
             if (opcaoButtons != null)
                 foreach (var btn in opcaoButtons)
                     if (btn != null) btn.interactable = false;
+
+            // Em modo real, solicita ao servidor que processe a rodada (caso de timeout)
+            stateMachine?.TriggerProcessRound();
         }
 
         // ----------------------------------------------------------

@@ -178,11 +178,16 @@ namespace BrainDuel.Match.Core
                 bool roundStarted = false;
                 CloudScriptClient.Call("StartNextRound",
                     new { matchId = Context.MatchId, roundNumber = 1 },
-                    onSuccess: _ => roundStarted = true,
-                    onError:   _ => roundStarted = true);
+                    onSuccess: result =>
+                    {
+                        if (result != null && Context.ServerState == null)
+                            InicializarServerStateDoRetorno(result);
+                        roundStarted = true;
+                    },
+                    onError: _ => roundStarted = true);
 
                 float waited = 0f;
-                while (!roundStarted && waited < 3f)
+                while (!roundStarted && waited < 5f)
                 {
                     waited += Time.deltaTime;
                     yield return null;
@@ -501,19 +506,30 @@ namespace BrainDuel.Match.Core
             // Envia ao servidor via CloudScript (autoritativo)
             CloudScriptClient.Call("SubmitAnswer", new SubmitAnswerRequest
             {
-                MatchId          = Context.MatchId,
-                RoundNumber      = Context.CurrentRound,
-                AnswerId         = answerId,
+                MatchId           = Context.MatchId,
+                RoundNumber       = Context.CurrentRound,
+                AnswerId          = answerId,
                 ClientTimestampMs = Context.AnswerTimestampMs
-            }, onSuccess: _ =>
+            }, onSuccess: result =>
             {
-                // Notifica oponente via Party (sem revelar resposta)
-                PartyNetworkManager.Instance?.Broadcast(MessageType.OpponentAnswered,
-                    new OpponentAnsweredPayload
-                    {
-                        PlayerId    = Context.LocalPlayerId,
-                        TimestampMs = Context.AnswerTimestampMs
-                    });
+                // Se o servidor já processou a rodada (ambos responderam), o resultado
+                // vem embutido na resposta — processa localmente e reenvia ao oponente.
+                var roundResult = TentarParsearRoundResult(result);
+                if (roundResult != null)
+                {
+                    PartyNetworkManager.Instance?.Broadcast(MessageType.RoundResult, roundResult);
+                    HandleRoundResult(roundResult);
+                }
+                else
+                {
+                    // Ainda aguardando o oponente — apenas notifica que respondemos
+                    PartyNetworkManager.Instance?.Broadcast(MessageType.OpponentAnswered,
+                        new OpponentAnsweredPayload
+                        {
+                            PlayerId    = Context.LocalPlayerId,
+                            TimestampMs = Context.AnswerTimestampMs
+                        });
+                }
             });
         }
 
@@ -556,6 +572,100 @@ namespace BrainDuel.Match.Core
                 return type;
             }
             return PowerUpType.None;
+        }
+
+        // ----------------------------------------------------------
+        // Processamento de rodada por timeout (chamado pelo UI quando o timer esgota)
+        // ----------------------------------------------------------
+
+        public void TriggerProcessRound()
+        {
+            if (Context.IsStubMode || Phase != MatchPhase.Question) return;
+
+            CloudScriptClient.Call("ProcessRound",
+                new { matchId = Context.MatchId, roundNumber = Context.CurrentRound },
+                onSuccess: result =>
+                {
+                    var roundResult = TentarParsearRoundResult(result);
+                    if (roundResult != null)
+                    {
+                        PartyNetworkManager.Instance?.Broadcast(MessageType.RoundResult, roundResult);
+                        HandleRoundResult(roundResult);
+                    }
+                },
+                onError: err => Debug.LogWarning($"[Match] ProcessRound falhou: {err}"));
+        }
+
+        private RoundResultPayload TentarParsearRoundResult(object result)
+        {
+            if (result == null) return null;
+            try
+            {
+                var json = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<Dictionary<string, object>>(json);
+                if (dict == null || !dict.TryGetValue("roundResult", out var rr) || rr == null)
+                    return null;
+                var rrJson = PlayFab.Json.PlayFabSimpleJson.SerializeObject(rr);
+                return PlayFab.Json.PlayFabSimpleJson.DeserializeObject<RoundResultPayload>(rrJson);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Match] Falha ao parsear roundResult: {ex.Message}");
+                return null;
+            }
+        }
+
+        // ----------------------------------------------------------
+        // Inicializa ServerState a partir do retorno de StartNextRound
+        // ----------------------------------------------------------
+
+        private void InicializarServerStateDoRetorno(object result)
+        {
+            try
+            {
+                // PlayFab retorna FunctionResult como objeto — re-serializa para parsear campos
+                var json = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<
+                    Dictionary<string, object>>(json);
+
+                if (dict == null) return;
+
+                string p1Id = dict.TryGetValue("player1Id", out var v1) ? v1?.ToString() : string.Empty;
+                string p2Id = dict.TryGetValue("player2Id", out var v2) ? v2?.ToString() : string.Empty;
+
+                PlayerMatchState BuildState(string pid, object stateObj)
+                {
+                    var ps = new PlayerMatchState { PlayerId = pid, HP = MatchConfig.InitialHP, IsConnected = true };
+                    if (stateObj == null) return ps;
+                    var sj = PlayFab.Json.PlayFabSimpleJson.SerializeObject(stateObj);
+                    var sd = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<Dictionary<string, object>>(sj);
+                    if (sd == null) return ps;
+                    ps.DisplayName = sd.TryGetValue("DisplayName", out var dn) ? dn?.ToString() : string.Empty;
+                    if (sd.TryGetValue("Level", out var lv) && lv != null)
+                        int.TryParse(lv.ToString(), out ps.Level);
+                    return ps;
+                }
+
+                dict.TryGetValue("player1State", out var s1Raw);
+                dict.TryGetValue("player2State", out var s2Raw);
+
+                Context.ServerState = new ServerMatchState
+                {
+                    MatchId      = Context.MatchId,
+                    Player1Id    = p1Id,
+                    Player2Id    = p2Id,
+                    CurrentRound = 1,
+                    IsActive     = true,
+                    Player1State = BuildState(p1Id, s1Raw),
+                    Player2State = BuildState(p2Id, s2Raw),
+                };
+
+                Debug.Log($"[Match] ServerState inicial: P1={Context.ServerState.Player1State.DisplayName} P2={Context.ServerState.Player2State.DisplayName}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Match] Falha ao parsear ServerState inicial: {ex.Message}");
+            }
         }
 
         // ----------------------------------------------------------
@@ -605,6 +715,10 @@ namespace BrainDuel.Match.Core
             TransitionTo(MatchPhase.ThemeAndPowerUp);
         }
 
+        // Chamado pelo ThemeAndPowerUpState após receber a resposta do StartQuestion
+        public void ReceiveQuestionReveal(QuestionRevealPayload payload) =>
+            HandleQuestionReveal(payload);
+
         private void HandleQuestionReveal(QuestionRevealPayload p)
         {
             Context.PhaseStartServerMs = p.ServerTimestampMs;
@@ -623,15 +737,28 @@ namespace BrainDuel.Match.Core
         {
             Context.LastRoundResult = p;
 
-            // Atualiza HP local a partir do resultado autoritativo
             var localResult    = Context.GetLocalResult(p);
             var opponentResult = Context.GetOpponentResult(p);
 
-            if (Context.ServerState != null)
+            // No modo real, o ServerState pode não ter sido inicializado pelo cliente —
+            // cria um estado mínimo a partir do payload para que HP e nomes funcionem.
+            if (Context.ServerState == null)
             {
-                Context.LocalPlayer.HP    = localResult.HPAfter;
-                Context.OpponentPlayer.HP = opponentResult.HPAfter;
+                Context.ServerState = new ServerMatchState
+                {
+                    MatchId      = Context.MatchId,
+                    Player1Id    = localResult.PlayerId,
+                    Player2Id    = opponentResult.PlayerId,
+                    CurrentRound = p.RoundNumber,
+                    IsActive     = !p.IsMatchOver,
+                    Player1State = new PlayerMatchState { PlayerId = localResult.PlayerId },
+                    Player2State = new PlayerMatchState { PlayerId = opponentResult.PlayerId },
+                };
             }
+
+            // Atualiza HP a partir do resultado autoritativo do servidor
+            Context.LocalPlayer.HP    = localResult.HPAfter;
+            Context.OpponentPlayer.HP = opponentResult.HPAfter;
 
             OnHPUpdated?.Invoke(Context.LocalHP, Context.OpponentHP);
             OnRoundResultReceived?.Invoke(p);
@@ -674,9 +801,32 @@ namespace BrainDuel.Match.Core
             OnOpponentConnected?.Invoke(playerId);
         }
 
+        // Chamado pelo AbandonarPartidaModal antes de ir para a tela de derrota
+        public void NotificarAbandono()
+        {
+            PartyNetworkManager.Instance?.Broadcast(MessageType.OpponentAbandoned, new { });
+        }
+
         private void HandleOpponentAbandoned(string playerId)
         {
-            // Servidor declarará vitória — aguarda MatchEnd
+            // Oponente abandonou — encerra a partida localmente com vitória
+            HandleMatchEnd(new MatchEndPayload
+            {
+                WinnerId          = Context.LocalPlayerId,
+                WinnerHP          = Context.LocalHP,
+                LoserHP           = 0,
+                Reason            = MatchEndReason.Abandonment,
+                TotalRoundsPlayed = Context.CurrentRound,
+            });
+
+            // Garante que o servidor finalize e processe as estatísticas do vencedor
+            if (!Context.IsStubMode)
+            {
+                CloudScriptClient.Call("FinalizeMatch",
+                    new { matchId = Context.MatchId, winnerId = Context.LocalPlayerId },
+                    onSuccess: _ => { },
+                    onError:   err => Debug.LogWarning($"[Match] FinalizeMatch pós-abandono: {err}"));
+            }
         }
     }
 }
