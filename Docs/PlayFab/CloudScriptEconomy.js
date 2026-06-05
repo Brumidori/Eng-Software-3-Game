@@ -87,7 +87,7 @@ handlers.EconomyGetBalance = function (args, context) {
 /**
  * PurchaseItemSecure - Server-authoritative purchase handler
  * 
- * Valida saldo suficiente, subtrai moeda virtual e retorna novo saldo.
+ * Valida saldo suficiente, subtrai moeda virtual, concede o item e retorna novo saldo.
  * 
  * Args:
  * - itemId (required): ID do item a ser comprado
@@ -123,11 +123,29 @@ handlers.PurchaseItemSecure = function (args, context) {
         return { success: false, error: "price must be > 0" };
     }
 
-    // Obter saldo atual
+    // Obter saldo atual e inventario para validar compra unica de decks/skins
     var inventory = server.GetUserInventory({ PlayFabId: currentPlayerId });
     var currentBalance = inventory.VirtualCurrency && inventory.VirtualCurrency[virtualCurrency]
         ? inventory.VirtualCurrency[virtualCurrency]
         : 0;
+
+    var isUniqueItem = itemId.toLowerCase().indexOf("deck") === 0
+        || itemId.toLowerCase().indexOf("skin") === 0;
+
+    if (isUniqueItem && inventory.Inventory) {
+        for (var ownedIndex = 0; ownedIndex < inventory.Inventory.length; ownedIndex++) {
+            var ownedItem = inventory.Inventory[ownedIndex];
+            if (ownedItem && ownedItem.ItemId && ownedItem.ItemId.toLowerCase() === itemId.toLowerCase()) {
+                return {
+                    success: false,
+                    error: "already_owned",
+                    itemId: itemId,
+                    currencyCode: virtualCurrency,
+                    currentBalance: currentBalance
+                };
+            }
+        }
+    }
 
     // Validar saldo suficiente
     if (currentBalance < price) {
@@ -170,6 +188,42 @@ handlers.PurchaseItemSecure = function (args, context) {
     });
 
     var newBalance = subtractResult.Balance !== undefined ? subtractResult.Balance : (currentBalance - price);
+    var grantResult = null;
+
+    try {
+        grantResult = server.GrantItemsToUser({
+            PlayFabId: currentPlayerId,
+            CatalogVersion: "mainCatalog",
+            ItemIds: [itemId],
+            Annotation: "PurchaseItemSecure:" + storeId
+        });
+    } catch (grantError) {
+        var refundResult = server.AddUserVirtualCurrency({
+            PlayFabId: currentPlayerId,
+            VirtualCurrency: virtualCurrency,
+            Amount: price
+        });
+
+        return {
+            success: false,
+            error: "grant_failed_refunded",
+            itemId: itemId,
+            currencyCode: virtualCurrency,
+            refundedAmount: price,
+            newBalance: refundResult.Balance !== undefined ? refundResult.Balance : currentBalance,
+            details: grantError && grantError.message ? grantError.message : String(grantError)
+        };
+    }
+
+    var grantedItemInstanceIds = [];
+    if (grantResult && grantResult.ItemGrantResults) {
+        for (var grantIndex = 0; grantIndex < grantResult.ItemGrantResults.length; grantIndex++) {
+            var granted = grantResult.ItemGrantResults[grantIndex];
+            if (granted && granted.ItemInstanceId) {
+                grantedItemInstanceIds.push(granted.ItemInstanceId);
+            }
+        }
+    }
 
     return {
         success: true,
@@ -178,6 +232,7 @@ handlers.PurchaseItemSecure = function (args, context) {
         currencyCode: virtualCurrency,
         priceDeducted: price,
         newBalance: newBalance,
+        grantedItemInstanceIds: grantedItemInstanceIds,
         storeId: storeId
     };
 };

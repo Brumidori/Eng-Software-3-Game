@@ -16,6 +16,8 @@ public class ProfileUIBinder : MonoBehaviour
     [SerializeField] private TMP_Text titleText;
     [SerializeField] private TMP_Text brainCoinsText;
     [SerializeField] private Image avatarImage;
+    [SerializeField] private Button skinButton;
+    [SerializeField] private GameObject avatarSelectionModalObject;
 
     [Header("Avatar Sprites")]
     [SerializeField] private List<NamedSprite> avatarSprites = new List<NamedSprite>();
@@ -90,6 +92,40 @@ public class ProfileUIBinder : MonoBehaviour
         }
     }
 
+    private void OnEnable()
+    {
+        if (skinButton != null)
+        {
+            skinButton.onClick.AddListener(ShowAvatarSelectionModal);
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (skinButton != null)
+        {
+            skinButton.onClick.RemoveListener(ShowAvatarSelectionModal);
+        }
+    }
+
+    private void ShowAvatarSelectionModal()
+    {
+        if (avatarSelectionModalObject == null)
+        {
+            var modalTransform = transform.root.Find("ModalSelectAvatar");
+            if (modalTransform != null)
+            {
+                avatarSelectionModalObject = modalTransform.gameObject;
+            }
+        }
+
+        if (avatarSelectionModalObject != null)
+        {
+            avatarSelectionModalObject.SetActive(true);
+            avatarSelectionModalObject.SendMessage("Show", SendMessageOptions.DontRequireReceiver);
+        }
+    }
+
     private void BindAvatar(PlayerProfileData data)
     {
         if (avatarImage == null)
@@ -99,12 +135,33 @@ public class ProfileUIBinder : MonoBehaviour
 
         if (!string.IsNullOrWhiteSpace(data.avatarId))
         {
-            var sprite = ResolveSprite(avatarSprites, data.avatarId);
+            var sprite = Resources.Load<Sprite>($"AvatarImages/{data.avatarId}");
+            if (sprite == null)
+            {
+                sprite = ResolveSprite(avatarSprites, data.avatarId);
+            }
+
             if (sprite != null)
             {
                 avatarImage.sprite = sprite;
             }
         }
+    }
+
+    public Sprite ResolveAvatarSprite(string avatarId)
+    {
+        if (string.IsNullOrWhiteSpace(avatarId))
+        {
+            return null;
+        }
+
+        var sprite = Resources.Load<Sprite>($"AvatarImages/{avatarId}");
+        if (sprite == null)
+        {
+            sprite = ResolveSprite(avatarSprites, avatarId);
+        }
+
+        return sprite;
     }
 
     private void BindDecks(List<PlayerDeckData> decks)

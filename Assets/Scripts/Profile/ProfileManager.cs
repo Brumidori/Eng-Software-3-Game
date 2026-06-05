@@ -7,20 +7,16 @@ using UnityEngine.Serialization;
 
 public class ProfileManager : MonoBehaviour
 {
-    private static readonly string[] AllDeckIds =
+    private static readonly string[] StoreDeckIds =
     {
-        "deckHistoria",
-        "deckEntretenimento",
-        "deckGeografia",
-        "deckCiencia"
-    };
-
-    private static readonly Dictionary<string, string> DeckCategories = new Dictionary<string, string>
-    {
-        { "deckHistoria", "HISTÓRIA" },
-        { "deckEntretenimento", "ENTRETENIMENTO" },
-        { "deckGeografia", "GEOGRAFIA" },
-        { "deckCiencia", "CIÊNCIA" }
+        "deckAnimes",
+        "deckAstronomia",
+        "deckDireito",
+        "deckGastronomia",
+        "deckLiteratura",
+        "deckMedicina",
+        "deckMitologia",
+        "deckTecnologia"
     };
 
     [SerializeField, FormerlySerializedAs("uiBinder")]
@@ -32,7 +28,22 @@ public class ProfileManager : MonoBehaviour
     private bool inventoryLoaded;
     private bool equippedLoaded;
     private bool statsLoaded;
-    private bool accountLoaded;
+    private bool profileDataLoaded;
+    private bool profileLoadStarted;
+
+    private void OnEnable()
+    {
+        PlayFabService.OnLoginSuccess += HandlePlayFabLoginSuccess;
+        InventoryService.OnInventoryLoaded += HandleInventoryLoaded;
+        InventoryService.OnInventoryFailed += HandleInventoryFailed;
+    }
+
+    private void OnDisable()
+    {
+        PlayFabService.OnLoginSuccess -= HandlePlayFabLoginSuccess;
+        InventoryService.OnInventoryLoaded -= HandleInventoryLoaded;
+        InventoryService.OnInventoryFailed -= HandleInventoryFailed;
+    }
 
     private void Awake()
     {
@@ -44,6 +55,41 @@ public class ProfileManager : MonoBehaviour
 
     private void Start()
     {
+        EnsurePlayFabService();
+        EnsureInventoryService();
+
+        if (PlayFabService.Instance != null)
+        {
+            PlayFabService.Instance.Initialize();
+        }
+
+        if (PlayFabService.Instance != null && PlayFabService.Instance.IsLoggedIn())
+        {
+            BeginProfileLoad();
+            return;
+        }
+
+        Debug.Log("[ProfileManager] Aguardando login do PlayFab para carregar os decks do perfil.");
+    }
+
+    private void HandlePlayFabLoginSuccess()
+    {
+        BeginProfileLoad();
+    }
+
+    private void BeginProfileLoad()
+    {
+        if (profileLoadStarted)
+        {
+            return;
+        }
+
+        if (PlayFabService.Instance == null || !PlayFabService.Instance.IsLoggedIn())
+        {
+            return;
+        }
+
+        profileLoadStarted = true;
         LoadProfile();
     }
 
@@ -53,40 +99,62 @@ public class ProfileManager : MonoBehaviour
         inventoryLoaded = false;
         equippedLoaded  = false;
         statsLoaded     = false;
-        accountLoaded   = false;
+        profileDataLoaded = false;
         ownedDeckIds.Clear();
         equippedDeckId = string.Empty;
 
         RequestInventory();
         RequestEquippedDeck();
         RequestPlayerStats();
-        RequestAccountInfo();
+        RequestPlayerProfile();
     }
 
     private void RequestInventory()
     {
-        PlayFabClientAPI.GetUserInventory(
-            new GetUserInventoryRequest(),
-            result =>
-            {
-                ownedDeckIds.Clear();
+        if (InventoryService.Instance == null)
+        {
+            EnsureInventoryService();
+        }
 
-                if (result != null && result.Inventory != null)
+        if (InventoryService.Instance == null)
+        {
+            Debug.LogWarning("[ProfileManager] InventoryService indisponivel para carregar os decks do perfil.");
+            ownedDeckIds.Clear();
+            inventoryLoaded = true;
+            TryBuildProfile();
+            return;
+        }
+
+        InventoryService.Instance.LoadInventory();
+    }
+
+    private void HandleInventoryLoaded(List<ItemInstance> items)
+    {
+        ownedDeckIds.Clear();
+
+        if (items != null)
+        {
+            foreach (var item in items)
+            {
+                if (item == null || string.IsNullOrWhiteSpace(item.ItemId))
                 {
-                    foreach (var item in result.Inventory)
-                    {
-                        if (item != null && !string.IsNullOrWhiteSpace(item.ItemId)
-                            && item.ItemId.StartsWith("deck", StringComparison.OrdinalIgnoreCase))
-                        {
-                            ownedDeckIds.Add(item.ItemId);
-                        }
-                    }
+                    continue;
                 }
 
-                inventoryLoaded = true;
-                TryBuildProfile();
-            },
-            HandlePlayFabError);
+                ownedDeckIds.Add(item.ItemId);
+            }
+        }
+
+        inventoryLoaded = true;
+        TryBuildProfile();
+    }
+
+    private void HandleInventoryFailed(PlayFabError error)
+    {
+        Debug.LogError(error.GenerateErrorReport());
+        ownedDeckIds.Clear();
+        inventoryLoaded = true;
+        TryBuildProfile();
     }
 
     private void RequestEquippedDeck()
@@ -133,20 +201,30 @@ public class ProfileManager : MonoBehaviour
             HandlePlayFabError);
     }
 
-    private void RequestAccountInfo()
+    private void RequestPlayerProfile()
     {
-        PlayFabClientAPI.GetAccountInfo(
-            new GetAccountInfoRequest(),
+        PlayFabClientAPI.GetUserData(
+            new GetUserDataRequest { Keys = new List<string> { "player_profile" } },
             result =>
             {
-                if (result?.AccountInfo?.TitleInfo != null)
+                if (result?.Data != null
+                    && result.Data.TryGetValue("player_profile", out var record)
+                    && !string.IsNullOrWhiteSpace(record.Value))
                 {
-                    var name = result.AccountInfo.TitleInfo.DisplayName;
-                    if (!string.IsNullOrWhiteSpace(name))
-                        currentProfile.displayName = name;
+                    var profile = JsonUtility.FromJson<PlayerProfileData>(record.Value);
+                    if (profile != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(profile.displayName))
+                        {
+                            currentProfile.displayName = profile.displayName;
+                        }
+
+                        currentProfile.avatarId = profile.avatarId;
+                        currentProfile.avatarUrl = profile.avatarUrl;
+                    }
                 }
 
-                accountLoaded = true;
+                profileDataLoaded = true;
                 TryBuildProfile();
             },
             HandlePlayFabError);
@@ -154,7 +232,7 @@ public class ProfileManager : MonoBehaviour
 
     private void TryBuildProfile()
     {
-        if (!inventoryLoaded || !equippedLoaded || !statsLoaded || !accountLoaded || currentProfile == null)
+        if (!inventoryLoaded || !equippedLoaded || !statsLoaded || !profileDataLoaded || currentProfile == null)
         {
             return;
         }
@@ -168,23 +246,43 @@ public class ProfileManager : MonoBehaviour
     {
         var decks = new List<PlayerDeckData>();
 
-        for (int i = 0; i < AllDeckIds.Length; i++)
+        for (int i = 0; i < StoreDeckIds.Length; i++)
         {
-            var deckId = AllDeckIds[i];
-            var category = DeckCategories.TryGetValue(deckId, out var name) ? name : deckId;
-            bool isOwned = ownedDeckIds.Contains(deckId);
+            var deckId = StoreDeckIds[i];
+
+            if (!ownedDeckIds.Contains(deckId))
+            {
+                continue;
+            }
 
             decks.Add(new PlayerDeckData
             {
                 id = deckId,
-                category = category,
-                iconName = string.Empty,
-                isOwned = isOwned,
-                isEquipped = isOwned && string.Equals(deckId, equippedDeckId, StringComparison.OrdinalIgnoreCase)
+                category = FormatDeckCategory(deckId),
+                iconName = deckId,
+                isOwned = true,
+                isEquipped = string.Equals(deckId, equippedDeckId, StringComparison.OrdinalIgnoreCase)
             });
         }
 
         return decks;
+    }
+
+    private static string FormatDeckCategory(string deckId)
+    {
+        if (string.IsNullOrWhiteSpace(deckId))
+        {
+            return "DECK";
+        }
+
+        var label = deckId.Trim();
+        if (label.StartsWith("deck", StringComparison.OrdinalIgnoreCase))
+        {
+            label = label.Substring(4);
+        }
+
+        label = label.Replace("_", string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(label) ? "DECK" : label.ToUpperInvariant();
     }
 
     public void EquipDeck(string deckId)
@@ -215,6 +313,27 @@ public class ProfileManager : MonoBehaviour
             HandlePlayFabError);
     }
 
+    public void ApplyAvatarId(string avatarId)
+    {
+        if (currentProfile == null || string.IsNullOrWhiteSpace(avatarId))
+        {
+            return;
+        }
+
+        currentProfile.avatarId = avatarId;
+        profileUIBinder?.Bind(currentProfile);
+
+        if (PlayerDataService.Instance != null)
+        {
+            PlayerDataService.Instance.LoadPlayerData();
+        }
+    }
+
+    public string GetEquippedAvatarId()
+    {
+        return currentProfile != null ? currentProfile.avatarId : string.Empty;
+    }
+
     private void UpdateEquippedFlags(string deckId)
     {
         if (currentProfile == null || currentProfile.decks == null)
@@ -237,5 +356,27 @@ public class ProfileManager : MonoBehaviour
     private void HandlePlayFabError(PlayFabError error)
     {
         Debug.LogError(error.GenerateErrorReport());
+    }
+
+    private static void EnsurePlayFabService()
+    {
+        if (PlayFabService.Instance != null)
+        {
+            return;
+        }
+
+        var playFabServiceGO = new GameObject("PlayFabService");
+        playFabServiceGO.AddComponent<PlayFabService>();
+    }
+
+    private static void EnsureInventoryService()
+    {
+        if (InventoryService.Instance != null)
+        {
+            return;
+        }
+
+        var inventoryServiceGO = new GameObject("InventoryService");
+        inventoryServiceGO.AddComponent<InventoryService>();
     }
 }

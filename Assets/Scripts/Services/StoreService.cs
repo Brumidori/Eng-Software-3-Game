@@ -174,11 +174,25 @@ public class StoreService : MonoBehaviour
             if (errorMessage == "insufficient_balance")
                 errorMessage = "Saldo insuficiente";
             else if (errorMessage == "item_not_found")
-                errorMessage = "Item não encontrado";
+            {
+                errorMessage = "Item nao encontrado";
+            }
+            else if (errorMessage == "already_owned")
+            {
+                errorMessage = "Item ja adquirido";
+            }
+            else if (errorMessage == "grant_failed_refunded")
+            {
+                errorMessage = "Falha ao entregar item. Valor reembolsado";
+            }
 
             Debug.LogWarning($"[StoreService] Compra rejeitada: {errorMessage}");
 
             var currentBalance = TryGetInt(resultData, "currentBalance");
+            if (currentBalance == 0)
+            {
+                currentBalance = TryGetInt(resultData, "newBalance");
+            }
             
             var purchaseResult = new PurchaseResult
             {
@@ -210,6 +224,11 @@ public class StoreService : MonoBehaviour
 
         onComplete?.Invoke(successResult);
         OnPurchaseCompletedSecure?.Invoke(successResult);
+
+        if (InventoryService.Instance != null)
+        {
+            InventoryService.Instance.LoadInventory();
+        }
     }
 
     private void OnCloudScriptPurchaseError(PlayFabError error, StoreItemData item, Action<PurchaseResult> onComplete)
