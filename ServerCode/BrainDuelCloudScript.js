@@ -798,8 +798,8 @@ function processRoundInternal(state) {
     p1Result.HPBefore = p1HPBefore; p1Result.HPAfter = p1State.HP;
     p2Result.HPBefore = p2HPBefore; p2Result.HPAfter = p2State.HP;
 
-    p1State.Streak = p1Result.Result === "Correct" ? p1State.Streak + 1 : 0;
-    p2State.Streak = p2Result.Result === "Correct" ? p2State.Streak + 1 : 0;
+    p1State.Streak = p1Result.Result === 1 ? p1State.Streak + 1 : 0; // 1 = Correct
+    p2State.Streak = p2Result.Result === 1 ? p2State.Streak + 1 : 0;
     p1Result.StreakAfter = p1State.Streak;
     p2Result.StreakAfter = p2State.Streak;
 
@@ -1146,8 +1146,53 @@ function loadQuestion(state, questionId) {
     return null;
 }
 
+// Atualiza estatísticas e moedas de ambos os jogadores no fim da partida.
+// Requer que as estatísticas no PlayFab estejam configuradas com agregação "Sum".
 function updatePlayerStats(state, winnerId) {
-    // TODO: server.UpdatePlayerStatistics para wins/losses/ELO
+    var isDraw         = !winnerId;
+    var isAbandonment  = state.EndReason === 2; // MatchEndReason.Abandonment
+
+    aplicarResultadoJogador(state.Player1Id, state.Player1Id === winnerId, isDraw, isAbandonment);
+    aplicarResultadoJogador(state.Player2Id, state.Player2Id === winnerId, isDraw, isAbandonment);
+}
+
+function aplicarResultadoJogador(playerId, ganhou, empate, abandono) {
+    // XP: vitória=100, empate=50, abandono(vítima)=-10, derrota=20
+    var xp     = ganhou ? 100 : (empate ? 50 : (abandono ? -10 : 20));
+    // Moedas: vitória=80, empate=20, abandono=0, derrota=10
+    var moedas = ganhou ? 80  : (empate ? 20 : (abandono ? 0   : 10));
+
+    // Estatísticas (+1 por partida, acumula com agregação Sum no PlayFab)
+    var stats = [
+        { StatisticName: "partidas_totais_semanal", Value: 1 },
+        { StatisticName: "partidas_totais_mensal",  Value: 1 },
+        { StatisticName: "partidas_totais",         Value: 1 }
+    ];
+
+    if (xp > 0) {
+        stats.push({ StatisticName: "xp_semanal", Value: xp });
+        stats.push({ StatisticName: "xp_mensal",  Value: xp });
+        stats.push({ StatisticName: "xp_total",   Value: xp });
+    }
+
+    if (ganhou || empate) {
+        stats.push({ StatisticName: "vitorias_semanal", Value: 1 });
+        stats.push({ StatisticName: "vitorias_mensal",  Value: 1 });
+        stats.push({ StatisticName: "wins",             Value: 1 });
+    } else {
+        stats.push({ StatisticName: "losses", Value: 1 });
+    }
+
+    try {
+        server.UpdatePlayerStatistics({ PlayFabId: playerId, Statistics: stats });
+    } catch (e) { log.error("updatePlayerStats falhou para " + playerId + ": " + JSON.stringify(e)); }
+
+    // Credita moedas via moeda virtual "BC" (BrainCoins)
+    if (moedas > 0) {
+        try {
+            server.AddUserVirtualCurrency({ PlayFabId: playerId, VirtualCurrency: "BC", Amount: moedas });
+        } catch (e) { log.error("AddUserVirtualCurrency falhou para " + playerId + ": " + JSON.stringify(e)); }
+    }
 }
 
 

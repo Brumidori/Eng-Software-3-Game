@@ -324,8 +324,13 @@ namespace BrainDuel.Match.Core
 
                     bool answered = Context.HasAnsweredThisRound;
                     bool acertou  = answered && Context.SelectedAnswerId == correctAnswerId;
-                    int  dmg      = acertou ? DamageConfig.BaseDamage : 0;
-                    int  newOppHP = Mathf.Max(0, opponentHP - dmg);
+
+                    // Streak: novo valor após esta rodada
+                    int currentStreak = Context.LocalStreak;
+                    int newStreak     = acertou ? currentStreak + 1 : 0;
+                    int streakBonus   = acertou ? DamageConfig.GetStreakBonus(newStreak) : 0;
+                    int dmg           = acertou ? DamageConfig.BaseDamage + streakBonus : 0;
+                    int newOppHP      = Mathf.Max(0, opponentHP - dmg);
 
                     // Rastreia rodadas sem resposta do jogador local
                     if (Context.LocalPlayer != null)
@@ -378,8 +383,8 @@ namespace BrainDuel.Match.Core
                             HPBefore    = localHP,
                             HPAfter     = localHP,
                             WasShielded = false,
-                            StreakAfter = acertou ? Context.LocalStreak + 1 : 0,
-                            Breakdown   = new DamageBreakdown { BaseDamage = dmg },
+                            StreakAfter = newStreak,
+                            Breakdown   = new DamageBreakdown { BaseDamage = DamageConfig.BaseDamage, StreakBonus = streakBonus },
                         },
                         Player2Result = new RoundPlayerResult
                         {
@@ -850,9 +855,11 @@ namespace BrainDuel.Match.Core
                 };
             }
 
-            // Atualiza HP a partir do resultado autoritativo do servidor
-            Context.LocalPlayer.HP    = localResult.HPAfter;
-            Context.OpponentPlayer.HP = opponentResult.HPAfter;
+            // Atualiza HP e streak a partir do resultado autoritativo do servidor
+            Context.LocalPlayer.HP       = localResult.HPAfter;
+            Context.LocalPlayer.Streak   = localResult.StreakAfter;
+            Context.OpponentPlayer.HP    = opponentResult.HPAfter;
+            Context.OpponentPlayer.Streak = opponentResult.StreakAfter;
 
             OnHPUpdated?.Invoke(Context.LocalHP, Context.OpponentHP);
             OnRoundResultReceived?.Invoke(p);

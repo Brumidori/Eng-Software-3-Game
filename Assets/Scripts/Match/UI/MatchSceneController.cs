@@ -77,6 +77,8 @@ namespace BrainDuel.Match.UI
         [SerializeField] private TMP_Text       danoJogador2Text;
         [SerializeField] private TMP_Text       damagePopupText;         // ComboPop — resultado do jogador local
         [SerializeField] private TMP_Text       damagePopupJogador2Text; // resultado do oponente
+        [SerializeField] private TMP_Text       comboText;               // combo do jogador local
+        [SerializeField] private TMP_Text       comboJogador2Text;       // combo do oponente
 
         // ----------------------------------------------------------
         // Panel: Fim de Partida
@@ -610,6 +612,25 @@ namespace BrainDuel.Match.UI
             ExibirPopupResultado(damagePopupText,         localResult.Result);
             // Popup resultado — oponente
             ExibirPopupResultado(damagePopupJogador2Text, oponenteResult.Result);
+
+            // Combo de cada jogador
+            ExibirCombo(comboText,         localResult.StreakAfter);
+            ExibirCombo(comboJogador2Text, oponenteResult.StreakAfter);
+        }
+
+        static void ExibirCombo(TMP_Text label, int streak)
+        {
+            if (label == null) return;
+
+            int bonus    = DamageConfig.GetStreakBonus(streak);
+            bool temCombo = streak >= 2 && bonus > 0;
+
+            label.gameObject.SetActive(temCombo);
+            if (!temCombo) return;
+
+            label.text                = $"COMBO x{streak}\n+{bonus} Dano";
+            label.color               = Color.yellow;
+            label.enableVertexGradient = false;
         }
 
         static void ExibirPopupResultado(TMP_Text label, AnswerResult resultado)
@@ -703,7 +724,7 @@ namespace BrainDuel.Match.UI
                 moedas  = empate ? 20 : porAbandono ? 40  : 80;
 
                 SetTMPText(xpGanhoVitoriaText, $"+{xpGanho} XP");
-                SetTMPText(moedaVitoriaText,   $"+{moedas}");
+                SetTMPText(moedaVitoriaText,   $"+{moedas} moedas");
             }
             else
             {
@@ -712,7 +733,7 @@ namespace BrainDuel.Match.UI
                 moedas  = 0;
 
                 SetTMPText(xpGanhoDerrotaText, xpGanho >= 0 ? $"+{xpGanho} XP" : $"{xpGanho} XP");
-                SetTMPText(moedaDerrotaText,   "0");
+                SetTMPText(moedaDerrotaText,   moedas > 0 ? $"+{moedas} moedas" : "0 moedas");
             }
 
             // Salva resultado no PlayFab — atualiza ranking e estatísticas
