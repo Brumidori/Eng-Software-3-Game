@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 94d13350340454317b7c6429f4a28b0e
+guid: c58e11a645140459899062bcb0b0e195
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -5542038499465411614
-    second: Tema-Entretenimento_0
+      213: -4842687270558776088
+    second: CardCiencia_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -113,13 +113,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Tema-Entretenimento_0
+      name: CardCiencia_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
         width: 742
-        height: 566
+        height: 942
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 2e343d30959b613b0800000000000000
-      internalID: -5542038499465411614
+      spriteID: 8e4c908c5915bccb0800000000000000
+      internalID: -4842687270558776088
       vertices: []
       indices: 
       edges: []
@@ -148,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Tema-Entretenimento_0: -5542038499465411614
+      CardCiencia_0: -4842687270558776088
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 05727f382c0e547ef82b04e585a18bd9
+guid: 4027cc3b934724e5588ae0a56de8269e
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 789224961138507704
-    second: CardLiteratura_0
+      213: 7640129643665241541
+    second: CardMitologia_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -113,7 +113,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: CardLiteratura_0
+      name: CardMitologia_0
       rect:
         serializedVersion: 2
         x: 0
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 8bf3880bbe3e3fa00800000000000000
-      internalID: 789224961138507704
+      spriteID: 5c539988e61370a60800000000000000
+      internalID: 7640129643665241541
       vertices: []
       indices: 
       edges: []
@@ -148,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      CardLiteratura_0: 789224961138507704
+      CardMitologia_0: 7640129643665241541
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
