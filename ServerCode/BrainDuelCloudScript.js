@@ -97,18 +97,17 @@ handlers.GrantStarterDecks = function (args, context) {
             if (!ownedItemIds[eligibleItemIds[i]]) missingItemIds.push(eligibleItemIds[i]);
         }
 
-        if (missingItemIds.length === 0) {
-            return { success: true, alreadyGranted: true, catalogVersion: catalogVersion, grantedItemIds: eligibleItemIds, operation: "grantStarterDecks" };
-        }
+        if (missingItemIds.length === 0)
+            return { success: true, alreadyGranted: true, catalogVersion: catalogVersion, grantedItemIds: eligibleItemIds };
 
         server.GrantItemsToUser({
-            PlayFabId: currentPlayerId,
+            PlayFabId:      currentPlayerId,
             CatalogVersion: catalogVersion,
-            ItemIds: missingItemIds,
-            Annotation: "Starter deck grant on registration"
+            ItemIds:        missingItemIds,
+            Annotation:     "Starter deck grant on registration"
         });
 
-        return { success: true, alreadyGranted: false, catalogVersion: catalogVersion, grantedItemIds: missingItemIds, eligibleItemIds: eligibleItemIds, operation: "grantStarterDecks" };
+        return { success: true, alreadyGranted: false, catalogVersion: catalogVersion, grantedItemIds: missingItemIds };
     } catch (error) {
         return fail("unexpected error while granting starter decks", error);
     }
@@ -334,18 +333,26 @@ function loadDeckIndex() {
 }
 
 function findStarterDeckItemIds(catalogResult) {
-    var eligible = [];
-    var seen = {};
-    if (!catalogResult || !Array.isArray(catalogResult.Catalog)) return eligible;
+    if (!catalogResult || !Array.isArray(catalogResult.Catalog)) return [];
+
+    // Primeira passagem: itens marcados com is_starter=true no CustomData
+    var marked = [];
+    var all    = [];
+    var seen   = {};
+
     for (var i = 0; i < catalogResult.Catalog.length; i++) {
-        var item = catalogResult.Catalog[i];
-        if (!item || !isStarterDeckCatalogItem(item)) continue;
-        var itemId = String(item.ItemId || "").trim();
+        var item   = catalogResult.Catalog[i];
+        var itemId = item && String(item.ItemId || "").trim();
         if (!itemId || seen[itemId]) continue;
+        if (String(itemId).toLowerCase().indexOf("deck") !== 0) continue;
         seen[itemId] = true;
-        eligible.push(itemId);
+        all.push(itemId);
+        if (isStarterDeckCatalogItem(item)) marked.push(itemId);
     }
-    return eligible;
+
+    // Se algum item tiver is_starter=true, usa apenas eles.
+    // Caso contrário, concede todos os decks do catálogo (fallback automático).
+    return marked.length > 0 ? marked : all;
 }
 
 function isStarterDeckCatalogItem(item) {
@@ -580,14 +587,16 @@ handlers.CreateMatch = function (args) {
 
     var p1PowerUp    = getEquippedPowerUp(player1Id);
     var p2PowerUp    = getEquippedPowerUp(player2Id);
+    var p1Info       = getPlayerDisplayInfo(player1Id);
+    var p2Info       = getPlayerDisplayInfo(player2Id);
     var questionPool = buildQuestionPool(player1Id, player2Id);
 
     var state = {
         MatchId:               matchId,
         Player1Id:             player1Id,
         Player2Id:             player2Id,
-        Player1State:          makePlayerState(player1Id, p1PowerUp),
-        Player2State:          makePlayerState(player2Id, p2PowerUp),
+        Player1State:          makePlayerState(player1Id, p1Info.displayName, p1Info.level, p1PowerUp),
+        Player2State:          makePlayerState(player2Id, p2Info.displayName, p2Info.level, p2PowerUp),
         CurrentRound:          0,
         Phase:                 "Initializing",
         PhaseStartTimestampMs: 0,
@@ -639,27 +648,39 @@ handlers.StartNextRound = function (args) {
         themeName:          question.ThemeName,
         serverTimestampMs:  state.PhaseStartTimestampMs,
         themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
-        questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs
+        questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
+        // Inclui estados dos jogadores para o cliente inicializar o ServerState
+        player1Id:          state.Player1Id,
+        player2Id:          state.Player2Id,
+        player1State:       state.Player1State,
+        player2State:       state.Player2State
     };
 };
 
 handlers.StartQuestion = function (args) {
     var state = loadMatchState(args.matchId);
     if (!state || state.CurrentRound !== args.roundNumber) return { status: "ignored" };
-    if (state.Phase !== "ThemeAndPowerUp") return { status: "wrong_phase" };
 
-    state.Phase                 = "Question";
-    state.PhaseStartTimestampMs = Date.now();
-    saveMatchState(state);
+    // Idempotente: aceita tanto ThemeAndPowerUp quanto Question (segundo jogador a chamar)
+    if (state.Phase !== "ThemeAndPowerUp" && state.Phase !== "Question")
+        return { status: "wrong_phase" };
+
+    if (state.Phase === "ThemeAndPowerUp") {
+        state.Phase                 = "Question";
+        state.PhaseStartTimestampMs = Date.now();
+        saveMatchState(state);
+    }
 
     var question = loadQuestion(state, state.CurrentRoundState.QuestionId);
+    if (!question) return { error: "Pergunta nao encontrada" };
+
+    // PascalCase para corresponder exatamente ao modelo C# QuestionRevealPayload
     return {
-        status:            "ok",
-        questionId:        question.QuestionId,
-        questionText:      question.Text,
-        answers:           question.Options,
-        serverTimestampMs: state.PhaseStartTimestampMs,
-        durationMs:        MATCH_CONFIG.QuestionPhaseDurationMs
+        QuestionId:        question.QuestionId,
+        QuestionText:      question.Text,
+        Answers:           question.Options,
+        ServerTimestampMs: state.PhaseStartTimestampMs,
+        DurationMs:        MATCH_CONFIG.QuestionPhaseDurationMs
     };
 };
 
@@ -728,10 +749,22 @@ handlers.RejoinMatch = function (args) {
     };
 };
 
+handlers.AbandonMatch = function (args) {
+    var loserId = currentPlayerId;
+    var state   = loadMatchState(args.matchId);
+    if (!state)             return { error: "Match nao encontrado" };
+    if (!state.IsActive)    return { status: "already_ended", winnerId: state.WinnerId };
+
+    var winnerId = (state.Player1Id === loserId) ? state.Player2Id : state.Player1Id;
+    finalizeMatch(state, winnerId, "Abandonment");
+    return { status: "ok", winnerId: winnerId, loserId: loserId };
+};
+
 handlers.FinalizeMatch = function (args) {
     var state = loadMatchState(args.matchId);
-    if (!state) return { error: "Match nao encontrado" };
-    finalizeMatch(state, args.winnerId, "HPDepleted");
+    if (!state)          return { error: "Match nao encontrado" };
+    if (!state.IsActive) return { status: "already_ended" };   // evita double-processing
+    finalizeMatch(state, args.winnerId, "Abandonment");
     return { status: "ok" };
 };
 
@@ -814,10 +847,11 @@ function computePlayerResult(attackerAct, attackerState, defenderAct, defenderSt
         Breakdown:   { BaseDamage: 0, SpeedBonus: 0, StreakBonus: 0, PowerUpBonus: 0, StolenHP: 0, SelfDamage: 0 }
     };
 
-    if (!attackerAct.HasAnswered) { result.Result = "NotAnswered"; return result; }
+    // Valores numéricos espelham o enum C# AnswerResult: NotAnswered=0, Correct=1, Incorrect=2
+    if (!attackerAct.HasAnswered) { result.Result = 0; return result; }
 
     var correct   = (attackerAct.AnswerId === correctId);
-    result.Result = correct ? "Correct" : "Incorrect";
+    result.Result = correct ? 1 : 2;
     if (!correct) return result;
 
     var streak = attackerState.Streak + 1;
@@ -901,9 +935,22 @@ function finalizeMatch(state, winnerId, reason) {
     return { status: "finalized", winnerId: winnerId };
 }
 
-function makePlayerState(playerId, equippedPowerUp) {
+function getPlayerDisplayInfo(playerId) {
+    try {
+        var r = server.GetUserData({ PlayFabId: playerId, Keys: ["player_profile"] });
+        if (!r.Data || !r.Data["player_profile"]) return { displayName: "", level: 1 };
+        var p = JSON.parse(r.Data["player_profile"].Value);
+        return { displayName: p.displayName || "", level: p.level || 1 };
+    } catch(e) {
+        return { displayName: "", level: 1 };
+    }
+}
+
+function makePlayerState(playerId, displayName, level, equippedPowerUp) {
     return {
         PlayerId:                playerId,
+        DisplayName:             displayName || "",
+        Level:                   level || 1,
         HP:                      MATCH_CONFIG.InitialHP,
         Streak:                  0,
         HasUsedPowerUp:          false,
@@ -925,31 +972,6 @@ function getEquippedPowerUp(playerId) {
     if (result.Data && result.Data["EquippedPowerUp"])
         return result.Data["EquippedPowerUp"].Value || "None";
     return "None";
-}
-
-// Retorna IDs de decks possuídos pelo jogador (ex: ["deckHistoria", "deckGeografia"])
-function getPlayerOwnedDeckIds(playerId) {
-    try {
-        var result = server.GetUserData({ PlayFabId: playerId, Keys: ["player_profile"] });
-        if (!result.Data || !result.Data["player_profile"]) return [];
-        var profile = JSON.parse(result.Data["player_profile"].Value);
-        if (!profile || !profile.decks) return [];
-        var ids = [];
-        for (var i = 0; i < profile.decks.length; i++)
-            if (profile.decks[i].isOwned) ids.push(profile.decks[i].id);
-        return ids;
-    } catch (e) { return []; }
-}
-
-// Mapeia "deckHistoria" → { key: "deck_historia", nome: "Historia" } usando o DeckIndex
-function resolveDeckCategory(deckId, deckIndex) {
-    var suffix = (deckId.indexOf("deck") === 0) ? deckId.substring(4) : deckId;
-    for (var i = 0; i < deckIndex.categorias.length; i++) {
-        var cat = deckIndex.categorias[i];
-        if (cat.nome.toLowerCase() === suffix.toLowerCase())
-            return { key: cat.key, nome: cat.nome };
-    }
-    return null;
 }
 
 // Converte DeckSchemaV2 em array de perguntas prontas para o pool
@@ -979,59 +1001,92 @@ function parseDeckQuestions(deckData, themeName) {
     return questions;
 }
 
-// Monta o pool de 20 perguntas combinando os decks de ambos os jogadores
+// Constrói um mapa itemId → custom_id (chave do TitleData) lendo o CustomData do catálogo.
+// O campo "custom_id" no CustomData de cada item de deck aponta para a key do TitleData
+// onde estão as perguntas daquele deck.
+// Retorna mapa itemId → { customId, theme } lendo o CustomData de cada item de deck do catálogo
+function buildCatalogCustomDataMap(catalogResult) {
+    var map = {};
+    if (!catalogResult || !Array.isArray(catalogResult.Catalog)) return map;
+    for (var i = 0; i < catalogResult.Catalog.length; i++) {
+        var item = catalogResult.Catalog[i];
+        if (!item || !item.ItemId) continue;
+        if (String(item.ItemId).toLowerCase().indexOf("deck") !== 0) continue;
+        if (!item.CustomData) continue;
+        try {
+            var cd = JSON.parse(item.CustomData);
+            if (cd && cd.custom_id)
+                map[item.ItemId] = { customId: cd.custom_id, theme: cd.theme || cd.custom_id };
+        } catch (e) { }
+    }
+    return map;
+}
+
+// Retorna as TitleData keys dos decks que o jogador possui no inventário,
+// resolvendo cada ItemId pelo custom_id do CustomData do catálogo.
+// Retorna array de { key, theme } para os decks que o jogador possui no inventário
+function getPlayerDeckTitleKeys(playerId, catalogMap) {
+    var entries = [];
+    var seenKeys = {};
+    try {
+        var result = server.GetUserInventory({ PlayFabId: playerId });
+        if (!result.Inventory) return entries;
+        for (var i = 0; i < result.Inventory.length; i++) {
+            var itemId = result.Inventory[i].ItemId;
+            if (!itemId || String(itemId).toLowerCase().indexOf("deck") !== 0) continue;
+            var entry = catalogMap[itemId];
+            if (entry && entry.customId && !seenKeys[entry.customId]) {
+                seenKeys[entry.customId] = true;
+                entries.push({ key: entry.customId, theme: entry.theme });
+            }
+        }
+    } catch (e) { }
+    return entries;
+}
+
+// Monta o pool de 20 perguntas combinando os decks de ambos os jogadores.
+// Fluxo:
+//   1. Carrega catálogo → extrai mapa itemId → custom_id (TitleData key)
+//   2. Lê inventário de cada jogador → resolve TitleData keys via catalogMap
+//   3. Une as keys dos dois jogadores (sem duplicatas)
+//   4. Carrega todos os decks em uma única chamada GetTitleData
+//   5. Fisher-Yates shuffle → 20 perguntas
 function buildQuestionPool(p1Id, p2Id) {
-    // Carrega o índice de categorias (reutiliza loadDeckIndex da seção Admin)
-    var indexResult = loadDeckIndex();
-    var deckIndex   = indexResult.success ? indexResult.deckIndex : null;
+    // 1. Catálogo → mapa de custom_id
+    var catalogResult = server.GetCatalogItems({ CatalogVersion: DEFAULT_CATALOG_VERSION });
+    var catalogMap    = buildCatalogCustomDataMap(catalogResult);
 
-    // Coleta IDs de decks de cada jogador e une sem duplicatas
-    var p1DeckIds  = getPlayerOwnedDeckIds(p1Id);
-    var p2DeckIds  = getPlayerOwnedDeckIds(p2Id);
-    var allDeckIds = p1DeckIds.slice();
-    for (var i = 0; i < p2DeckIds.length; i++) {
-        if (allDeckIds.indexOf(p2DeckIds[i]) === -1) allDeckIds.push(p2DeckIds[i]);
+    // 2. Entries { key, theme } de cada jogador
+    var p1Entries = getPlayerDeckTitleKeys(p1Id, catalogMap);
+    var p2Entries = getPlayerDeckTitleKeys(p2Id, catalogMap);
+
+    // 3. União sem duplicatas de keys
+    var entryMap = {};
+    var allEntries = [];
+    function addEntry(e) {
+        if (e && e.key && !entryMap[e.key]) { entryMap[e.key] = e; allEntries.push(e); }
     }
+    for (var i = 0; i < p1Entries.length; i++) addEntry(p1Entries[i]);
+    for (var i = 0; i < p2Entries.length; i++) addEntry(p2Entries[i]);
 
-    // Resolve quais TitleData keys precisam ser carregadas
-    var keysToLoad = [];
-    var keyToTheme = {};
+    var keysToLoad = allEntries.map(function(e) { return e.key; });
 
-    if (deckIndex) {
-        if (allDeckIds.length > 0) {
-            for (var i = 0; i < allDeckIds.length; i++) {
-                var catInfo = resolveDeckCategory(allDeckIds[i], deckIndex);
-                if (catInfo && keysToLoad.indexOf(catInfo.key) === -1) {
-                    keysToLoad.push(catInfo.key);
-                    keyToTheme[catInfo.key] = catInfo.nome;
-                }
-            }
-        }
-        // Fallback: nenhum deck encontrado → usa todas as categorias ativas
-        if (keysToLoad.length === 0) {
-            for (var i = 0; i < deckIndex.categorias.length; i++) {
-                var cat = deckIndex.categorias[i];
-                if (cat.ativo !== false) {
-                    keysToLoad.push(cat.key);
-                    keyToTheme[cat.key] = cat.nome;
-                }
-            }
-        }
-    }
-
-    // Carrega todos os decks de uma única chamada ao TitleData
+    // 4. Carrega decks
     var allQuestions = [];
     var seenIds      = {};
 
     if (keysToLoad.length > 0) {
         try {
             var deckResult = server.GetTitleData({ Keys: keysToLoad });
-            for (var k = 0; k < keysToLoad.length; k++) {
-                var key = keysToLoad[k];
+            for (var k = 0; k < allEntries.length; k++) {
+                var entry = allEntries[k];
+                var key   = entry.key;
                 if (!deckResult.Data || !deckResult.Data[key]) continue;
                 try {
                     var deckData  = JSON.parse(deckResult.Data[key]);
-                    var questions = parseDeckQuestions(deckData, keyToTheme[key]);
+                    // Tema vem do catálogo (catalog CustomData.theme), fallback para TitleData.theme
+                    var themeName = entry.theme || deckData.theme || key;
+                    var questions = parseDeckQuestions(deckData, themeName);
                     for (var q = 0; q < questions.length; q++) {
                         if (!seenIds[questions[q].QuestionId]) {
                             seenIds[questions[q].QuestionId] = true;
@@ -1057,7 +1112,7 @@ function buildQuestionPool(p1Id, p2Id) {
         return allQuestions;
     }
 
-    // Embaralha Fisher-Yates
+    // 5. Fisher-Yates shuffle
     for (var i = allQuestions.length - 1; i > 0; i--) {
         var j   = Math.floor(Math.random() * (i + 1));
         var tmp = allQuestions[i]; allQuestions[i] = allQuestions[j]; allQuestions[j] = tmp;

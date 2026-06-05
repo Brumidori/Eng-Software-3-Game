@@ -179,7 +179,18 @@ public class RegisterScreenHandler : MonoBehaviour
         var nickname = nicknameInput != null ? nicknameInput.text.Trim() : string.Empty;
 
         EnsurePlayerDataService();
-        PlayerDataService.Instance.InitializeForNewPlayer(nickname);
+        EnsureStarterDeckGrantService();
+
+        // Concede os decks iniciais ao inventário PlayFab e usa os ItemIds
+        // retornados pelo catálogo para criar o player_profile com IDs consistentes.
+        StarterDeckGrantService.Instance.GrantStarterDecks(result =>
+        {
+            var grantedIds = result?.GrantedItemIds ?? new System.Collections.Generic.List<string>();
+            if (!result?.Success ?? false)
+                Debug.LogWarning($"[Register] GrantStarterDecks: {result?.Error}");
+
+            PlayerDataService.Instance.InitializeForNewPlayer(nickname, grantedIds);
+        });
 
         EnsureRankingService();
         RankingService.Instance.RegistroRanking();
@@ -311,4 +322,10 @@ public class RegisterScreenHandler : MonoBehaviour
         if (RankingService.Instance != null) return;
         new GameObject("RankingService").AddComponent<RankingService>();
     }
+
+    private static void EnsureStarterDeckGrantService()
+    {
+        if (StarterDeckGrantService.Instance != null) return;
+        new GameObject("StarterDeckGrantService").AddComponent<StarterDeckGrantService>();
+    }
 }

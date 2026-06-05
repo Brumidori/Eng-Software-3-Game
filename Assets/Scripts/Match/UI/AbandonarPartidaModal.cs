@@ -38,14 +38,16 @@ namespace BrainDuel.Match.UI
         {
             FecharModal();
 
-            // Notifica servidor — CloudScript aplica penalidade ao perdedor
-            // e concede 40 moedas + 20 XP ao vencedor
             if (stateMachine?.Context != null)
             {
+                // 1. Notifica oponente via Party imediatamente (antes de qualquer atraso de rede)
+                stateMachine.NotificarAbandono();
+
+                // 2. Registra abandono no servidor — CloudScript finaliza a partida e
+                //    processa XP/moedas do vencedor (oponente)
                 CloudScriptClient.Call("AbandonMatch", new
                 {
-                    matchId  = stateMachine.Context.MatchId,
-                    playerId = stateMachine.Context.LocalPlayerId
+                    matchId = stateMachine.Context.MatchId
                 }, onSuccess: _ =>
                 {
                     Debug.Log("[Modal] AbandonMatch confirmado pelo servidor.");
@@ -55,10 +57,10 @@ namespace BrainDuel.Match.UI
                 });
             }
 
-            // Registra derrota e penalidade de XP no cliente
+            // 3. Registra derrota e penalidade de XP no cliente local
             StatisticsService.Instance?.UpdateMatchStatistics(-10, wonMatch: false);
 
-            // Mostra tela de derrota sem navegar — jogador clica em Menu ou Outra Partida
+            // 4. Mostra tela de derrota
             sceneController?.MostrarDerrotaPorAbandono();
         }
     }
