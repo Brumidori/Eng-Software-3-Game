@@ -674,13 +674,20 @@ handlers.StartQuestion = function (args) {
     var question = loadQuestion(state, state.CurrentRoundState.QuestionId);
     if (!question) return { error: "Pergunta nao encontrada" };
 
+    // Se o jogador que chamou ativou EliminateTwo, calcula 2 índices errados para eliminar
+    var playerAction      = getPlayerAction(state, currentPlayerId);
+    var eliminatedIndices = null;
+    if (playerAction && playerAction.ActivatedPowerUp === "EliminateTwo")
+        eliminatedIndices = calcularIndicesEliminados(question.Options, question.CorrectOptionId);
+
     // PascalCase para corresponder exatamente ao modelo C# QuestionRevealPayload
     return {
         QuestionId:        question.QuestionId,
         QuestionText:      question.Text,
         Answers:           question.Options,
         ServerTimestampMs: state.PhaseStartTimestampMs,
-        DurationMs:        MATCH_CONFIG.QuestionPhaseDurationMs
+        DurationMs:        MATCH_CONFIG.QuestionPhaseDurationMs,
+        EliminatedIndices: eliminatedIndices
     };
 };
 
@@ -798,8 +805,8 @@ function processRoundInternal(state) {
     p1Result.HPBefore = p1HPBefore; p1Result.HPAfter = p1State.HP;
     p2Result.HPBefore = p2HPBefore; p2Result.HPAfter = p2State.HP;
 
-    p1State.Streak = p1Result.Result === "Correct" ? p1State.Streak + 1 : 0;
-    p2State.Streak = p2Result.Result === "Correct" ? p2State.Streak + 1 : 0;
+    p1State.Streak = p1Result.Result === 1 ? p1State.Streak + 1 : 0; // 1 = Correct
+    p2State.Streak = p2Result.Result === 1 ? p2State.Streak + 1 : 0;
     p1Result.StreakAfter = p1State.Streak;
     p2Result.StreakAfter = p2State.Streak;
 
@@ -822,11 +829,13 @@ function processRoundInternal(state) {
     var winnerId  = null;
     var endReason = "HPDepleted";
 
+    // Valores numéricos espelham o enum C# MatchEndReason: HPDepleted=0, RoundsOver=1, Abandonment=2
     if (matchOver) {
-        if      (afkP1)     { winnerId = state.Player2Id; endReason = "Abandonment"; }
-        else if (afkP2)     { winnerId = state.Player1Id; endReason = "Abandonment"; }
-        else if (roundsMax) { winnerId = determineWinnerByHP(state); endReason = "RoundsOver"; }
-        else                { winnerId = determineWinnerByHP(state); }
+        if      (afkP1 && afkP2) { winnerId = null;            endReason = 2; } // ambos AFK → derrota dupla
+        else if (afkP1)          { winnerId = state.Player2Id; endReason = 2; } // Abandonment
+        else if (afkP2)          { winnerId = state.Player1Id; endReason = 2; } // Abandonment
+        else if (roundsMax)      { winnerId = determineWinnerByHP(state); endReason = 1; } // RoundsOver
+        else                     { winnerId = determineWinnerByHP(state); endReason = 0; } // HPDepleted
         state.IsActive  = false;
         state.WinnerId  = winnerId;
         state.EndReason = endReason;
@@ -924,10 +933,13 @@ function buildRoundResponse(state, alreadyProcessed) {
     };
 }
 
+// reason aceita string ou número; normaliza para número antes de salvar
 function finalizeMatch(state, winnerId, reason) {
+    var reasonMap = { "HPDepleted": 0, "RoundsOver": 1, "Abandonment": 2, "Disconnected": 3 };
+    var reasonNum = (typeof reason === "number") ? reason : (reasonMap[reason] !== undefined ? reasonMap[reason] : 0);
     state.IsActive  = false;
     state.WinnerId  = winnerId;
-    state.EndReason = reason;
+    state.EndReason = reasonNum;
     state.Phase     = "MatchEnd";
     saveMatchState(state);
     removeFromActiveIndex(state.MatchId);
@@ -1125,6 +1137,20 @@ function buildQuestionPool(p1Id, p2Id) {
     return pool;
 }
 
+// Seleciona 2 índices de respostas erradas para o EliminateTwo (nunca elimina a correta)
+function calcularIndicesEliminados(options, correctOptionId) {
+    var errados = [];
+    for (var i = 0; i < options.length; i++) {
+        if (options[i].Id !== correctOptionId) errados.push(i);
+    }
+    // Embaralha e pega os 2 primeiros
+    for (var i = errados.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = errados[i]; errados[i] = errados[j]; errados[j] = tmp;
+    }
+    return errados.slice(0, 2);
+}
+
 // Retorna a pergunta completa para a rodada (pool armazena objetos, não IDs)
 function getQuestionForRound(state, roundNumber) {
     var idx = roundNumber - 1;
@@ -1141,8 +1167,53 @@ function loadQuestion(state, questionId) {
     return null;
 }
 
+// Atualiza estatísticas e moedas de ambos os jogadores no fim da partida.
+// Requer que as estatísticas no PlayFab estejam configuradas com agregação "Sum".
 function updatePlayerStats(state, winnerId) {
-    // TODO: server.UpdatePlayerStatistics para wins/losses/ELO
+    var isDraw         = !winnerId;
+    var isAbandonment  = state.EndReason === 2; // MatchEndReason.Abandonment
+
+    aplicarResultadoJogador(state.Player1Id, state.Player1Id === winnerId, isDraw, isAbandonment);
+    aplicarResultadoJogador(state.Player2Id, state.Player2Id === winnerId, isDraw, isAbandonment);
+}
+
+function aplicarResultadoJogador(playerId, ganhou, empate, abandono) {
+    // XP: vitória=100, empate=50, abandono(vítima)=-10, derrota=20
+    var xp     = ganhou ? 100 : (empate ? 50 : (abandono ? -10 : 20));
+    // Moedas: vitória=80, empate=20, abandono=0, derrota=10
+    var moedas = ganhou ? 80  : (empate ? 20 : (abandono ? 0   : 10));
+
+    // Estatísticas (+1 por partida, acumula com agregação Sum no PlayFab)
+    var stats = [
+        { StatisticName: "partidas_totais_semanal", Value: 1 },
+        { StatisticName: "partidas_totais_mensal",  Value: 1 },
+        { StatisticName: "partidas_totais",         Value: 1 }
+    ];
+
+    if (xp > 0) {
+        stats.push({ StatisticName: "xp_semanal", Value: xp });
+        stats.push({ StatisticName: "xp_mensal",  Value: xp });
+        stats.push({ StatisticName: "xp_total",   Value: xp });
+    }
+
+    if (ganhou || empate) {
+        stats.push({ StatisticName: "vitorias_semanal", Value: 1 });
+        stats.push({ StatisticName: "vitorias_mensal",  Value: 1 });
+        stats.push({ StatisticName: "wins",             Value: 1 });
+    } else {
+        stats.push({ StatisticName: "losses", Value: 1 });
+    }
+
+    try {
+        server.UpdatePlayerStatistics({ PlayFabId: playerId, Statistics: stats });
+    } catch (e) { log.error("updatePlayerStats falhou para " + playerId + ": " + JSON.stringify(e)); }
+
+    // Credita moedas via moeda virtual "BC" (BrainCoins)
+    if (moedas > 0) {
+        try {
+            server.AddUserVirtualCurrency({ PlayFabId: playerId, VirtualCurrency: "BC", Amount: moedas });
+        } catch (e) { log.error("AddUserVirtualCurrency falhou para " + playerId + ": " + JSON.stringify(e)); }
+    }
 }
 
 
