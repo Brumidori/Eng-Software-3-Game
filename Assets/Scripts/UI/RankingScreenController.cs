@@ -1,17 +1,18 @@
 using UnityEngine;
-using UnityEngine.UI; 
+using UnityEngine.UI;
 using System.Collections.Generic;
 using PlayFab.ClientModels;
 
 /// <summary>
-/// Controlador principal da tela de ranking
-/// Gerencia a interface, a troca de abas (Semanal/Mensal) e a atualização dos dados recebidos do PlayFab
+/// Controlador principal da tela de ranking.
+/// Cruza os resultados do Top 15 com a posição do jogador logado,
+/// garantindo que ele apareça na tabela mesmo com valor 0 na stat.
 /// </summary>
 public class RankingScreenController : MonoBehaviour
 {
     [Header("Componentes da Tabela")]
     [SerializeField] private RankingLineService[] linhasRanking;
-    [SerializeField] private RankingLineService linhaDoJogador; 
+    [SerializeField] private RankingLineService linhaDoJogador;
 
     [Header("Botão Semanal")]
     [SerializeField] private Button btnSemanal;
@@ -28,47 +29,52 @@ public class RankingScreenController : MonoBehaviour
     [Header("Estado Atual")]
     [SerializeField] private TipoRanking rankingAtivo = TipoRanking.Semanal;
 
+    // Cache dos últimos dados recebidos do PlayFab
+    private List<PlayerLeaderboardEntry> _ultimoTop15;
+    private PlayerLeaderboardEntry       _entradaJogador;
+    private string _nomeStatVitorias;
+    private string _nomeStatPartidas;
+
     private void OnEnable()
     {
-        RankingService.OnRankingCarregado += PreencherTop15;
-        RankingService.OnRankingJogadorCarregado += PreencherLinhaJogador;
-        RankingService.OnErroAoCarregar += ExibirErro;
+        RankingService.OnRankingCarregado      += AoReceberTop15;
+        RankingService.OnRankingJogadorCarregado += AoReceberEntradaJogador;
+        RankingService.OnErroAoCarregar        += ExibirErro;
 
-        // Configura os cliques dos botões 
         if (btnSemanal != null) btnSemanal.onClick.AddListener(() => AtualizarFiltroRanking(TipoRanking.Semanal));
-        if (btnMensal != null) btnMensal.onClick.AddListener(() => AtualizarFiltroRanking(TipoRanking.Mensal));
+        if (btnMensal  != null) btnMensal.onClick.AddListener(() => AtualizarFiltroRanking(TipoRanking.Mensal));
     }
 
     private void OnDisable()
     {
-        RankingService.OnRankingCarregado -= PreencherTop15;
-        RankingService.OnRankingJogadorCarregado -= PreencherLinhaJogador;
-        RankingService.OnErroAoCarregar -= ExibirErro;
+        RankingService.OnRankingCarregado      -= AoReceberTop15;
+        RankingService.OnRankingJogadorCarregado -= AoReceberEntradaJogador;
+        RankingService.OnErroAoCarregar        -= ExibirErro;
 
         if (btnSemanal != null) btnSemanal.onClick.RemoveAllListeners();
-        if (btnMensal != null) btnMensal.onClick.RemoveAllListeners();
+        if (btnMensal  != null) btnMensal.onClick.RemoveAllListeners();
     }
 
     private void Start()
     {
-        // Força a UI a iniciar na aba Semanal
         AtualizarFiltroRanking(TipoRanking.Semanal);
     }
 
-    // Alterna entre as abas, altera os sprites dos botões e solicita novos dados ao serviço
     private void AtualizarFiltroRanking(TipoRanking novoTipo)
     {
-        rankingAtivo = novoTipo;
+        rankingAtivo    = novoTipo;
+        _ultimoTop15    = null;
+        _entradaJogador = null;
 
         if (novoTipo == TipoRanking.Semanal)
         {
             if (imgSemanal != null) imgSemanal.sprite = spriteSemanalApagado;
-            if (imgMensal != null) imgMensal.sprite = spriteMensalAceso;
+            if (imgMensal  != null) imgMensal.sprite  = spriteMensalAceso;
         }
         else
         {
             if (imgSemanal != null) imgSemanal.sprite = spriteSemanalAceso;
-            if (imgMensal != null) imgMensal.sprite = spriteMensalApagado;
+            if (imgMensal  != null) imgMensal.sprite  = spriteMensalApagado;
         }
 
         ConfigurarTabelaVazia("Carregando...");
@@ -78,45 +84,62 @@ public class RankingScreenController : MonoBehaviour
             RankingService.Instance.BaixarRanking(rankingAtivo);
     }
 
-    // Processa a lista de jogadores recebida do PlayFab e preenche as 15 linhas da tabela
-    private void PreencherTop15(List<PlayerLeaderboardEntry> ranking, TipoRanking tipoRetornado)
-    {
-        if (tipoRetornado != rankingAtivo) return;
+    // ------------------------------------------------------------------
+    // Callbacks do RankingService
+    // ------------------------------------------------------------------
 
-        // Define quais nomes de estatísticas para pegar no Leaderboard
-        string nomeStatVitorias = (tipoRetornado == TipoRanking.Semanal) ? "vitorias_semanal" : "vitorias_mensal";
-        string nomeStatPartidas = (tipoRetornado == TipoRanking.Semanal) ? "partidas_totais_semanal" : "partidas_totais_mensal";
+    private void AoReceberTop15(List<PlayerLeaderboardEntry> ranking, TipoRanking tipo)
+    {
+        if (tipo != rankingAtivo) return;
+        _ultimoTop15 = ranking;
+        _nomeStatVitorias = (tipo == TipoRanking.Semanal) ? "vitorias_semanal" : "vitorias_mensal";
+        _nomeStatPartidas = (tipo == TipoRanking.Semanal) ? "partidas_totais_semanal" : "partidas_totais_mensal";
+        RenderizarTabela();
+    }
+
+    private void AoReceberEntradaJogador(PlayerLeaderboardEntry jogador, TipoRanking tipo)
+    {
+        if (tipo != rankingAtivo) return;
+        _entradaJogador = jogador;
+        RenderizarLinhaJogador();
+        // Re-renderiza a tabela para incluir o jogador no slot correto se ele
+        // não veio no Top 15 (ex.: valor 0 excluído pelo PlayFab)
+        if (_ultimoTop15 != null) RenderizarTabela();
+    }
+
+    // ------------------------------------------------------------------
+    // Renderização
+    // ------------------------------------------------------------------
+
+    private void RenderizarTabela()
+    {
+        if (linhasRanking == null) return;
 
         for (int i = 0; i < linhasRanking.Length; i++)
         {
             if (linhasRanking[i] == null) continue;
 
-            if (i < ranking.Count)
+            // Verifica se a posição i existe no top 15 retornado pelo PlayFab
+            if (_ultimoTop15 != null && i < _ultimoTop15.Count)
             {
-                var entry = ranking[i];
-                int vits = 0;
-                int totais = 0;
-
-                // Extrai as estatísticas do perfil do jogador
-                if (entry.Profile != null && entry.Profile.Statistics != null)
-                {
-                    var statVit = entry.Profile.Statistics.Find(s => s.Name == nomeStatVitorias);
-                    var statTot = entry.Profile.Statistics.Find(s => s.Name == nomeStatPartidas);
-
-                    if (statVit != null) vits = statVit.Value;
-                    if (statTot != null) totais = statTot.Value;
-                }
-
-                // Cálculo do Winrate
-                float taxa = totais > 0 ? ((float)vits / totais) * 100f : 0f;
-                string winrateStr = taxa.ToString("F1") + "%";
-
-                string nome = string.IsNullOrEmpty(entry.DisplayName) ? "Jogador" : entry.DisplayName;
-                string posicao = (entry.Position + 1).ToString();
-                string xp = entry.StatValue.ToString();
-
-                // Preenche a linha com os dados
-                linhasRanking[i].SetupLine(posicao, nome, xp, vits.ToString(), winrateStr);
+                linhasRanking[i].SetupLine(
+                    EntradaParaPosicao(_ultimoTop15[i]),
+                    EntradaParaNome(_ultimoTop15[i]),
+                    _ultimoTop15[i].StatValue.ToString(),
+                    ExtrairVitorias(_ultimoTop15[i]).ToString(),
+                    CalcularWinrate(_ultimoTop15[i])
+                );
+            }
+            // O jogador logado está neste slot mas não veio no top 15 (valor 0)
+            else if (_entradaJogador != null && _entradaJogador.Position == i)
+            {
+                linhasRanking[i].SetupLine(
+                    (i + 1).ToString(),
+                    EntradaParaNome(_entradaJogador),
+                    _entradaJogador.StatValue.ToString(),
+                    ExtrairVitorias(_entradaJogador).ToString(),
+                    CalcularWinrate(_entradaJogador)
+                );
             }
             else
             {
@@ -125,28 +148,57 @@ public class RankingScreenController : MonoBehaviour
         }
     }
 
-    // Preenche a linha inferior com os dados do jogador logado
-    private void PreencherLinhaJogador(PlayerLeaderboardEntry jogadorLogado, TipoRanking tipoRetornado)
+    private void RenderizarLinhaJogador()
     {
-        if (tipoRetornado != rankingAtivo || linhaDoJogador == null) return;
+        if (linhaDoJogador == null || _entradaJogador == null) return;
 
-        string posicao = (jogadorLogado.Position + 1).ToString();
-        string nome = string.IsNullOrEmpty(jogadorLogado.DisplayName) ? "Você" : jogadorLogado.DisplayName;
-        string xp = jogadorLogado.StatValue.ToString();
-
-        linhaDoJogador.SetupLine(posicao, nome, xp, "-", "-");
+        linhaDoJogador.SetupLine(
+            (_entradaJogador.Position + 1).ToString(),
+            EntradaParaNome(_entradaJogador),
+            _entradaJogador.StatValue.ToString(),
+            ExtrairVitorias(_entradaJogador).ToString(),
+            CalcularWinrate(_entradaJogador)
+        );
     }
 
-    // Limpa a tabela visualmente enquanto aguarda novos dados
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+
+    private string EntradaParaPosicao(PlayerLeaderboardEntry e) => (e.Position + 1).ToString();
+
+    private string EntradaParaNome(PlayerLeaderboardEntry e) =>
+        string.IsNullOrEmpty(e.DisplayName) ? "Jogador" : e.DisplayName;
+
+    private int ExtrairVitorias(PlayerLeaderboardEntry e)
+    {
+        if (e.Profile?.Statistics == null || string.IsNullOrEmpty(_nomeStatVitorias)) return 0;
+        var stat = e.Profile.Statistics.Find(s => s.Name == _nomeStatVitorias);
+        return stat?.Value ?? 0;
+    }
+
+    private int ExtrairPartidas(PlayerLeaderboardEntry e)
+    {
+        if (e.Profile?.Statistics == null || string.IsNullOrEmpty(_nomeStatPartidas)) return 0;
+        var stat = e.Profile.Statistics.Find(s => s.Name == _nomeStatPartidas);
+        return stat?.Value ?? 0;
+    }
+
+    private string CalcularWinrate(PlayerLeaderboardEntry e)
+    {
+        int vits   = ExtrairVitorias(e);
+        int totais = ExtrairPartidas(e);
+        float taxa = totais > 0 ? ((float)vits / totais) * 100f : 0f;
+        return taxa.ToString("F1") + "%";
+    }
+
     private void ConfigurarTabelaVazia(string mensagem)
     {
+        if (linhasRanking == null) return;
         foreach (var linha in linhasRanking)
-        {
             if (linha != null) linha.SetupLine("-", mensagem, "-", "-", "-");
-        }
     }
 
-    // Gerencia o feedback visual caso ocorra algum erro na comunicação com o PlayFab
     private void ExibirErro(string mensagem)
     {
         ConfigurarTabelaVazia("Erro ao carregar");

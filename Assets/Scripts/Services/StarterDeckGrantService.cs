@@ -2,8 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using PlayFab;
-using PlayFab.ClientModels;
 using UnityEngine;
+using BrainDuel.Match.Core;
 
 public class StarterDeckGrantResult
 {
@@ -39,98 +39,23 @@ public class StarterDeckGrantService : MonoBehaviour
     {
         if (!ValidateAuth())
         {
-            onComplete?.Invoke(new StarterDeckGrantResult
-            {
-                Success = false,
-                Error = "Sessao PlayFab nao autenticada para conceder decks iniciais."
-            });
+            onComplete?.Invoke(new StarterDeckGrantResult { Success = false, Error = "Sessao PlayFab nao autenticada." });
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(grantFunctionName))
-        {
-            onComplete?.Invoke(new StarterDeckGrantResult
+        // Usa CloudScriptClient que chama Legacy CloudScript V1 via ExecuteCloudScript
+        CloudScriptClient.Call(
+            grantFunctionName,
+            new { catalogVersion = catalogVersion },
+            onSuccess: result =>
             {
-                Success = false,
-                Error = "Funcao de grant de decks iniciais nao configurada."
-            });
-            return;
-        }
-
-        var request = new ExecuteCloudScriptRequest
-        {
-            FunctionName = grantFunctionName,
-            FunctionParameter = new Dictionary<string, object>
-            {
-                { "catalogVersion", catalogVersion }
+                if (TryExtractResult(result, out var parsed))
+                    onComplete?.Invoke(parsed);
+                else
+                    onComplete?.Invoke(new StarterDeckGrantResult { Success = false, Error = "Resposta inesperada do servidor." });
             },
-            GeneratePlayStreamEvent = true
-        };
-
-        PlayFabService.Client.ExecuteCloudScript(
-            request,
-            result => HandleGrantSuccess(result, onComplete),
-            error => HandleGrantError(error, onComplete));
-    }
-
-    private void HandleGrantSuccess(ExecuteCloudScriptResult result, Action<StarterDeckGrantResult> onComplete)
-    {
-        if (result.Error != null)
-        {
-            onComplete?.Invoke(new StarterDeckGrantResult
-            {
-                Success = false,
-                Error = BuildCloudScriptError(result.Error.Error, result.Error.Message, result.Error.StackTrace)
-            });
-            return;
-        }
-
-        if (TryExtractResult(result.FunctionResult, out var parsedResult))
-        {
-            onComplete?.Invoke(parsedResult);
-            return;
-        }
-
-        onComplete?.Invoke(new StarterDeckGrantResult
-        {
-            Success = false,
-            Error = "Resposta inesperada do CloudScript ao conceder decks iniciais."
-        });
-    }
-
-    private void HandleGrantError(PlayFabError error, Action<StarterDeckGrantResult> onComplete)
-    {
-        onComplete?.Invoke(new StarterDeckGrantResult
-        {
-            Success = false,
-            Error = error == null
-                ? "Falha ao comunicar com o servidor para conceder decks iniciais."
-                : error.GenerateErrorReport()
-        });
-    }
-
-    private static string BuildCloudScriptError(string code, string message, string stackTrace)
-    {
-        var combined = string.Empty;
-
-        if (!string.IsNullOrWhiteSpace(code))
-        {
-            combined = code;
-        }
-
-        if (!string.IsNullOrWhiteSpace(message))
-        {
-            combined = string.IsNullOrWhiteSpace(combined) ? message : combined + ": " + message;
-        }
-
-        if (!string.IsNullOrWhiteSpace(stackTrace))
-        {
-            combined = string.IsNullOrWhiteSpace(combined) ? stackTrace : combined + " | " + stackTrace;
-        }
-
-        return string.IsNullOrWhiteSpace(combined)
-            ? "Erro no CloudScript ao conceder decks iniciais."
-            : combined;
+            onError: err => onComplete?.Invoke(new StarterDeckGrantResult { Success = false, Error = err })
+        );
     }
 
     private static bool TryExtractResult(object functionResult, out StarterDeckGrantResult parsedResult)

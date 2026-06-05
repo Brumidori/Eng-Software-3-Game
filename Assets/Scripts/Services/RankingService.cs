@@ -93,6 +93,36 @@ public class RankingService : MonoBehaviour
             erro => Debug.LogWarning($"[RankingService] Jogador ainda não tem pontuação neste ranking: {erro.ErrorMessage}")
         );
     }
+    
+    // Cria as statistics para o player
+    public void RegistroRanking()
+    {
+        var request = new UpdatePlayerStatisticsRequest
+        {
+            Statistics = new List<StatisticUpdate>
+            {
+                new StatisticUpdate { StatisticName = "acertos_tema_temp",       Value = 0 },
+                new StatisticUpdate { StatisticName = "acertos_totais",          Value = 0 },
+                new StatisticUpdate { StatisticName = "escudos",                 Value = 0 },
+                new StatisticUpdate { StatisticName = "losses",                  Value = 0 },
+                new StatisticUpdate { StatisticName = "partidas_totais",         Value = 0 },
+                new StatisticUpdate { StatisticName = "partidas_totais_mensal",  Value = 0 },
+                new StatisticUpdate { StatisticName = "partidas_totais_semanal", Value = 0 },
+                new StatisticUpdate { StatisticName = "score",                   Value = 0 },
+                new StatisticUpdate { StatisticName = "vitorias_mensal",         Value = 0 },
+                new StatisticUpdate { StatisticName = "vitorias_semanal",        Value = 0 },
+                new StatisticUpdate { StatisticName = "wins",                    Value = 0 },
+                new StatisticUpdate { StatisticName = "xp_total",                Value = 0 },
+                new StatisticUpdate { StatisticName = "xp_mensal",               Value = 0 },
+                new StatisticUpdate { StatisticName = "xp_semanal",              Value = 0 }
+            }
+        };
+
+        PlayFabClientAPI.UpdatePlayerStatistics(request,
+            result => Debug.Log("[RankingService] Estatísticas inicializadas com sucesso."),
+            error => Debug.LogError("[RankingService] Erro ao inicializar estatísticas: " + error.ErrorMessage)
+        );
+    }
 
     // Envia o resultado de uma partida para o PlayFab, atualizando XP, vitórias e contagem total de partidas
     // Exemplo de uso: RankingService.Instance.SalvarFimDePartida(50, true)

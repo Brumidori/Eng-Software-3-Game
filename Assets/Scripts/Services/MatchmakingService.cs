@@ -41,6 +41,8 @@ public class MatchmakingService : MonoBehaviour
     public static event Action<string> OnMatchFound;
     public static event Action<PlayFabError> OnMatchmakingFailed;
 
+    public string CurrentMatchId { get; private set; }
+
     public MatchmakingState CurrentState { get; private set; } = MatchmakingState.Idle;
 
     private string queueName;
@@ -48,6 +50,7 @@ public class MatchmakingService : MonoBehaviour
     private float pollIntervalSeconds;
     private MatchmakingTestUser userA;
     private MatchmakingTestUser userB;
+    private MatchmakingTestUser singleUser;
     private Coroutine matchmakingRoutine;
     private bool cancellationRequested;
     private bool createMissingUsersForTest;
@@ -62,6 +65,51 @@ public class MatchmakingService : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+    }
+
+    public void StartSinglePlayerMatchmaking(string queue, int timeout = 60, float pollInterval = 3f)
+    {
+        if (matchmakingRoutine != null)
+        {
+            StopCoroutine(matchmakingRoutine);
+            matchmakingRoutine = null;
+        }
+
+        if (string.IsNullOrWhiteSpace(queue))
+        {
+            Debug.LogError("[MatchmakingService] Queue deve estar preenchida.");
+            SetState(MatchmakingState.Failed);
+            return;
+        }
+
+        if (!PlayFabClientAPI.IsClientLoggedIn())
+        {
+            Debug.LogError("[MatchmakingService] Nenhum jogador logado.");
+            SetState(MatchmakingState.Failed);
+            OnMatchmakingFailed?.Invoke(null);
+            return;
+        }
+
+        queueName           = queue.Trim();
+        timeoutSeconds      = Mathf.Max(5, timeout);
+        pollIntervalSeconds = Mathf.Max(0.5f, pollInterval);
+        cancellationRequested = false;
+
+        var authContext = PlayFabSettings.staticPlayer;
+        singleUser = new MatchmakingTestUser
+        {
+            authContext   = authContext,
+            multiplayerApi = new PlayFabMultiplayerInstanceAPI(authContext),
+            entity = new MultiplayerEntityKey
+            {
+                Id   = authContext.EntityId,
+                Type = authContext.EntityType
+            }
+        };
+
+        Debug.Log($"[MatchmakingService] Iniciando matchmaking individual | fila='{queueName}' timeout={timeoutSeconds}s entity={authContext.EntityType}/{authContext.EntityId}");
+        SetState(MatchmakingState.Searching);
+        matchmakingRoutine = StartCoroutine(RunSinglePlayerMatchmaking());
     }
 
     public void StartTwoUserMatchmaking(string queue, string userAId, string userBId, int timeout, float pollInterval, bool allowCreateMissingUsers = false)
@@ -102,8 +150,8 @@ public class MatchmakingService : MonoBehaviour
     {
         if (matchmakingRoutine != null)
         {
-            Debug.LogWarning("[MatchmakingService] Ja existe um teste de matchmaking em andamento.");
-            return false;
+            StopCoroutine(matchmakingRoutine);
+            matchmakingRoutine = null;
         }
         if (string.IsNullOrWhiteSpace(queue))
         {
@@ -124,19 +172,75 @@ public class MatchmakingService : MonoBehaviour
 
     public void CancelCurrentSearch()
     {
-        if (matchmakingRoutine == null)
+        if (matchmakingRoutine != null)
         {
-            Debug.LogWarning("[MatchmakingService] Nao ha busca ativa para cancelar.");
-            return;
+            StopCoroutine(matchmakingRoutine);
+            matchmakingRoutine = null;
         }
 
-        cancellationRequested = true;
-        Debug.Log("[MatchmakingService] Cancelamento solicitado.");
+        cancellationRequested = false;
+        SetState(MatchmakingState.Cancelled);
+        Debug.Log("[MatchmakingService] Busca cancelada.");
     }
 
     public string GetDiagnosticsSummary()
     {
         return $"Queue='{queueName}' | Estado={CurrentState} | UserA='{userA?.customId}' Ticket='{userA?.ticketId}' Status='{userA?.status}' Match='{userA?.matchId}' | UserB='{userB?.customId}' Ticket='{userB?.ticketId}' Status='{userB?.status}' Match='{userB?.matchId}'";
+    }
+
+    private IEnumerator RunSinglePlayerMatchmaking()
+    {
+        yield return CancelAllTicketsForUser(singleUser);
+
+        // Aguarda PlayFab processar o cancelamento antes de criar novo ticket
+        yield return new WaitForSeconds(2f);
+
+        yield return CreateTicketWithRetry(singleUser);
+        if (CurrentState == MatchmakingState.Failed)
+        {
+            FinishRoutine();
+            yield break;
+        }
+
+        Debug.Log($"[MatchmakingService] Ticket criado com GiveUpAfterSeconds={timeoutSeconds}. Deadline do cliente em {timeoutSeconds}s.");
+        var deadline = Time.time + timeoutSeconds;
+        while (Time.time < deadline && !cancellationRequested)
+        {
+            yield return new WaitForSeconds(pollIntervalSeconds);
+            yield return PollTicket(singleUser);
+
+            if (singleUser.status == "Matched" && !string.IsNullOrWhiteSpace(singleUser.matchId))
+            {
+                CurrentMatchId = singleUser.matchId;
+                SetState(MatchmakingState.Matched);
+                Debug.Log($"[MatchmakingService] Match encontrado! MatchId: {singleUser.matchId}");
+                OnMatchFound?.Invoke(singleUser.matchId);
+                FinishRoutine();
+                yield break;
+            }
+
+            // Ticket cancelado pelo servidor (GiveUpAfterSeconds expirou ou fila recusou)
+            if (singleUser.status == "Cancelled")
+            {
+                Debug.LogWarning($"[MatchmakingService] Ticket cancelado pelo servidor após ~{timeoutSeconds - (deadline - Time.time):F0}s. Verifique o MaxTicketLifetimeSeconds da fila no PlayFab Game Manager.");
+                SetState(MatchmakingState.TimedOut);
+                FinishRoutine();
+                yield break;
+            }
+        }
+
+        if (cancellationRequested)
+        {
+            yield return CancelTicketIfNeeded(singleUser);
+            SetState(MatchmakingState.Cancelled);
+            FinishRoutine();
+            yield break;
+        }
+
+        yield return CancelTicketIfNeeded(singleUser);
+        SetState(MatchmakingState.TimedOut);
+        Debug.LogWarning($"[MatchmakingService] Timeout do cliente após {timeoutSeconds}s sem match.");
+        FinishRoutine();
     }
 
     private IEnumerator RunTwoUserMatchmaking()
@@ -181,6 +285,7 @@ public class MatchmakingService : MonoBehaviour
 
             if (AreUsersMatchedTogether())
             {
+                CurrentMatchId = userA.matchId;
                 SetState(MatchmakingState.Matched);
                 Debug.Log($"[MatchmakingService] Match encontrado! MatchId compartilhado: {userA.matchId}");
                 OnMatchFound?.Invoke(userA.matchId);
@@ -390,6 +495,51 @@ public class MatchmakingService : MonoBehaviour
         Debug.Log($"[MatchmakingService] Ticket criado para '{user.customId}': {user.ticketId}");
     }
 
+    private IEnumerator CreateTicketWithRetry(MatchmakingTestUser user)
+    {
+        int   maxRetries = 3;
+        float[] delays   = { 2f, 4f, 8f };
+
+        for (int attempt = 0; attempt < maxRetries; attempt++)
+        {
+            bool          done        = false;
+            CreateMatchmakingTicketResult ticketResult = null;
+            PlayFabError  ticketError  = null;
+
+            user.multiplayerApi.CreateMatchmakingTicket(new CreateMatchmakingTicketRequest
+            {
+                QueueName          = queueName,
+                GiveUpAfterSeconds = timeoutSeconds,
+                Creator            = new MatchmakingPlayer { Entity = user.entity }
+            },
+            result => { ticketResult = result; done = true; },
+            error  => { ticketError  = error;  done = true; });
+
+            while (!done) yield return null;
+
+            if (ticketError == null)
+            {
+                user.ticketId = ticketResult.TicketId;
+                user.status   = "WaitingForMatch";
+                user.matchId  = null;
+                Debug.Log($"[MatchmakingService] Ticket criado: {user.ticketId}");
+                yield break;
+            }
+
+            bool throttled = ticketError.HttpCode == 429;
+
+            if (!throttled || attempt == maxRetries - 1)
+            {
+                HandlePlayFabFailure("Falha ao criar ticket", ticketError);
+                yield break;
+            }
+
+            float wait = delays[Mathf.Min(attempt, delays.Length - 1)];
+            Debug.LogWarning($"[MatchmakingService] Throttling em CreateTicket. Tentativa {attempt + 1}/{maxRetries}. Aguardando {wait}s...");
+            yield return new WaitForSeconds(wait);
+        }
+    }
+
     private IEnumerator PollTicket(MatchmakingTestUser user)
     {
         if (string.IsNullOrWhiteSpace(user.ticketId))
@@ -522,7 +672,9 @@ public class MatchmakingService : MonoBehaviour
         error =>
         {
             done = true;
-            Debug.LogWarning($"[MatchmakingService] Cancelamento do ticket '{user.ticketId}' de '{user.customId}' retornou: {error.GenerateErrorReport()}");
+            // "already completed" é esperado quando o ticket foi concluído antes do cancelamento
+            if (error.Error != PlayFabErrorCode.MatchmakingTicketNotFound && !error.ErrorMessage.Contains("already completed"))
+                Debug.LogWarning($"[MatchmakingService] Cancelamento do ticket '{user.ticketId}' retornou: {error.GenerateErrorReport()}");
         });
 
         while (!done)

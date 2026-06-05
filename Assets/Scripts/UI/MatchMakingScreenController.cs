@@ -2,16 +2,24 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using PlayFab;
+using PlayFab.ClientModels;
 
 public class MatchMakingScreenController : MonoBehaviour
 {
     [Header("Configuração")]
-    [SerializeField] private string cenaHomeScreen    = "HomeScreen";
-    [SerializeField] private string cenaPartida       = "BrainDuelArena";
+    [SerializeField] private string cenaHomeScreen     = "HomeScreen";
+    [SerializeField] private string cenaPartida        = "BrainDuelArena";
     [SerializeField] private int    contagemRegressiva = 3;
 
+    [Header("Matchmaking")]
+    [SerializeField] private string queueName            = "BrainDuelPublicQueue";
+    [SerializeField] private int    timeoutSeconds       = 60;
+    [SerializeField] private float  pollIntervalSeconds  = 3f;
+
     [Header("Visual")]
-    [SerializeField] private int tamanhoFonte = 48;
+    [SerializeField] private int    tamanhoFonte = 48;
+    [SerializeField] private Button btnCancelar;
 
     private const string TextoBuscando   = "BUSCANDO OPONENTE";
     private const string TextoEncontrado = "OPONENTE ENCONTRADO!\nINICIANDO PARTIDA EM {0}...";
@@ -30,7 +38,7 @@ public class MatchMakingScreenController : MonoBehaviour
     private void Awake()
     {
         CriarTextoStatus();
-        BuscarBotaoCancelar();
+        _btnCancelar = btnCancelar;
     }
 
     private void OnEnable()
@@ -58,6 +66,16 @@ public class MatchMakingScreenController : MonoBehaviour
     private void Start()
     {
         SetBuscando();
+
+        var service = MatchmakingService.Instance;
+        if (service == null)
+        {
+            var go = new GameObject("MatchmakingService");
+            service = go.AddComponent<MatchmakingService>();
+        }
+
+        Debug.Log($"[MatchMaking] Iniciando com timeoutSeconds={timeoutSeconds} (valor do Inspector)");
+        service.StartSinglePlayerMatchmaking(queueName, timeoutSeconds, pollIntervalSeconds);
     }
 
 #if UNITY_EDITOR
@@ -76,7 +94,7 @@ public class MatchMakingScreenController : MonoBehaviour
     {
         // Busca o Canvas da própria cena ativa, ignorando DontDestroyOnLoad
         Canvas canvas = null;
-        foreach (var c in FindObjectsOfType<Canvas>())
+        foreach (var c in FindObjectsByType<Canvas>(FindObjectsSortMode.None))
         {
             if (c.gameObject.scene == gameObject.scene)
             {
@@ -104,6 +122,7 @@ public class MatchMakingScreenController : MonoBehaviour
 
         var bg = container.AddComponent<Image>();
         bg.color = new Color(0.05f, 0.1f, 0.25f, 0.75f);
+        bg.raycastTarget = false;
 
         // Texto filho do container
         var go = new GameObject("Label");
@@ -124,6 +143,7 @@ public class MatchMakingScreenController : MonoBehaviour
         _statusText.color              = Color.white;
         _statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
         _statusText.verticalOverflow   = VerticalWrapMode.Overflow;
+        _statusText.raycastTarget      = false;
 
         // Sombra leve para legibilidade
         var shadow            = go.AddComponent<Shadow>();
@@ -131,22 +151,6 @@ public class MatchMakingScreenController : MonoBehaviour
         shadow.effectDistance = new Vector2(2f, -2f);
 
         container.transform.SetAsLastSibling();
-    }
-
-    // ────────────────────────────────────────────────────────
-    // Busca botão cancelar pelo nome
-    // ────────────────────────────────────────────────────────
-
-    private void BuscarBotaoCancelar()
-    {
-        var goBtn = GameObject.Find("BtnCancelarEspera");
-        if (goBtn == null)
-        {
-            Debug.LogWarning("[MatchMaking] BtnCancelarEspera não encontrado na cena.");
-            return;
-        }
-
-        _btnCancelar = goBtn.GetComponent<Button>();
     }
 
     // ────────────────────────────────────────────────────────
@@ -174,8 +178,37 @@ public class MatchMakingScreenController : MonoBehaviour
 
     private void HandleMatchFound(string matchId)
     {
+        BrainDuel.Match.Core.MatchSessionData.MatchId       = matchId;
+        BrainDuel.Match.Core.MatchSessionData.LocalPlayerId = PlayFab.PlayFabSettings.staticPlayer?.EntityId;
+
         StopAnimations();
-        _contagemCoroutine = StartCoroutine(ContagemRegressiva());
+        _contagemCoroutine = StartCoroutine(BuscarNomeEIniciar());
+    }
+
+    private IEnumerator BuscarNomeEIniciar()
+    {
+        bool done = false;
+
+        PlayFabClientAPI.GetAccountInfo(
+            new GetAccountInfoRequest(),
+            result =>
+            {
+                var name = result?.AccountInfo?.TitleInfo?.DisplayName;
+                if (!string.IsNullOrEmpty(name))
+                    BrainDuel.Match.Core.MatchSessionData.LocalDisplayName = name;
+
+                var profile = PlayerDataService.Instance?.CurrentProfile;
+                if (profile != null && profile.level > 0)
+                    BrainDuel.Match.Core.MatchSessionData.LocalLevel = profile.level;
+
+                done = true;
+            },
+            _ => done = true
+        );
+
+        while (!done) yield return null;
+
+        yield return ContagemRegressiva();
     }
 
     private void HandleMatchFailed(PlayFab.PlayFabError _)
@@ -188,7 +221,7 @@ public class MatchMakingScreenController : MonoBehaviour
     // Botão cancelar
     // ────────────────────────────────────────────────────────
 
-    private void OnCancelarClick()
+    public void OnCancelarClick()
     {
         MatchmakingService.Instance?.CancelCurrentSearch();
         SceneManager.LoadScene(cenaHomeScreen);

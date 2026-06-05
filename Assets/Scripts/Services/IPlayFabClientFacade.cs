@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using PlayFab.ClientModels;
+using PlayFab.CloudScriptModels;
 
 public interface IPlayFabClientFacade
 {
@@ -18,6 +19,7 @@ public interface IPlayFabClientFacade
     void PurchaseItem(PurchaseItemRequest request, Action<PurchaseItemResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
     void GetCatalogItems(GetCatalogItemsRequest request, Action<GetCatalogItemsResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
     void GetStoreItems(GetStoreItemsRequest request, Action<GetStoreItemsResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
-    void ExecuteCloudScript(ExecuteCloudScriptRequest request, Action<ExecuteCloudScriptResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
+    void ExecuteCloudScript(PlayFab.ClientModels.ExecuteCloudScriptRequest request, Action<PlayFab.ClientModels.ExecuteCloudScriptResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
+    void ExecuteFunction(ExecuteFunctionRequest request, Action<ExecuteFunctionResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
     void RegisterPlayFabUser(RegisterPlayFabUserRequest request, Action<RegisterPlayFabUserResult> successCallback, Action<PlayFab.PlayFabError> errorCallback);
 }

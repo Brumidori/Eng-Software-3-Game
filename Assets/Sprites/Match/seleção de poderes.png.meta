@@ -1,0 +1,572 @@
+fileFormatVersion: 2
+guid: ebe2433212e3843fc81154ab0c3b9fce
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -6587273605642338566
+    second: "selec\u0327a\u0303o de poderes_0"
+  - first:
+      213: 7240149176048975829
+    second: "selec\u0327a\u0303o de poderes_1"
+  - first:
+      213: -6703050931712715028
+    second: "selec\u0327a\u0303o de poderes_2"
+  - first:
+      213: -2776650383024806790
+    second: "selec\u0327a\u0303o de poderes_3"
+  - first:
+      213: -631814876177860258
+    second: "selec\u0327a\u0303o de poderes_4"
+  - first:
+      213: -4510627232956882547
+    second: "selec\u0327a\u0303o de poderes_5"
+  - first:
+      213: -895370780133559022
+    second: "selec\u0327a\u0303o de poderes_6"
+  - first:
+      213: 1488185801900719626
+    second: "selec\u0327a\u0303o de poderes_7"
+  - first:
+      213: 2511518894735155289
+    second: "selec\u0327a\u0303o de poderes_8"
+  - first:
+      213: -3350186275005995676
+    second: "selec\u0327a\u0303o de poderes_9"
+  - first:
+      213: -5487857869132244015
+    second: "selec\u0327a\u0303o de poderes_10"
+  - first:
+      213: -2444138999777324982
+    second: "selec\u0327a\u0303o de poderes_11"
+  - first:
+      213: -5623300436239411688
+    second: "selec\u0327a\u0303o de poderes_12"
+  - first:
+      213: -2256303999164675823
+    second: "selec\u0327a\u0303o de poderes_13"
+  - first:
+      213: -8482190404469187854
+    second: "selec\u0327a\u0303o de poderes_14"
+  - first:
+      213: 5492543171263429012
+    second: "selec\u0327a\u0303o de poderes_15"
+  - first:
+      213: -5762187277384195511
+    second: "selec\u0327a\u0303o de poderes_16"
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 1
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_0"
+      rect:
+        serializedVersion: 2
+        x: 357
+        y: 170
+        width: 56
+        height: 25
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: afeb1697e8d4594a0800000000000000
+      internalID: -6587273605642338566
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_1"
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 25
+        width: 64
+        height: 141
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5df7c3fc05d2a7460800000000000000
+      internalID: 7240149176048975829
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_2"
+      rect:
+        serializedVersion: 2
+        x: 74
+        y: 27
+        width: 60
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ce699ef11baf9f2a0800000000000000
+      internalID: -6703050931712715028
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_3"
+      rect:
+        serializedVersion: 2
+        x: 143
+        y: 27
+        width: 59
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a74aa5e103b5779d0800000000000000
+      internalID: -2776650383024806790
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_4"
+      rect:
+        serializedVersion: 2
+        x: 209
+        y: 27
+        width: 61
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e597c95b7b75b37f0800000000000000
+      internalID: -631814876177860258
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_5"
+      rect:
+        serializedVersion: 2
+        x: 278
+        y: 0
+        width: 65
+        height: 166
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d81e6611e680761c0800000000000000
+      internalID: -4510627232956882547
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_6"
+      rect:
+        serializedVersion: 2
+        x: 347
+        y: 27
+        width: 75
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 215ffd3f4010393f0800000000000000
+      internalID: -895370780133559022
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_7"
+      rect:
+        serializedVersion: 2
+        x: 428
+        y: 25
+        width: 67
+        height: 141
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a0e72122a1917a410800000000000000
+      internalID: 1488185801900719626
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_8"
+      rect:
+        serializedVersion: 2
+        x: 537
+        y: 27
+        width: 67
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 950ee5fc025bad220800000000000000
+      internalID: 2511518894735155289
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_9"
+      rect:
+        serializedVersion: 2
+        x: 615
+        y: 27
+        width: 60
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 465e0ea355fb181d0800000000000000
+      internalID: -3350186275005995676
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_10"
+      rect:
+        serializedVersion: 2
+        x: 715
+        y: 27
+        width: 66
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1db5a8c085637d3b0800000000000000
+      internalID: -5487857869132244015
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_11"
+      rect:
+        serializedVersion: 2
+        x: 788
+        y: 25
+        width: 67
+        height: 141
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a401890878ca41ed0800000000000000
+      internalID: -2444138999777324982
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_12"
+      rect:
+        serializedVersion: 2
+        x: 866
+        y: 27
+        width: 67
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 81696a8fb0606f1b0800000000000000
+      internalID: -5623300436239411688
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_13"
+      rect:
+        serializedVersion: 2
+        x: 944
+        y: 27
+        width: 61
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1190f78977fffa0e0800000000000000
+      internalID: -2256303999164675823
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_14"
+      rect:
+        serializedVersion: 2
+        x: 1014
+        y: 27
+        width: 68
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2fa136884c4394a80800000000000000
+      internalID: -8482190404469187854
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_15"
+      rect:
+        serializedVersion: 2
+        x: 1092
+        y: 27
+        width: 60
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 49977acd9ee693c40800000000000000
+      internalID: 5492543171263429012
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: "selec\u0327a\u0303o de poderes_16"
+      rect:
+        serializedVersion: 2
+        x: 1158
+        y: 25
+        width: 65
+        height: 141
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9426d3a53399800b0800000000000000
+      internalID: -5762187277384195511
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      "selec\u0327a\u0303o de poderes_0": -6587273605642338566
+      "selec\u0327a\u0303o de poderes_1": 7240149176048975829
+      "selec\u0327a\u0303o de poderes_10": -5487857869132244015
+      "selec\u0327a\u0303o de poderes_11": -2444138999777324982
+      "selec\u0327a\u0303o de poderes_12": -5623300436239411688
+      "selec\u0327a\u0303o de poderes_13": -2256303999164675823
+      "selec\u0327a\u0303o de poderes_14": -8482190404469187854
+      "selec\u0327a\u0303o de poderes_15": 5492543171263429012
+      "selec\u0327a\u0303o de poderes_16": -5762187277384195511
+      "selec\u0327a\u0303o de poderes_2": -6703050931712715028
+      "selec\u0327a\u0303o de poderes_3": -2776650383024806790
+      "selec\u0327a\u0303o de poderes_4": -631814876177860258
+      "selec\u0327a\u0303o de poderes_5": -4510627232956882547
+      "selec\u0327a\u0303o de poderes_6": -895370780133559022
+      "selec\u0327a\u0303o de poderes_7": 1488185801900719626
+      "selec\u0327a\u0303o de poderes_8": 2511518894735155289
+      "selec\u0327a\u0303o de poderes_9": -3350186275005995676
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

@@ -31,6 +31,7 @@ public class StoreItemBinder : MonoBehaviour
             return;
         }
 
+        thumbnail.preserveAspect = true;
         thumbnail.sprite = icon;
         thumbnail.enabled = icon != null;
     }

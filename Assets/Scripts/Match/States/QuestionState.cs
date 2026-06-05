@@ -48,8 +48,11 @@ namespace BrainDuel.Match.States
 
         // Solicita ao servidor que processe a rodada (idempotente)
         // Ambos os clientes chamam — servidor processa apenas uma vez
+        // Em modo stub o StubConductor já cuida da transição, então não chama o servidor
         private void RequestProcessRound()
         {
+            if (Context.IsStubMode) return;
+
             CloudScriptClient.Call("ProcessRound", new
             {
                 matchId     = Context.MatchId,

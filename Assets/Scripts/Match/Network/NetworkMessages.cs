@@ -90,6 +90,7 @@ namespace BrainDuel.Network
     public class RoundResultPayload
     {
         public int              RoundNumber;
+        public string           CorrectAnswerId;  // revelado após todos responderem
         public RoundPlayerResult Player1Result;
         public RoundPlayerResult Player2Result;
         public int              Player1HP;

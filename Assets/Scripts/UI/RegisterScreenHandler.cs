@@ -110,6 +110,8 @@ public class RegisterScreenHandler : MonoBehaviour
         _isSubmitting = true;
         SetInteractable(false);
         SetFeedback("Criando conta...", false);
+
+        EnsurePlayFabService();
         EnsureAuthorizationService();
         AuthorizationService.Instance.ResetRoleState();
 
@@ -172,34 +174,29 @@ public class RegisterScreenHandler : MonoBehaviour
     {
         _isSubmitting = false;
         _registrationSucceeded = true;
-        SetFeedback("Conta criada! Concedendo decks iniciais...", false);
+        SetFeedback("Conta criada! Inicializando perfil...", false);
+
+        var nickname = nicknameInput != null ? nicknameInput.text.Trim() : string.Empty;
+
+        EnsurePlayerDataService();
         EnsureStarterDeckGrantService();
 
+        // Concede os decks iniciais ao inventário PlayFab e usa os ItemIds
+        // retornados pelo catálogo para criar o player_profile com IDs consistentes.
         StarterDeckGrantService.Instance.GrantStarterDecks(result =>
         {
-            if (result == null || !result.Success)
-            {
-                _registrationSucceeded = false;
-                _isSubmitting = false;
-                SetInteractable(true);
-                SetFeedback(result != null && !string.IsNullOrWhiteSpace(result.Error)
-                    ? result.Error
-                    : "Nao foi possivel conceder os decks iniciais.", true);
-                return;
-            }
+            var grantedIds = result?.GrantedItemIds ?? new System.Collections.Generic.List<string>();
+            if (!result?.Success ?? false)
+                Debug.LogWarning($"[Register] GrantStarterDecks: {result?.Error}");
 
-            if (InventoryService.Instance != null)
-            {
-                InventoryService.Instance.LoadInventory();
-            }
-
-            SetFeedback(result.AlreadyGranted
-                ? "Decks iniciais ja confirmados. Validando perfil..."
-                : "Decks iniciais concedidos. Validando perfil...", false);
-
-            EnsureAuthorizationService();
-            AuthorizationService.Instance.ValidatePlayerRole();
+            PlayerDataService.Instance.InitializeForNewPlayer(nickname, grantedIds);
         });
+
+        EnsureRankingService();
+        RankingService.Instance.RegistroRanking();
+
+        EnsureAuthorizationService();
+        AuthorizationService.Instance.ValidatePlayerRole();
     }
 
     private void HandleRegisterFailure(PlayFabError error)
@@ -311,6 +308,20 @@ public class RegisterScreenHandler : MonoBehaviour
         if (AuthorizationService.Instance != null) return;
         new GameObject("AuthorizationService").AddComponent<AuthorizationService>();
     }
+
+
+
+    private static void EnsurePlayerDataService()
+    {
+        if (PlayerDataService.Instance != null) return;
+        new GameObject("PlayerDataService").AddComponent<PlayerDataService>();
+    }
+
+    private static void EnsureRankingService()
+    {
+        if (RankingService.Instance != null) return;
+        new GameObject("RankingService").AddComponent<RankingService>();
+    }
 
     private static void EnsureStarterDeckGrantService()
     {

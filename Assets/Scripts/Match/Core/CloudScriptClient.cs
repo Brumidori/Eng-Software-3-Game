@@ -5,6 +5,8 @@ using UnityEngine;
 
 namespace BrainDuel.Match.Core
 {
+    // Chama handlers do Legacy CloudScript V1 via PlayFabClientAPI.ExecuteCloudScript.
+    // NÃO usar PlayFabCloudScriptAPI.ExecuteFunction — essa API é para CloudScript V2 (Azure Functions).
     public static class CloudScriptClient
     {
         public static void Call(string functionName, object args,
@@ -22,7 +24,7 @@ namespace BrainDuel.Match.Core
                 {
                     if (result.Error != null)
                     {
-                        Debug.LogError($"[CloudScript] {functionName} error: {result.Error.Message}");
+                        Debug.LogError($"[CloudScript] {functionName} erro no script: {result.Error.Message}");
                         onError?.Invoke(result.Error.Message);
                         return;
                     }
