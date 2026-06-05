@@ -88,12 +88,14 @@ namespace BrainDuel.Match.UI
         [Header("Sub-panel Vitória")]
         [SerializeField] private GameObject panelVitoria;
         [SerializeField] private TMP_Text   xpGanhoVitoriaText;
+        [SerializeField] private TMP_Text   moedaVitoriaText;
         [SerializeField] private Button     btnMenuVitoria;
         [SerializeField] private Button     btnOutraPartidaVitoria;
 
         [Header("Sub-panel Derrota")]
         [SerializeField] private GameObject panelDerrota;
         [SerializeField] private TMP_Text   xpGanhoDerrotaText;
+        [SerializeField] private TMP_Text   moedaDerrotaText;
         [SerializeField] private Button     btnMenuDerrota;
         [SerializeField] private Button     btnOutraPartidaDerrota;
 
@@ -537,7 +539,13 @@ namespace BrainDuel.Match.UI
 
             string answerId = _perguntaAtual.Answers[index].Id;
             stateMachine.SubmitAnswer(answerId);
-            CongelarPainelPergunta();
+
+            // Apenas desabilita os botões — o timer continua contando.
+            // O panel só é congelado quando ambos respondem (HandlePhaseChanged Reveal)
+            // ou o tempo esgota (callback do timer → CongelarPainelPergunta).
+            if (opcaoButtons != null)
+                foreach (var btn in opcaoButtons)
+                    if (btn != null) btn.interactable = false;
         }
 
         // Congela o painel de pergunta: timer em 0, botões não-interativos.
@@ -660,10 +668,11 @@ namespace BrainDuel.Match.UI
 
         void HandleFimPartida(MatchEndPayload payload)
         {
-            bool venceu = payload.WinnerId == _ctx?.LocalPlayerId;
+            bool empate      = string.IsNullOrEmpty(payload.WinnerId);
+            bool venceu      = !empate && payload.WinnerId == _ctx?.LocalPlayerId;
             bool porAbandono = payload.Reason == MatchEndReason.Abandonment;
 
-            MostrarResultadoFinal(venceu, porAbandono);
+            MostrarResultadoFinal(venceu, porAbandono, empate);
         }
 
         // Chamado pelo AbandonarPartidaModal quando o jogador LOCAL abandona
@@ -674,21 +683,30 @@ namespace BrainDuel.Match.UI
             MostrarResultadoFinal(venceu: false, porAbandono: true);
         }
 
-        void MostrarResultadoFinal(bool venceu, bool porAbandono)
+        void MostrarResultadoFinal(bool venceu, bool porAbandono, bool empate = false)
         {
             if (panelFimPartida != null) panelFimPartida.SetActive(true);
-            if (panelVitoria   != null) panelVitoria.SetActive(venceu);
-            if (panelDerrota   != null) panelDerrota.SetActive(!venceu);
 
-            if (venceu)
+            // Empate: ambos são vencedores — mostra painel de vitória com recompensa reduzida
+            bool mostrarVitoria = venceu || empate;
+            if (panelVitoria != null) panelVitoria.SetActive(mostrarVitoria);
+            if (panelDerrota != null) panelDerrota.SetActive(!mostrarVitoria);
+
+            if (mostrarVitoria)
             {
-                if (xpGanhoVitoriaText != null)
-                    xpGanhoVitoriaText.text = porAbandono ? "+20 XP  +40 moedas" : "+100 XP";
+                int xp     = empate ? 50 : porAbandono ? 50  : 100;
+                int moedas = empate ? 20 : porAbandono ? 40  : 80;
+
+                SetTMPText(xpGanhoVitoriaText, $"+{xp} XP");
+                SetTMPText(moedaVitoriaText,   $"+{moedas}");
             }
             else
             {
-                if (xpGanhoDerrotaText != null)
-                    xpGanhoDerrotaText.text = porAbandono ? "-10 XP" : "+20 XP";
+                int xp     = porAbandono ? -10 : 20;
+                int moedas = porAbandono ? 0   : 10;
+
+                SetTMPText(xpGanhoDerrotaText, xp >= 0 ? $"+{xp} XP" : $"{xp} XP");
+                SetTMPText(moedaDerrotaText,   moedas > 0 ? $"+{moedas}" : "0");
             }
         }
 

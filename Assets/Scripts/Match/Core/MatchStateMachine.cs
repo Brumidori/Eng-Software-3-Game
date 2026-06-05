@@ -824,6 +824,13 @@ namespace BrainDuel.Match.Core
             TransitionTo(MatchPhase.Reveal);
         }
 
+        // Chamado pelo MatchEndState para notificar a UI quando a partida termina
+        // por HP zerado ou 20 rodadas (sem payload vindo da rede).
+        public void NotifyMatchEnded(MatchEndPayload payload)
+        {
+            OnMatchEnded?.Invoke(payload);
+        }
+
         private void HandleMatchEnd(MatchEndPayload p)
         {
             Context.LastRoundResult = null;
