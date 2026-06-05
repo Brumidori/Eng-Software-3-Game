@@ -22,6 +22,6 @@ public class QuickAccessHUD : MonoBehaviour
         if (btnRanking  != null) btnRanking.onClick.RemoveListener(AbrirRanking);
     }
 
-    private void AbrirMedalhas() {}// => SceneManager.LoadScene(medalhasScene);
+    private void AbrirMedalhas() => SceneManager.LoadScene(medalhasScene);
     private void AbrirRanking()  => SceneManager.LoadScene(rankingScene);
 }

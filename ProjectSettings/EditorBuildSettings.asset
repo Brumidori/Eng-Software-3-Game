@@ -54,6 +54,9 @@ EditorBuildSettings:
     path: Assets/Scenes/Match.unity
     guid: ff944512f120c4778b59b0d12ecb6bf2
   - enabled: 1
+    path: Assets/Scenes/Medalhas.unity
+    guid: 7bd0c3e230ef4fd46aff93129da37623
+  - enabled: 1
     path: Assets/Scenes/Regras.unity
     guid: 376f9fb2d92f92f48b27ce26856fc8de
   m_configObjects:
