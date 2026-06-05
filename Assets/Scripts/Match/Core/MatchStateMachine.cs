@@ -326,7 +326,42 @@ namespace BrainDuel.Match.Core
                     bool acertou  = answered && Context.SelectedAnswerId == correctAnswerId;
                     int  dmg      = acertou ? DamageConfig.BaseDamage : 0;
                     int  newOppHP = Mathf.Max(0, opponentHP - dmg);
-                    bool matchOver = newOppHP <= 0 || round >= MatchConfig.MaxRounds;
+
+                    // Rastreia rodadas sem resposta do jogador local
+                    if (Context.LocalPlayer != null)
+                    {
+                        if (!answered)
+                            Context.LocalPlayer.ConsecutiveMissedRounds++;
+                        else
+                            Context.LocalPlayer.ConsecutiveMissedRounds = 0;
+                    }
+
+                    // AFK: 3 rodadas sem responder → derrota por abandono
+                    bool localAfk  = Context.LocalPlayer != null
+                                  && Context.LocalPlayer.ConsecutiveMissedRounds >= MatchConfig.AfkRoundLimit;
+                    bool matchOver = newOppHP <= 0 || round >= MatchConfig.MaxRounds || localAfk;
+
+                    // Determina vencedor: AFK local → oponente vence; caso contrário, lógica normal
+                    string stubWinnerId = null;
+                    MatchEndReason stubEndReason = MatchEndReason.HPDepleted;
+                    if (matchOver)
+                    {
+                        if (localAfk)
+                        {
+                            stubWinnerId  = Context.ServerState?.Player2Id ?? "oponente_stub";
+                            stubEndReason = MatchEndReason.Abandonment;
+                        }
+                        else if (round >= MatchConfig.MaxRounds)
+                        {
+                            stubWinnerId  = newOppHP < localHP ? Context.LocalPlayerId : null;
+                            stubEndReason = MatchEndReason.RoundsOver;
+                        }
+                        else
+                        {
+                            stubWinnerId  = Context.LocalPlayerId;
+                            stubEndReason = MatchEndReason.HPDepleted;
+                        }
+                    }
 
                     HandleRoundResult(new RoundResultPayload
                     {
@@ -361,7 +396,8 @@ namespace BrainDuel.Match.Core
                         Player1HP   = localHP,
                         Player2HP   = newOppHP,
                         IsMatchOver = matchOver,
-                        WinnerId    = matchOver ? Context.LocalPlayerId : null,
+                        WinnerId    = stubWinnerId,
+                        EndReason   = stubEndReason,
                     });
                     break;
                 }

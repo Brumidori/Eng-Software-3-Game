@@ -822,11 +822,13 @@ function processRoundInternal(state) {
     var winnerId  = null;
     var endReason = "HPDepleted";
 
+    // Valores numéricos espelham o enum C# MatchEndReason: HPDepleted=0, RoundsOver=1, Abandonment=2
     if (matchOver) {
-        if      (afkP1)     { winnerId = state.Player2Id; endReason = "Abandonment"; }
-        else if (afkP2)     { winnerId = state.Player1Id; endReason = "Abandonment"; }
-        else if (roundsMax) { winnerId = determineWinnerByHP(state); endReason = "RoundsOver"; }
-        else                { winnerId = determineWinnerByHP(state); }
+        if      (afkP1 && afkP2) { winnerId = null;            endReason = 2; } // ambos AFK → derrota dupla
+        else if (afkP1)          { winnerId = state.Player2Id; endReason = 2; } // Abandonment
+        else if (afkP2)          { winnerId = state.Player1Id; endReason = 2; } // Abandonment
+        else if (roundsMax)      { winnerId = determineWinnerByHP(state); endReason = 1; } // RoundsOver
+        else                     { winnerId = determineWinnerByHP(state); endReason = 0; } // HPDepleted
         state.IsActive  = false;
         state.WinnerId  = winnerId;
         state.EndReason = endReason;
@@ -924,10 +926,13 @@ function buildRoundResponse(state, alreadyProcessed) {
     };
 }
 
+// reason aceita string ou número; normaliza para número antes de salvar
 function finalizeMatch(state, winnerId, reason) {
+    var reasonMap = { "HPDepleted": 0, "RoundsOver": 1, "Abandonment": 2, "Disconnected": 3 };
+    var reasonNum = (typeof reason === "number") ? reason : (reasonMap[reason] !== undefined ? reasonMap[reason] : 0);
     state.IsActive  = false;
     state.WinnerId  = winnerId;
-    state.EndReason = reason;
+    state.EndReason = reasonNum;
     state.Phase     = "MatchEnd";
     saveMatchState(state);
     removeFromActiveIndex(state.MatchId);

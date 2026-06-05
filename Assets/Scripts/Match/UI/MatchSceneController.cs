@@ -668,11 +668,14 @@ namespace BrainDuel.Match.UI
 
         void HandleFimPartida(MatchEndPayload payload)
         {
-            bool empate      = string.IsNullOrEmpty(payload.WinnerId);
-            bool venceu      = !empate && payload.WinnerId == _ctx?.LocalPlayerId;
-            bool porAbandono = payload.Reason == MatchEndReason.Abandonment;
+            bool semVencedor  = string.IsNullOrEmpty(payload.WinnerId);
+            bool porAbandono  = payload.Reason == MatchEndReason.Abandonment;
+            // Derrota dupla: ninguém ganhou E foi por abandono → ambos perdem
+            bool derrotaDupla = semVencedor && porAbandono;
+            bool empate       = semVencedor && !porAbandono;
+            bool venceu       = !semVencedor && payload.WinnerId == _ctx?.LocalPlayerId;
 
-            MostrarResultadoFinal(venceu, porAbandono, empate);
+            MostrarResultadoFinal(venceu, porAbandono, empate, derrotaDupla);
         }
 
         // Chamado pelo AbandonarPartidaModal quando o jogador LOCAL abandona
@@ -680,33 +683,56 @@ namespace BrainDuel.Match.UI
         {
             DesativarTodosPanels();
             panelFimPartida.SetActive(true);
-            MostrarResultadoFinal(venceu: false, porAbandono: true);
+            MostrarResultadoFinal(venceu: false, porAbandono: true, empate: false, derrotaDupla: false);
         }
 
-        void MostrarResultadoFinal(bool venceu, bool porAbandono, bool empate = false)
+        void MostrarResultadoFinal(bool venceu, bool porAbandono, bool empate = false, bool derrotaDupla = false)
         {
             if (panelFimPartida != null) panelFimPartida.SetActive(true);
 
-            // Empate: ambos são vencedores — mostra painel de vitória com recompensa reduzida
-            bool mostrarVitoria = venceu || empate;
+            // Derrota dupla (ambos AFK): ambos veem painel de derrota
+            bool mostrarVitoria = (venceu || empate) && !derrotaDupla;
             if (panelVitoria != null) panelVitoria.SetActive(mostrarVitoria);
             if (panelDerrota != null) panelDerrota.SetActive(!mostrarVitoria);
 
+            int xpGanho, moedas;
+
             if (mostrarVitoria)
             {
-                int xp     = empate ? 50 : porAbandono ? 50  : 100;
-                int moedas = empate ? 20 : porAbandono ? 40  : 80;
+                xpGanho = empate ? 50 : porAbandono ? 50  : 100;
+                moedas  = empate ? 20 : porAbandono ? 40  : 80;
 
-                SetTMPText(xpGanhoVitoriaText, $"+{xp} XP");
+                SetTMPText(xpGanhoVitoriaText, $"+{xpGanho} XP");
                 SetTMPText(moedaVitoriaText,   $"+{moedas}");
             }
             else
             {
-                int xp     = porAbandono ? -10 : 20;
-                int moedas = porAbandono ? 0   : 10;
+                // derrotaDupla → ambos AFK, penalidade máxima
+                xpGanho = derrotaDupla ? -20 : porAbandono ? -10 : 20;
+                moedas  = 0;
 
-                SetTMPText(xpGanhoDerrotaText, xp >= 0 ? $"+{xp} XP" : $"{xp} XP");
-                SetTMPText(moedaDerrotaText,   moedas > 0 ? $"+{moedas}" : "0");
+                SetTMPText(xpGanhoDerrotaText, xpGanho >= 0 ? $"+{xpGanho} XP" : $"{xpGanho} XP");
+                SetTMPText(moedaDerrotaText,   "0");
+            }
+
+            // Salva resultado no PlayFab — atualiza ranking e estatísticas
+            SalvarResultadoNoPlayFab(xpGanho, venceu, empate && !derrotaDupla);
+        }
+
+        private void SalvarResultadoNoPlayFab(int xpGanho, bool venceu, bool empate)
+        {
+            // Atualiza leaderboard e contadores de vitória/partida
+            if (RankingService.Instance != null)
+                RankingService.Instance.SalvarFimDePartida(xpGanho, venceu || empate);
+            else
+                Debug.LogWarning("[Match] RankingService não encontrado — estatísticas não salvas.");
+
+            // Atualiza XP no player_profile
+            var perfil = PlayerDataService.Instance?.CurrentProfile;
+            if (perfil != null && xpGanho != 0)
+            {
+                int novoXp = Mathf.Max(0, perfil.currentXp + xpGanho);
+                PlayerDataService.Instance.SaveProgress(perfil.level, novoXp);
             }
         }
 
