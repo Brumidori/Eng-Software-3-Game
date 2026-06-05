@@ -301,21 +301,23 @@ namespace BrainDuel.Match.UI
         void ExibirSpriteTema(string themeName)
         {
             if (temaIcon == null) return;
-            Sprite sprite = Resources.Load<Sprite>($"Temas/Tema-{themeName}");
+            var key    = themeName?.Replace(" ", "") ?? string.Empty;
+            Sprite sprite = Resources.Load<Sprite>($"Temas/Tema-{key}");
             if (sprite != null)
                 temaIcon.sprite = sprite;
             else
-                Debug.LogWarning($"[Match] Sprite não encontrado: Temas/Tema-{themeName}");
+                Debug.LogWarning($"[Match] Sprite não encontrado: Temas/Tema-{key}");
         }
 
         void ExibirCardTema(string themeName)
         {
             if (cardTemaPerguntaImage == null || string.IsNullOrEmpty(themeName)) return;
-            Sprite sprite = Resources.Load<Sprite>($"Temas/Card{themeName}");
+            var key    = themeName.Replace(" ", "");
+            Sprite sprite = Resources.Load<Sprite>($"Temas/Card{key}");
             if (sprite != null)
                 cardTemaPerguntaImage.sprite = sprite;
             else
-                Debug.LogWarning($"[Match] Card de tema não encontrado: Temas/Card{themeName}");
+                Debug.LogWarning($"[Match] Card de tema não encontrado: Temas/Card{key}");
         }
 
         // ----------------------------------------------------------

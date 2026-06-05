@@ -407,18 +407,46 @@ namespace BrainDuel.Match.Core
         {
             _stubRoundPool = null;
 
-            var deckService = DeckService.Instance;
-            if (deckService == null) yield break;
+            // Garante que o DeckService existe mesmo quando a cena Match é iniciada diretamente
+            if (DeckService.Instance == null)
+            {
+                var go = new GameObject("DeckService");
+                go.AddComponent<DeckService>();
+                yield return null; // deixa o Awake/Start rodar
+            }
 
-            // Aguarda DeckIndex ficar disponível (máx 5s)
-            float idxDeadline = Time.time + 5f;
+            var deckService = DeckService.Instance;
+            if (deckService == null)
+            {
+                Debug.LogWarning("[MatchStateMachine] DeckService não disponível — usando pergunta fallback.");
+                yield break;
+            }
+
+            // Aguarda DeckIndex ficar disponível (máx 8s)
+            float idxDeadline = Time.time + 8f;
             while (deckService.GetAvailableCategories().Count == 0 && Time.time < idxDeadline)
                 yield return new WaitForSeconds(0.3f);
 
             var allCategories = deckService.GetAvailableCategories();
-            if (allCategories.Count == 0) yield break;
+            if (allCategories.Count == 0)
+            {
+                Debug.LogWarning("[MatchStateMachine] DeckIndex vazio após espera — usando pergunta fallback.");
+                yield break;
+            }
 
-            // Resolve quais categorias o jogador possui
+            Debug.Log($"[MatchStateMachine] Categorias disponíveis: {string.Join(", ", allCategories)}");
+
+            // Aguarda PlayerDataService carregar o perfil (máx 3s)
+            if (PlayerDataService.Instance == null)
+            {
+                new GameObject("PlayerDataService").AddComponent<PlayerDataService>();
+                yield return null;
+            }
+            float profileDeadline = Time.time + 3f;
+            while (PlayerDataService.Instance?.CurrentProfile == null && Time.time < profileDeadline)
+                yield return new WaitForSeconds(0.3f);
+
+            // Resolve categorias do jogador: tenta pelo suffix do id, depois pelo campo category
             var profile    = PlayerDataService.Instance?.CurrentProfile;
             var ownedDecks = profile?.decks?.FindAll(d => d.isOwned);
             var categorias = new List<string>();
@@ -427,53 +455,83 @@ namespace BrainDuel.Match.Core
             {
                 foreach (var deck in ownedDecks)
                 {
-                    // "deckHistoria" → "Historia"
+                    // Tenta 1: "deckHistoria" → suffix "Historia"
                     var suffix = deck.id.StartsWith("deck", StringComparison.OrdinalIgnoreCase)
-                        ? deck.id.Substring(4)
-                        : deck.id;
+                        ? deck.id.Substring(4) : deck.id;
                     var match = allCategories.Find(c =>
                         string.Equals(c, suffix, StringComparison.OrdinalIgnoreCase));
+
+                    // Tenta 2: compara com o campo category do perfil (ex: "HISTÓRIA")
+                    if (match == null && !string.IsNullOrEmpty(deck.category))
+                        match = allCategories.Find(c =>
+                            string.Equals(c, deck.category, StringComparison.OrdinalIgnoreCase));
+
                     if (match != null && !categorias.Contains(match))
+                    {
                         categorias.Add(match);
+                        Debug.Log($"[MatchStateMachine] Deck '{deck.id}' → categoria '{match}'");
+                    }
+                    else if (match == null)
+                    {
+                        Debug.LogWarning($"[MatchStateMachine] Deck '{deck.id}' não mapeado. Categorias: {string.Join(", ", allCategories)}");
+                    }
                 }
             }
 
             // Fallback: usa todas as categorias disponíveis
             if (categorias.Count == 0)
+            {
+                Debug.Log("[MatchStateMachine] Nenhum deck do jogador mapeado — carregando todas as categorias.");
                 categorias.AddRange(allCategories);
+            }
 
             // Dispara carregamento dos decks ainda não cacheados
             foreach (var cat in categorias)
             {
-                if (deckService.GetDeck(cat) == null)
+                if (!deckService.IsDeckLoaded(cat))
                     deckService.LoadDeck(cat);
             }
 
-            // Aguarda todos carregarem (máx 10s)
-            float deckDeadline = Time.time + 10f;
+            // Aguarda carregamento (máx 8s).
+            // Usa IsDeckLoaded para não disparar erros em decks que não têm TitleData.
+            // Após o deadline coleta o que carregou, sem travar por categorias inexistentes.
+            float deckDeadline = Time.time + 8f;
             while (Time.time < deckDeadline)
             {
                 bool allLoaded = true;
                 foreach (var cat in categorias)
                 {
-                    var d = deckService.GetDeck(cat);
-                    if (d == null || d.Count == 0) { allLoaded = false; break; }
+                    if (!deckService.IsDeckLoaded(cat)) { allLoaded = false; break; }
                 }
                 if (allLoaded) break;
                 yield return new WaitForSeconds(0.5f);
             }
 
-            // Coleta todas as perguntas disponíveis
+            // Diagnóstico pós-espera
+            foreach (var cat in categorias)
+                Debug.Log($"[MatchStateMachine] Deck '{cat}': {(deckService.IsDeckLoaded(cat) ? deckService.GetDeck(cat)?.Count + " perguntas" : "não carregado")}");
+
+
+            // Coleta todas as perguntas disponíveis.
+            // ThemeName vem de carta.categoria (= deckPayload.theme do TitleData, sem acentos)
+            // em vez do nome da categoria do DeckIndex (que pode ter acentos).
             var pool = new List<StubRoundData>();
             foreach (var cat in categorias)
             {
                 var deck = deckService.GetDeck(cat);
                 if (deck == null) continue;
                 foreach (var carta in deck)
-                    pool.Add(new StubRoundData { ThemeName = cat, Carta = carta });
+                {
+                    var theme = !string.IsNullOrEmpty(carta.categoria) ? carta.categoria : cat;
+                    pool.Add(new StubRoundData { ThemeName = theme, Carta = carta });
+                }
             }
 
-            if (pool.Count == 0) yield break;
+            if (pool.Count == 0)
+            {
+                Debug.LogWarning("[MatchStateMachine] Pool de perguntas vazio após carregamento — usando pergunta fallback.");
+                yield break;
+            }
 
             // Embaralha Fisher-Yates
             for (int i = pool.Count - 1; i > 0; i--)
@@ -487,7 +545,7 @@ namespace BrainDuel.Match.Core
             for (int i = 0; i < rounds; i++)
                 _stubRoundPool[i] = pool[i % pool.Count];
 
-            Debug.Log($"[MatchStateMachine] Pool stub: {rounds} rodadas, {pool.Count} perguntas de {categorias.Count} deck(s).");
+            Debug.Log($"[MatchStateMachine] Pool stub pronto: {rounds} rodadas, {pool.Count} perguntas de {categorias.Count} deck(s).");
         }
 
         // ----------------------------------------------------------
