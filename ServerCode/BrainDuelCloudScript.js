@@ -674,13 +674,20 @@ handlers.StartQuestion = function (args) {
     var question = loadQuestion(state, state.CurrentRoundState.QuestionId);
     if (!question) return { error: "Pergunta nao encontrada" };
 
+    // Se o jogador que chamou ativou EliminateTwo, calcula 2 índices errados para eliminar
+    var playerAction      = getPlayerAction(state, currentPlayerId);
+    var eliminatedIndices = null;
+    if (playerAction && playerAction.ActivatedPowerUp === "EliminateTwo")
+        eliminatedIndices = calcularIndicesEliminados(question.Options, question.CorrectOptionId);
+
     // PascalCase para corresponder exatamente ao modelo C# QuestionRevealPayload
     return {
         QuestionId:        question.QuestionId,
         QuestionText:      question.Text,
         Answers:           question.Options,
         ServerTimestampMs: state.PhaseStartTimestampMs,
-        DurationMs:        MATCH_CONFIG.QuestionPhaseDurationMs
+        DurationMs:        MATCH_CONFIG.QuestionPhaseDurationMs,
+        EliminatedIndices: eliminatedIndices
     };
 };
 
@@ -1128,6 +1135,20 @@ function buildQuestionPool(p1Id, p2Id) {
     for (var i = 0; i < MATCH_CONFIG.MaxRounds; i++)
         pool.push(allQuestions[i % allQuestions.length]);
     return pool;
+}
+
+// Seleciona 2 índices de respostas erradas para o EliminateTwo (nunca elimina a correta)
+function calcularIndicesEliminados(options, correctOptionId) {
+    var errados = [];
+    for (var i = 0; i < options.length; i++) {
+        if (options[i].Id !== correctOptionId) errados.push(i);
+    }
+    // Embaralha e pega os 2 primeiros
+    for (var i = errados.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = errados[i]; errados[i] = errados[j]; errados[j] = tmp;
+    }
+    return errados.slice(0, 2);
 }
 
 // Retorna a pergunta completa para a rodada (pool armazena objetos, não IDs)

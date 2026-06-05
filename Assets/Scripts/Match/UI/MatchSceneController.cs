@@ -47,6 +47,11 @@ namespace BrainDuel.Match.UI
         [SerializeField] private TMP_Text   powerUpDescricaoText;
         [SerializeField] private TMP_Text   timerTemaPoderesText;
 
+        [Header("Power-up Ativado")]
+        // Imagens que exibem o sprite do PU ativado por cada jogador
+        [SerializeField] private Image   powerUpAtivadoJogador1Image;
+        [SerializeField] private Image   powerUpAtivadoJogador2Image;
+
         // ----------------------------------------------------------
         // Panel: Pergunta
         // ----------------------------------------------------------
@@ -119,7 +124,9 @@ namespace BrainDuel.Match.UI
         private QuestionRevealPayload     _perguntaAtual;
         private Coroutine                 _timerCoroutine;
         private bool                      _poderJaUsado;
+        private bool                      _eliminateTwoPendente;   // EliminateTwo ativado aguardando pergunta
         private Dictionary<PowerUpType, int> _poderesNoInventario = new Dictionary<PowerUpType, int>();
+        private List<PlayFab.ClientModels.ItemInstance> _inventarioItens = new List<PlayFab.ClientModels.ItemInstance>();
         private string                    _currentThemeName;
 
         // ----------------------------------------------------------
@@ -133,12 +140,14 @@ namespace BrainDuel.Match.UI
 
             _ctx = stateMachine.Context;
 
-            stateMachine.OnPhaseChanged        += HandlePhaseChanged;
-            stateMachine.OnHPUpdated           += HandleHPAtualizado;
-            stateMachine.OnRoundResultReceived += HandleResultadoRodada;
-            stateMachine.OnMatchEnded          += HandleFimPartida;
-            stateMachine.OnRoundStarted        += HandleRodadaIniciada;
-            stateMachine.OnQuestionRevealed    += HandlePerguntaRevelada;
+            stateMachine.OnPhaseChanged              += HandlePhaseChanged;
+            stateMachine.OnHPUpdated                 += HandleHPAtualizado;
+            stateMachine.OnRoundResultReceived       += HandleResultadoRodada;
+            stateMachine.OnMatchEnded                += HandleFimPartida;
+            stateMachine.OnRoundStarted              += HandleRodadaIniciada;
+            stateMachine.OnQuestionRevealed          += HandlePerguntaRevelada;
+            stateMachine.OnPowerUpActivatedReceived  += HandlePowerUpOponente;
+            MatchEvents.OnEliminateTwo               += AplicarEliminateDuas;
 
             if (powerUpManager != null)
                 powerUpManager.OnPowerUpActivated += HandlePoderAtivado;
@@ -159,18 +168,24 @@ namespace BrainDuel.Match.UI
 
             InicializarHUD();
             DesativarTodosPanels();
+
+            // Power-up ativado: só aparece após ativação
+            if (powerUpAtivadoJogador1Image != null) powerUpAtivadoJogador1Image.gameObject.SetActive(false);
+            if (powerUpAtivadoJogador2Image != null) powerUpAtivadoJogador2Image.gameObject.SetActive(false);
         }
 
         void OnDestroy()
         {
             if (stateMachine == null) return;
 
-            stateMachine.OnPhaseChanged        -= HandlePhaseChanged;
-            stateMachine.OnHPUpdated           -= HandleHPAtualizado;
-            stateMachine.OnRoundResultReceived -= HandleResultadoRodada;
-            stateMachine.OnMatchEnded          -= HandleFimPartida;
-            stateMachine.OnRoundStarted        -= HandleRodadaIniciada;
-            stateMachine.OnQuestionRevealed    -= HandlePerguntaRevelada;
+            stateMachine.OnPhaseChanged              -= HandlePhaseChanged;
+            stateMachine.OnHPUpdated                 -= HandleHPAtualizado;
+            stateMachine.OnRoundResultReceived       -= HandleResultadoRodada;
+            stateMachine.OnMatchEnded                -= HandleFimPartida;
+            stateMachine.OnRoundStarted              -= HandleRodadaIniciada;
+            stateMachine.OnQuestionRevealed          -= HandlePerguntaRevelada;
+            stateMachine.OnPowerUpActivatedReceived  -= HandlePowerUpOponente;
+            MatchEvents.OnEliminateTwo               -= AplicarEliminateDuas;
 
             if (powerUpManager != null)
                 powerUpManager.OnPowerUpActivated -= HandlePoderAtivado;
@@ -292,6 +307,7 @@ namespace BrainDuel.Match.UI
 
         void HandleRodadaIniciada(RoundStartPayload payload)
         {
+            _eliminateTwoPendente = false;
             _currentThemeName = payload.ThemeName;
 
             // Inicializa o PowerUpManager na primeira rodada (ServerState já está populado)
@@ -341,6 +357,7 @@ namespace BrainDuel.Match.UI
 
         void PopularInventarioPoderes(List<ItemInstance> itens)
         {
+            _inventarioItens = itens ?? new List<ItemInstance>();
             _poderesNoInventario.Clear();
 
             // Conta quantidades por tipo usando mapeamento do Inspector (powerUpItemIds)
@@ -386,6 +403,14 @@ namespace BrainDuel.Match.UI
             {
                 if (!_poderesNoInventario.ContainsKey(_ctx.EquippedPowerUp))
                     _poderesNoInventario[_ctx.EquippedPowerUp] = 1;
+            }
+
+            // No modo stub todos os poderes ficam disponíveis para teste
+            if (_ctx?.IsStubMode == true)
+            {
+                foreach (PowerUpType tipo in OrdemPoderes)
+                    if (tipo != PowerUpType.None && !_poderesNoInventario.ContainsKey(tipo))
+                        _poderesNoInventario[tipo] = 1;
             }
 
             AtualizarQuantidadesTexto();
@@ -482,6 +507,105 @@ namespace BrainDuel.Match.UI
             BloquearTodosBotoesPoder();
             if (powerUpDescricaoText != null)
                 powerUpDescricaoText.text = $"{PowerUpManager.GetName(tipo)} ativado!";
+
+            // Mostra sprite do PU ativado pelo jogador local
+            ExibirSpritePowerUp(powerUpAtivadoJogador1Image, tipo);
+
+            // EliminateTwo será aplicado quando a pergunta chegar
+            if (tipo == PowerUpType.EliminateTwo)
+                _eliminateTwoPendente = true;
+
+            // Consome 1 unidade do item no inventário PlayFab
+            ConsumirPowerUpDoInventario(tipo);
+        }
+
+        // Sprite do PU do OPONENTE (recebido via Party broadcast)
+        void HandlePowerUpOponente(PowerUpActivatedPayload payload)
+        {
+            if (payload == null) return;
+            // Ignora se for o próprio jogador local — J1 já foi tratado em HandlePoderAtivado
+            string localId = _ctx?.LocalPlayerId ?? PlayFab.PlayFabSettings.staticPlayer?.EntityId;
+            if (!string.IsNullOrEmpty(localId) && payload.PlayerId == localId) return;
+
+            ExibirSpritePowerUp(powerUpAtivadoJogador2Image, payload.PowerUp);
+        }
+
+        // Mostra o sprite do PU copiando a imagem do botão correspondente (sem array extra)
+        void ExibirSpritePowerUp(Image destino, PowerUpType tipo)
+        {
+            if (destino == null) return;
+            if (tipo == PowerUpType.None) { destino.gameObject.SetActive(false); return; }
+
+            // Copia o sprite do botão do painel de poderes que corresponde ao tipo
+            Sprite sprite = null;
+            if (powerUpButtons != null)
+            {
+                for (int i = 0; i < OrdemPoderes.Length && i < powerUpButtons.Length; i++)
+                {
+                    if (OrdemPoderes[i] != tipo || powerUpButtons[i] == null) continue;
+                    sprite = powerUpButtons[i].GetComponent<Image>()?.sprite;
+                    break;
+                }
+            }
+
+            destino.gameObject.SetActive(true);
+            if (sprite != null) destino.sprite = sprite;
+            destino.color = Color.white;
+        }
+
+        // Elimina 2 respostas aleatórias (efeito visual do EliminateTwo)
+        void AplicarEliminateDuas(int[] indices)
+        {
+            if (opcaoButtons == null || indices == null) return;
+            foreach (var idx in indices)
+            {
+                if (idx < 0 || idx >= opcaoButtons.Length || opcaoButtons[idx] == null) continue;
+                opcaoButtons[idx].interactable = false;
+                SetAlpha(opcaoButtons[idx], 0.2f);
+                if (_perguntaAtual != null && idx < _perguntaAtual.Answers.Length)
+                    _perguntaAtual.Answers[idx].IsEliminated = true;
+            }
+        }
+
+        void ConsumirPowerUpDoInventario(PowerUpType tipo)
+        {
+            if (tipo == PowerUpType.None) return;
+
+            // Encontra o ItemId do catálogo correspondente ao PU
+            string catalogItemId = null;
+            for (int i = 0; i < OrdemPoderes.Length; i++)
+            {
+                if (OrdemPoderes[i] == tipo && i < powerUpItemIds.Length)
+                { catalogItemId = powerUpItemIds[i]; break; }
+            }
+            if (string.IsNullOrEmpty(catalogItemId)) return;
+
+            // Encontra a instância no inventário e consome
+            var instancia = _inventarioItens.Find(it => it.ItemId == catalogItemId);
+            if (instancia == null)
+            {
+                Debug.LogWarning($"[Match] Item '{catalogItemId}' não encontrado no inventário para consumo.");
+                return;
+            }
+
+            PlayFab.PlayFabClientAPI.ConsumeItem(
+                new PlayFab.ClientModels.ConsumeItemRequest { ItemInstanceId = instancia.ItemInstanceId, ConsumeCount = 1 },
+                _ =>
+                {
+                    Debug.Log($"[Match] Power-up '{catalogItemId}' consumido do inventário.");
+                    // Atualiza SOMENTE este poder no contador local — não recarrega o inventário
+                    // (evita zerar todos os poderes por recarga completa durante a partida)
+                    if (_poderesNoInventario.TryGetValue(tipo, out int qtd))
+                    {
+                        if (qtd > 1) _poderesNoInventario[tipo] = qtd - 1;
+                        else         _poderesNoInventario.Remove(tipo);
+                        AtualizarQuantidadesTexto();
+                    }
+                    // Remove do cache local para não consumir duas vezes se chamado novamente
+                    _inventarioItens.RemoveAll(it => it.ItemInstanceId == instancia.ItemInstanceId);
+                },
+                e => Debug.LogWarning($"[Match] Falha ao consumir power-up: {e.GenerateErrorReport()}")
+            );
         }
 
         void BloquearTodosBotoesPoder()
@@ -533,6 +657,46 @@ namespace BrainDuel.Match.UI
                 opcaoButtons[i].interactable = !eliminada;
                 SetAlpha(opcaoButtons[i], eliminada ? 0.2f : 1f);
             }
+
+            // Aplica EliminateTwo agora que os botões estão visíveis
+            if (_eliminateTwoPendente)
+            {
+                _eliminateTwoPendente = false;
+
+                if (payload.EliminatedIndices != null && payload.EliminatedIndices.Length > 0)
+                {
+                    // Modo real: servidor já calculou 2 índices errados
+                    AplicarEliminateDuas(payload.EliminatedIndices);
+                }
+                else
+                {
+                    // Modo stub: usa a resposta correta exposta pelo estado para evitar eliminá-la
+                    string correctId = stateMachine?.CurrentStubCorrectAnswerId;
+                    AplicarEliminateDuas(EscolherDoisErrados(payload.Answers, correctId));
+                }
+            }
+        }
+
+        // Escolhe 2 índices de respostas erradas, nunca eliminando a correta
+        static int[] EscolherDoisErrados(AnswerOption[] answers, string correctId)
+        {
+            int correctIdx = -1;
+            if (!string.IsNullOrEmpty(correctId))
+                for (int i = 0; i < answers.Length; i++)
+                    if (answers[i].Id == correctId) { correctIdx = i; break; }
+
+            var errados = new List<int>();
+            for (int i = 0; i < answers.Length; i++)
+                if (i != correctIdx) errados.Add(i);
+
+            var escolhidos = new List<int>();
+            while (escolhidos.Count < 2 && errados.Count > 0)
+            {
+                int pick = UnityEngine.Random.Range(0, errados.Count);
+                escolhidos.Add(errados[pick]);
+                errados.RemoveAt(pick);
+            }
+            return escolhidos.ToArray();
         }
 
         void OnRespostaClicada(int index)
@@ -592,21 +756,13 @@ namespace BrainDuel.Match.UI
             MoverIndicador(escolhaJogador2Image, j2Idx, ativo: oponenteResult.Result != AnswerResult.NotAnswered, offsetX:  revealIndicadorOffsetX);
 
             // Dano sofrido por cada jogador (HPBefore − HPAfter do receptor)
+            // oponenteResult.WasShielded → escudo do jogador LOCAL bloqueou ataque do oponente
+            // localResult.WasShielded    → escudo do OPONENTE bloqueou ataque do jogador local
             int danoRecebido1 = localResult.HPBefore    - localResult.HPAfter;
             int danoRecebido2 = oponenteResult.HPBefore - oponenteResult.HPAfter;
 
-            if (danoJogador1Text != null)
-            {
-                danoJogador1Text.text                = danoRecebido1 > 0 ? $"-{danoRecebido1} HP" : "0 HP";
-                danoJogador1Text.color               = danoRecebido1 > 0 ? Color.red : Color.white;
-                danoJogador1Text.enableVertexGradient = false;
-            }
-            if (danoJogador2Text != null)
-            {
-                danoJogador2Text.text                = danoRecebido2 > 0 ? $"-{danoRecebido2} HP" : "0 HP";
-                danoJogador2Text.color               = danoRecebido2 > 0 ? Color.red : Color.white;
-                danoJogador2Text.enableVertexGradient = false;
-            }
+            ExibirTextoDano(danoJogador1Text, danoRecebido1, oponenteResult.WasShielded);
+            ExibirTextoDano(danoJogador2Text, danoRecebido2, localResult.WasShielded);
 
             // Popup resultado — jogador local
             ExibirPopupResultado(damagePopupText,         localResult.Result);
@@ -630,6 +786,21 @@ namespace BrainDuel.Match.UI
 
             label.text                = $"COMBO x{streak}\n+{bonus} Dano";
             label.color               = Color.yellow;
+            label.enableVertexGradient = false;
+        }
+
+        static void ExibirTextoDano(TMP_Text label, int dano, bool bloqueadoPorEscudo)
+        {
+            if (label == null) return;
+            if (bloqueadoPorEscudo)
+            {
+                label.text                = "Dano Bloqueado - Escudo";
+                label.color               = new Color(0.4f, 0.7f, 1f); // azul claro
+                label.enableVertexGradient = false;
+                return;
+            }
+            label.text                = dano > 0 ? $"-{dano} HP" : "0 HP";
+            label.color               = dano > 0 ? Color.red : Color.white;
             label.enableVertexGradient = false;
         }
 
@@ -742,13 +913,17 @@ namespace BrainDuel.Match.UI
 
         private void SalvarResultadoNoPlayFab(int xpGanho, bool venceu, bool empate)
         {
-            // Atualiza leaderboard e contadores de vitória/partida
-            if (RankingService.Instance != null)
-                RankingService.Instance.SalvarFimDePartida(xpGanho, venceu || empate);
-            else
-                Debug.LogWarning("[Match] RankingService não encontrado — estatísticas não salvas.");
+            // Modo stub: CloudScript não roda — cliente atualiza as estatísticas diretamente
+            // Modo real: CloudScript já chamou updatePlayerStats ao fim da partida, sem double-counting
+            if (_ctx?.IsStubMode == true)
+            {
+                if (RankingService.Instance != null)
+                    RankingService.Instance.SalvarFimDePartida(xpGanho, venceu || empate);
+                else
+                    Debug.LogWarning("[Match] RankingService não encontrado — estatísticas não salvas.");
+            }
 
-            // Atualiza XP no player_profile
+            // Atualiza XP no player_profile para exibição imediata na UI de perfil
             var perfil = PlayerDataService.Instance?.CurrentProfile;
             if (perfil != null && xpGanho != 0)
             {

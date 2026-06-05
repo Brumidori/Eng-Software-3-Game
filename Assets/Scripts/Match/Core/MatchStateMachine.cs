@@ -28,9 +28,10 @@ namespace BrainDuel.Match.Core
         public event Action<string>              OnOpponentConnected;
         public event Action<string>              OnOpponentDisconnected;
         public event Action<MatchEndPayload>     OnMatchEnded;
-        public event Action<RoundResultPayload>  OnRoundResultReceived;
-        public event Action<RoundStartPayload>   OnRoundStarted;
-        public event Action<QuestionRevealPayload> OnQuestionRevealed;
+        public event Action<RoundResultPayload>      OnRoundResultReceived;
+        public event Action<RoundStartPayload>       OnRoundStarted;
+        public event Action<QuestionRevealPayload>   OnQuestionRevealed;
+        public event Action<PowerUpActivatedPayload> OnPowerUpActivatedReceived;
 
         // ----------------------------------------------------------
         // Estado
@@ -275,6 +276,9 @@ namespace BrainDuel.Match.Core
                         for (int i = 0; i < carta.alternativas.Count; i++)
                             answers[i] = new AnswerOption { Id = ((char)('A' + i)).ToString(), Text = carta.alternativas[i] };
 
+                        // Expõe a resposta correta para o EliminateTwo client-side
+                        CurrentStubCorrectAnswerId = ((char)('A' + carta.respostaCorreta)).ToString();
+
                         qPayload = new QuestionRevealPayload
                         {
                             QuestionId        = carta.id,
@@ -286,6 +290,7 @@ namespace BrainDuel.Match.Core
                     }
                     else
                     {
+                        CurrentStubCorrectAnswerId = "A"; // fallback hardcoded
                         qPayload = new QuestionRevealPayload
                         {
                             QuestionId        = "stub_q",
@@ -329,8 +334,14 @@ namespace BrainDuel.Match.Core
                     int currentStreak = Context.LocalStreak;
                     int newStreak     = acertou ? currentStreak + 1 : 0;
                     int streakBonus   = acertou ? DamageConfig.GetStreakBonus(newStreak) : 0;
-                    int dmg           = acertou ? DamageConfig.BaseDamage + streakBonus : 0;
-                    int newOppHP      = Mathf.Max(0, opponentHP - dmg);
+                    // Aposta: +5 de dano extra se acertou
+                    int betBonus   = (acertou && Context.PendingPowerUp == PowerUpType.Bet) ? DamageConfig.BetBonus : 0;
+                    int dmg        = acertou ? DamageConfig.BaseDamage + streakBonus + betBonus : 0;
+                    // Roubo: transfere 5 HP do oponente para o jogador local (independente da resposta)
+                    int stealAmount = Context.PendingPowerUp == PowerUpType.Steal ? DamageConfig.StealAmount : 0;
+
+                    int newOppHP   = Mathf.Max(0, opponentHP - dmg - stealAmount);
+                    int newLocalHP = Mathf.Min(MatchConfig.InitialHP, localHP + stealAmount);
 
                     // Rastreia rodadas sem resposta do jogador local
                     if (Context.LocalPlayer != null)
@@ -344,7 +355,7 @@ namespace BrainDuel.Match.Core
                     // AFK: 3 rodadas sem responder → derrota por abandono
                     bool localAfk  = Context.LocalPlayer != null
                                   && Context.LocalPlayer.ConsecutiveMissedRounds >= MatchConfig.AfkRoundLimit;
-                    bool matchOver = newOppHP <= 0 || round >= MatchConfig.MaxRounds || localAfk;
+                    bool matchOver = newOppHP <= 0 || newLocalHP <= 0 || round >= MatchConfig.MaxRounds || localAfk;
 
                     // Determina vencedor: AFK local → oponente vence; caso contrário, lógica normal
                     string stubWinnerId = null;
@@ -358,12 +369,15 @@ namespace BrainDuel.Match.Core
                         }
                         else if (round >= MatchConfig.MaxRounds)
                         {
-                            stubWinnerId  = newOppHP < localHP ? Context.LocalPlayerId : null;
+                            stubWinnerId  = newOppHP < newLocalHP ? Context.LocalPlayerId
+                                          : newLocalHP < newOppHP ? Context.ServerState?.Player2Id
+                                          : null;
                             stubEndReason = MatchEndReason.RoundsOver;
                         }
                         else
                         {
-                            stubWinnerId  = Context.LocalPlayerId;
+                            stubWinnerId  = newLocalHP <= 0 ? Context.ServerState?.Player2Id ?? "oponente_stub"
+                                          : Context.LocalPlayerId;
                             stubEndReason = MatchEndReason.HPDepleted;
                         }
                     }
@@ -379,12 +393,12 @@ namespace BrainDuel.Match.Core
                                             ? (acertou ? AnswerResult.Correct : AnswerResult.Incorrect)
                                             : AnswerResult.NotAnswered,
                             AnsweredId  = Context.SelectedAnswerId,
-                            DamageDealt = dmg,
+                            DamageDealt = dmg + stealAmount,
                             HPBefore    = localHP,
-                            HPAfter     = localHP,
+                            HPAfter     = newLocalHP,
                             WasShielded = false,
                             StreakAfter = newStreak,
-                            Breakdown   = new DamageBreakdown { BaseDamage = DamageConfig.BaseDamage, StreakBonus = streakBonus },
+                            Breakdown   = new DamageBreakdown { BaseDamage = DamageConfig.BaseDamage, StreakBonus = streakBonus, PowerUpBonus = betBonus, StolenHP = stealAmount },
                         },
                         Player2Result = new RoundPlayerResult
                         {
@@ -398,7 +412,7 @@ namespace BrainDuel.Match.Core
                             StreakAfter = 0,
                             Breakdown   = new DamageBreakdown(),
                         },
-                        Player1HP   = localHP,
+                        Player1HP   = newLocalHP,
                         Player2HP   = newOppHP,
                         IsMatchOver = matchOver,
                         WinnerId    = stubWinnerId,
@@ -814,6 +828,9 @@ namespace BrainDuel.Match.Core
             TransitionTo(MatchPhase.ThemeAndPowerUp);
         }
 
+        // Resposta correta da rodada atual (apenas em stub mode — usada pelo EliminateTwo)
+        public string CurrentStubCorrectAnswerId { get; private set; }
+
         // Chamado pelo ThemeAndPowerUpState após receber a resposta do StartQuestion
         public void ReceiveQuestionReveal(QuestionRevealPayload payload) =>
             HandleQuestionReveal(payload);
@@ -883,7 +900,7 @@ namespace BrainDuel.Match.Core
 
         private void HandlePowerUpActivated(PowerUpActivatedPayload p)
         {
-            // Repassado para o estado ativo (ex.: QuestionState aplica EliminateTwo na UI)
+            OnPowerUpActivatedReceived?.Invoke(p);
             (_currentState as QuestionState)?.OnPowerUpActivated(p);
         }
 
@@ -913,6 +930,21 @@ namespace BrainDuel.Match.Core
         public void NotificarAbandono()
         {
             PartyNetworkManager.Instance?.Broadcast(MessageType.OpponentAbandoned, new { });
+        }
+
+        // Para a partida imediatamente, dispara OnMatchEnded e transiciona para MatchEnd.
+        // Garante que stub conductor e timers não continuem após o abandono.
+        public void ForcarFimDePartida(MatchEndPayload payload)
+        {
+            if (_stubConductorCoroutine != null)
+            {
+                StopCoroutine(_stubConductorCoroutine);
+                _stubConductorCoroutine = null;
+            }
+            // Impede MatchEndState de disparar OnMatchEnded uma segunda vez
+            Context.LastRoundResult = null;
+            OnMatchEnded?.Invoke(payload);
+            TransitionTo(MatchPhase.MatchEnd);
         }
 
         private void HandleOpponentAbandoned(string playerId)
