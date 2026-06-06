@@ -121,73 +121,15 @@ public class StoreService : MonoBehaviour
 
     private void OnDirectPurchaseSuccess(PurchaseItemResult result, StoreItemData item, Action<PurchaseResult> onComplete)
     {
-        Debug.Log($"[StoreService] ✅ Compra concluída: ItemId={item.itemId}");
+        Debug.Log($"[StoreService] ✅ Compra concluída com sucesso: ItemId={item.itemId}");
 
         if (item.itemId.StartsWith("deck", StringComparison.OrdinalIgnoreCase))
         {
-            Debug.LogError($"[StoreService] ❌ Resposta inesperada do CloudScript");
-            
-            var purchaseResult = new PurchaseResult
+            if (PlayerDataService.Instance != null)
             {
-                Success = false,
-                ItemId = item.itemId,
-                Error = "Resposta inválida do servidor"
-            };
-            
-            onComplete?.Invoke(purchaseResult);
-            OnPurchaseFailed?.Invoke("Resposta inválida do servidor");
-            return;
+                PlayerDataService.Instance.AddDeckToProfile(item.itemId);
+            }
         }
-
-        var success = TryGetBool(resultData, "success");
-
-        if (!success)
-        {
-            resultData.TryGetValue("error", out var errorObj);
-            var errorMessage = errorObj?.ToString() ?? "Compra recusada";
-            
-            // Mapeamento de erros para mensagens amigáveis
-            if (errorMessage == "insufficient_balance")
-                errorMessage = "Saldo insuficiente";
-            else if (errorMessage == "item_not_found")
-            {
-                errorMessage = "Item nao encontrado";
-            }
-            else if (errorMessage == "already_owned")
-            {
-                errorMessage = "Item ja adquirido";
-            }
-            else if (errorMessage == "grant_failed_refunded")
-            {
-                errorMessage = "Falha ao entregar item. Valor reembolsado";
-            }
-
-            Debug.LogWarning($"[StoreService] Compra rejeitada: {errorMessage}");
-
-            var currentBalance = TryGetInt(resultData, "currentBalance");
-            if (currentBalance == 0)
-            {
-                currentBalance = TryGetInt(resultData, "newBalance");
-            }
-            
-            var purchaseResult = new PurchaseResult
-            {
-                Success = false,
-                ItemId = item.itemId,
-                CurrencyCode = item.virtualCurrency,
-                Error = errorMessage,
-                NewBalance = currentBalance
-            };
-            
-            onComplete?.Invoke(purchaseResult);
-            OnPurchaseFailed?.Invoke(errorMessage);
-            return;
-        }
-
-        // Sucesso na compra
-        var newBalance = TryGetInt(resultData, "newBalance");
-
-        Debug.Log($"[StoreService] ✅ Compra concluída com sucesso! ItemId={item.itemId}, Novo saldo={newBalance}");
 
         var successResult = new PurchaseResult
         {

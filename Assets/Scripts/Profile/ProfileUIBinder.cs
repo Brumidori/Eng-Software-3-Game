@@ -28,6 +28,7 @@ public class ProfileUIBinder : MonoBehaviour
     [SerializeField] private Transform decksContainer;
     [SerializeField] private DeckCardUI deckCardPrefab;
     [SerializeField] private ProfileManager profileManager;
+    [SerializeField] private ScrollRect decksScrollRect;
 
     public void Bind(PlayerProfileData data)
     {
@@ -166,16 +167,11 @@ public class ProfileUIBinder : MonoBehaviour
 
     private void BindDecks(List<PlayerDeckData> decks)
     {
-         Debug.Log($"[ProfileUIBinder] BindDecks chamado. decks={decks?.Count}, container={decksContainer}, prefab={deckCardPrefab}");
-    
-    if (decksContainer == null || deckCardPrefab == null)
-    {
-        Debug.LogError("[ProfileUIBinder] decksContainer ou deckCardPrefab é null!");
-        return;
-    }
-        
+        Debug.Log($"[ProfileUIBinder] BindDecks chamado. decks={decks?.Count}, container={decksContainer}, prefab={deckCardPrefab}");
+
         if (decksContainer == null || deckCardPrefab == null)
         {
+            Debug.LogError("[ProfileUIBinder] decksContainer ou deckCardPrefab é null!");
             return;
         }
 
@@ -184,11 +180,21 @@ public class ProfileUIBinder : MonoBehaviour
             profileManager = GetComponentInParent<ProfileManager>();
         }
 
+        // Auto-discover the ScrollRect if not set in the Inspector
+        if (decksScrollRect == null)
+        {
+            decksScrollRect = decksContainer.GetComponentInParent<ScrollRect>();
+        }
+
         if (clearExistingDecks)
         {
+            // SetParent(null) removes each child from the layout group immediately
+            // (before the end-of-frame Destroy), preventing incorrect content size calculations.
             for (int i = decksContainer.childCount - 1; i >= 0; i--)
             {
-                Destroy(decksContainer.GetChild(i).gameObject);
+                var child = decksContainer.GetChild(i);
+                child.SetParent(null);
+                Destroy(child.gameObject);
             }
         }
 
@@ -201,11 +207,18 @@ public class ProfileUIBinder : MonoBehaviour
         {
             var card = Instantiate(deckCardPrefab, decksContainer);
             card.Setup(deck, profileManager);
-                Debug.Log($"[ProfileUIBinder] Card instanciado: {deck.id} → GO={card.gameObject.name}");
-
+            Debug.Log($"[ProfileUIBinder] Card instanciado: {deck.id} → GO={card.gameObject.name}");
         }
-        
+
+        // Force layout rebuild so the ScrollRect content size is correct,
+        // then reset the scroll position to the top so the first deck is fully visible.
+        Canvas.ForceUpdateCanvases();
+        if (decksScrollRect != null)
+        {
+            decksScrollRect.verticalNormalizedPosition = 1f;
+        }
     }
+
 
     private static Sprite ResolveSprite(List<NamedSprite> mapping, string key)
     {

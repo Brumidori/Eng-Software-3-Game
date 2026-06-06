@@ -137,21 +137,9 @@ public class PlayerDataService : MonoBehaviour
     /// </summary>
     public void EquipPowerUp(PowerUpType type)
     {
-        cachedProfile = PlayerProfileData.CreateDefault();
-        if (!string.IsNullOrWhiteSpace(displayName))
-            cachedProfile.displayName = displayName;
-        cachedProfile.avatarId = "skinDefault";
-        cachedProfile.equippedDeckId = "deckHistoria";
-
-        string json = JsonUtility.ToJson(cachedProfile);
-        PlayFabService.Client.UpdateUserData(
-            new UpdateUserDataRequest
-            {
-                Data = new Dictionary<string, string> { { PlayerProfileKey, json } }
-            },
-            _ => Debug.Log($"[PlayerDataService] Power-up equipado salvo: {type}"),
-            e => Debug.LogError($"[PlayerDataService] Falha ao salvar power-up: {e.GenerateErrorReport()}")
-        );
+        cachedProfile ??= PlayerProfileData.CreateDefault();
+        cachedProfile.equippedPowerUp = type.ToString();
+        PersistProfile(cachedProfile, $"[PlayerDataService] Power-up equipado salvo: {type}");
     }
 
     /// <summary>
