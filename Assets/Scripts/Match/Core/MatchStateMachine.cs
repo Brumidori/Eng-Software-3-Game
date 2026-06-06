@@ -613,9 +613,14 @@ namespace BrainDuel.Match.Core
 
         public void SubmitAnswer(string answerId)
         {
-            if (Phase != MatchPhase.Question) return;
+            if (Phase != MatchPhase.Question)
+            {
+                Debug.LogWarning($"[Match] SubmitAnswer ignorado — Phase={Phase}, não é Question.");
+                return;
+            }
             if (Context.HasAnsweredThisRound) return;
 
+            Debug.Log($"[Match] SubmitAnswer enviando answerId={answerId} round={Context.CurrentRound}");
             Context.SubmitAnswer(answerId);
 
             if (Context.IsStubMode) return;
@@ -627,12 +632,16 @@ namespace BrainDuel.Match.Core
                 RoundNumber       = Context.CurrentRound,
                 AnswerId          = answerId,
                 ClientTimestampMs = Context.AnswerTimestampMs
-            }, onSuccess: _ =>
+            }, onSuccess: result =>
             {
-                // O resultado da rodada NÃO é processado aqui.
-                // Ambos os jogadores aguardam o timer expirar → TriggerProcessRound() garante
-                // que o Reveal aparece ao mesmo tempo para os dois.
-            });
+                try
+                {
+                    var j = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                    Debug.Log($"[Match] SubmitAnswer resposta: {j}");
+                }
+                catch { Debug.Log("[Match] SubmitAnswer: resposta recebida (parse ignorado)."); }
+            },
+            onError: err => Debug.LogWarning($"[Match] SubmitAnswer erro: {err}"));
         }
 
         public void ActivatePowerUp(PowerUpType type)

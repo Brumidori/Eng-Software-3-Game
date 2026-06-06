@@ -213,11 +213,13 @@ public class MatchMakingScreenController : MonoBehaviour
                     foreach (var m in result.Members)
                         if (m.Entity != null && m.Entity.Id != myEntityId)
                         {
-                            // Extrai o PlayFabId clássico dos atributos do ticket
+                            // Extrai o PlayFabId clássico dos atributos do ticket.
+                            // DataObject vem como tipo interno do SDK — re-serializa para parsear.
                             try
                             {
-                                var attrs = m.Attributes?.DataObject
-                                    as System.Collections.Generic.Dictionary<string, object>;
+                                var raw   = PlayFab.Json.PlayFabSimpleJson.SerializeObject(m.Attributes?.DataObject);
+                                var attrs = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<
+                                    System.Collections.Generic.Dictionary<string, object>>(raw);
                                 if (attrs != null && attrs.TryGetValue("PlayFabId", out var pfId))
                                     opponentPlayFabId = pfId?.ToString() ?? string.Empty;
                             }
