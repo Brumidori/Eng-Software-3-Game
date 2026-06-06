@@ -577,13 +577,26 @@ function removeFromActiveIndex(matchId) {
 // --- Handlers de partida ---
 
 handlers.CreateMatch = function (args) {
-    var matchId   = args.matchId;
-    var player1Id = args.player1Id;
+    var matchId = args.matchId;
+    // currentPlayerId é sempre o PlayFabId clássico do chamador — usa como fallback se player1Id vier vazio
+    var player1Id = isNonEmptyString(args.player1Id) ? args.player1Id : currentPlayerId;
     var player2Id = args.player2Id;
 
     var existing = loadMatchState(matchId);
-    if (existing && existing.IsActive)
+    if (existing && existing.IsActive) {
+        // Registra P2 se ainda estiver vazio e o chamador for diferente de P1
+        if (!isNonEmptyString(existing.Player2Id)
+                && isNonEmptyString(currentPlayerId)
+                && currentPlayerId !== existing.Player1Id) {
+            existing.Player2Id = currentPlayerId;
+            if (existing.Player2State) existing.Player2State.PlayerId = currentPlayerId;
+            // Atualiza ação de P2 na rodada atual, se existir
+            if (existing.CurrentRoundState && existing.CurrentRoundState.Player2Action)
+                existing.CurrentRoundState.Player2Action.PlayerId = currentPlayerId;
+            saveMatchState(existing);
+        }
         return { success: true, matchId: matchId, networkDescriptor: existing.PartyNetworkDescriptor };
+    }
 
     var p1PowerUp    = getEquippedPowerUp(player1Id);
     var p2PowerUp    = getEquippedPowerUp(player2Id);
@@ -687,7 +700,17 @@ handlers.StartQuestion = function (args) {
     if (state.Phase === "ThemeAndPowerUp") {
         state.Phase                 = "Question";
         state.PhaseStartTimestampMs = Date.now();
-        if (!saveMatchState(state)) return { error: "state_save_failed" };
+        try {
+            saveMatchState(state);
+        } catch (saveErr) {
+            // Conflito de escrita concorrente: o outro jogador já salvou a transição.
+            // Recarrega apenas o timestamp correto para sincronizar os timers.
+            try {
+                var reloaded = loadMatchState(args.matchId);
+                if (reloaded && reloaded.Phase === "Question")
+                    state.PhaseStartTimestampMs = reloaded.PhaseStartTimestampMs;
+            } catch (e2) { /* ignora */ }
+        }
     }
 
     var question = loadQuestion(state, state.CurrentRoundState.QuestionId);

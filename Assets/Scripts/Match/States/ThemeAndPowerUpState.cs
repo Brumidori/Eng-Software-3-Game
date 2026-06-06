@@ -72,7 +72,12 @@ namespace BrainDuel.Match.States
                     if (payload == null || string.IsNullOrEmpty(payload.QuestionText))
                     {
                         Debug.LogWarning($"[State] StartQuestion: payload inválido (tentativa {attempt + 1}) — {json}");
-                        ScheduleRetry(attempt);
+                        // round_mismatch com serverRound < clientRound:
+                        // processRoundInternal atrasado sobrescreveu StartNextRound — re-avança o servidor
+                        if (IsRoundBehind(json))
+                            Machine.StartCoroutine(AdvanceRoundThenRetry(attempt));
+                        else
+                            ScheduleRetry(attempt);
                         return;
                     }
 
@@ -102,6 +107,48 @@ namespace BrainDuel.Match.States
         {
             yield return new UnityEngine.WaitForSeconds(1f);
             TryGetQuestion(nextAttempt);
+        }
+
+        // Detecta round_mismatch onde serverRound < clientRound
+        private bool IsRoundBehind(string json)
+        {
+            try
+            {
+                var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<
+                    System.Collections.Generic.Dictionary<string, object>>(json);
+                if (dict == null) return false;
+                if (!dict.TryGetValue("reason", out var reason) || reason?.ToString() != "round_mismatch")
+                    return false;
+                long serverRound = 0, clientRound = 0;
+                if (dict.TryGetValue("serverRound", out var sr)) long.TryParse(sr?.ToString(), out serverRound);
+                if (dict.TryGetValue("clientRound", out var cr)) long.TryParse(cr?.ToString(), out clientRound);
+                return serverRound < clientRound;
+            }
+            catch { return false; }
+        }
+
+        // Chama StartNextRound para re-avançar o servidor e então retenta StartQuestion
+        private System.Collections.IEnumerator AdvanceRoundThenRetry(int attempt)
+        {
+            int round = Context.CurrentRound;
+            Debug.Log($"[State] StartNextRound recovery → round={round}");
+
+            bool done = false;
+            CloudScriptClient.Call("StartNextRound", new
+            {
+                matchId     = Context.MatchId,
+                roundNumber = round
+            }, onSuccess: _ => done = true,
+               onError:   err =>
+               {
+                   Debug.LogWarning($"[State] StartNextRound recovery falhou: {err}");
+                   done = true;
+               });
+
+            while (!done) yield return null;
+
+            yield return new UnityEngine.WaitForSeconds(0.5f);
+            TryGetQuestion(attempt);
         }
     }
 }

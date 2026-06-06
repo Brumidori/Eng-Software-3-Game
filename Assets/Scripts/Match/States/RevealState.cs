@@ -94,7 +94,6 @@ namespace BrainDuel.Match.States
                 roundNumber = nextRound
             }, onSuccess: result =>
             {
-                // Dispara a transição diretamente — não depende de Party broadcast
                 if (result == null) { Debug.LogError("[State] StartNextRound retornou null"); return; }
                 try
                 {
@@ -102,6 +101,13 @@ namespace BrainDuel.Match.States
                     var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<
                         System.Collections.Generic.Dictionary<string, object>>(json);
                     if (dict == null) return;
+
+                    // Não transiciona se o servidor retornou erro (ex: Match inativo)
+                    if (dict.ContainsKey("error"))
+                    {
+                        Debug.LogError($"[State] StartNextRound erro: {dict["error"]} | round={nextRound}");
+                        return;
+                    }
 
                     string themeId   = dict.TryGetValue("themeId",   out var tid) ? tid?.ToString() : string.Empty;
                     string themeName = dict.TryGetValue("themeName", out var tn)  ? tn?.ToString()  : themeId;
