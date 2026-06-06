@@ -249,18 +249,18 @@ public class DeckService : MonoBehaviour
     }
 
     /// <summary>
-    /// Retorna todas as cartas de um deck
+    /// Retorna todas as cartas de um deck (null se não carregado, sem log de erro)
     /// </summary>
     public List<Carta> GetDeck(string categoria)
     {
-        if (!decksCache.ContainsKey(categoria))
-        {
-            Debug.LogError($"[DeckService] ❌ Deck '{categoria}' não carregado!");
-            return null;
-        }
-
-        return decksCache[categoria];
+        decksCache.TryGetValue(categoria, out var deck);
+        return deck;
     }
+
+    /// <summary>
+    /// Verifica se o deck está no cache sem disparar logs de erro
+    /// </summary>
+    public bool IsDeckLoaded(string categoria) => decksCache.ContainsKey(categoria);
 
     /// <summary>
     /// Retorna o índice de categorias disponíveis

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Collections;
 using PlayFab;
 using PlayFab.ClientModels;
 using UnityEngine;
+using BrainDuel.Match;
 
 public class PurchaseResult
 {
@@ -84,8 +84,7 @@ public class StoreService : MonoBehaviour
     }
 
     /// <summary>
-    /// Realiza compra via CloudScript (server-authoritative) para maior segurança.
-    /// Valida saldo suficiente e existência do item no servidor.
+    /// Realiza compra via API direta do PlayFab (dedução + grant atômicos no servidor).
     /// </summary>
     public void PurchaseItemViaCloudScript(StoreItemData item, Action<PurchaseResult> onComplete = null)
     {
@@ -105,245 +104,65 @@ public class StoreService : MonoBehaviour
             return;
         }
 
-        var parameters = new Dictionary<string, object>
+        var request = new PurchaseItemRequest
         {
-            { "itemId", item.itemId },
-            { "virtualCurrency", item.virtualCurrency },
-            { "price", item.price },
-            { "storeId", item.storeId }
+            ItemId          = item.itemId,
+            VirtualCurrency = item.virtualCurrency,
+            Price           = item.price,
+            StoreId         = string.IsNullOrWhiteSpace(item.storeId) ? null : item.storeId
         };
 
-        var request = new ExecuteCloudScriptRequest
-        {
-            FunctionName = "PurchaseItemSecure",
-            FunctionParameter = parameters,
-            GeneratePlayStreamEvent = true
-        };
+        PlayFabService.Client.PurchaseItem(request,
+            result => OnDirectPurchaseSuccess(result, item, onComplete),
+            error  => OnCloudScriptPurchaseError(error, item, onComplete));
 
-        PlayFabService.Client.ExecuteCloudScript(request,
-            result => OnCloudScriptPurchaseSuccess(result, item, onComplete),
-            error => OnCloudScriptPurchaseError(error, item, onComplete));
-
-        Debug.Log($"[StoreService] Iniciando compra segura: ItemId={item.itemId}, Preço={item.price} {item.virtualCurrency}");
+        Debug.Log($"[StoreService] Iniciando compra: ItemId={item.itemId}, Preço={item.price} {item.virtualCurrency}");
     }
 
-    private void OnCloudScriptPurchaseSuccess(ExecuteCloudScriptResult result, StoreItemData item, Action<PurchaseResult> onComplete)
+    private void OnDirectPurchaseSuccess(PurchaseItemResult result, StoreItemData item, Action<PurchaseResult> onComplete)
     {
-        if (result.Error != null)
+        Debug.Log($"[StoreService] ✅ Compra concluída com sucesso: ItemId={item.itemId}");
+
+        if (item.itemId.StartsWith("deck", StringComparison.OrdinalIgnoreCase))
         {
-            var errorMsg = result.Error.Message ?? "Erro desconhecido no CloudScript";
-            Debug.LogError($"[StoreService] ❌ CloudScript retornou erro: {errorMsg}");
-            
-            var purchaseResult = new PurchaseResult
+            if (PlayerDataService.Instance != null)
             {
-                Success = false,
-                ItemId = item.itemId,
-                Error = errorMsg
-            };
-            
-            onComplete?.Invoke(purchaseResult);
-            OnPurchaseFailed?.Invoke(errorMsg);
-            return;
+                PlayerDataService.Instance.AddDeckToProfile(item.itemId);
+            }
         }
-
-        var resultData = TryExtractResultData(result.FunctionResult);
-        if (resultData == null)
-        {
-            Debug.LogError($"[StoreService] ❌ Resposta inesperada do CloudScript");
-            
-            var purchaseResult = new PurchaseResult
-            {
-                Success = false,
-                ItemId = item.itemId,
-                Error = "Resposta inválida do servidor"
-            };
-            
-            onComplete?.Invoke(purchaseResult);
-            OnPurchaseFailed?.Invoke("Resposta inválida do servidor");
-            return;
-        }
-
-        var success = TryGetBool(resultData, "success");
-
-        if (!success)
-        {
-            resultData.TryGetValue("error", out var errorObj);
-            var errorMessage = errorObj?.ToString() ?? "Compra recusada";
-            
-            // Mapeamento de erros para mensagens amigáveis
-            if (errorMessage == "insufficient_balance")
-                errorMessage = "Saldo insuficiente";
-            else if (errorMessage == "item_not_found")
-                errorMessage = "Item não encontrado";
-
-            Debug.LogWarning($"[StoreService] Compra rejeitada: {errorMessage}");
-
-            var currentBalance = TryGetInt(resultData, "currentBalance");
-            
-            var purchaseResult = new PurchaseResult
-            {
-                Success = false,
-                ItemId = item.itemId,
-                CurrencyCode = item.virtualCurrency,
-                Error = errorMessage,
-                NewBalance = currentBalance
-            };
-            
-            onComplete?.Invoke(purchaseResult);
-            OnPurchaseFailed?.Invoke(errorMessage);
-            return;
-        }
-
-        // Sucesso na compra
-        var newBalance = TryGetInt(resultData, "newBalance");
-
-        Debug.Log($"[StoreService] ✅ Compra concluída com sucesso! ItemId={item.itemId}, Novo saldo={newBalance}");
 
         var successResult = new PurchaseResult
         {
-            Success = true,
-            ItemId = item.itemId,
-            CurrencyCode = item.virtualCurrency,
+            Success       = true,
+            ItemId        = item.itemId,
+            CurrencyCode  = item.virtualCurrency,
             PriceDeducted = item.price,
-            NewBalance = newBalance
+            NewBalance    = 0
         };
 
         onComplete?.Invoke(successResult);
         OnPurchaseCompletedSecure?.Invoke(successResult);
+
+        if (InventoryService.Instance != null)
+        {
+            InventoryService.Instance.LoadInventory();
+        }
     }
 
     private void OnCloudScriptPurchaseError(PlayFabError error, StoreItemData item, Action<PurchaseResult> onComplete)
     {
-        var errorMsg = error?.GenerateErrorReport() ?? "Erro ao comunicar com o servidor";
-        Debug.LogError($"[StoreService] ❌ Erro na compra CloudScript: {errorMsg}");
+        var errorMsg = error?.GenerateErrorReport() ?? "Erro ao processar compra";
+        Debug.LogError($"[StoreService] ❌ Erro na compra: {errorMsg}");
 
-        var purchaseResult = new PurchaseResult
-        {
-            Success = false,
-            ItemId = item.itemId,
-            Error = "Falha ao processar compra"
-        };
+        string friendly = "Falha ao processar compra";
+        if (error?.Error == PlayFabErrorCode.InsufficientFunds)
+            friendly = "Saldo insuficiente";
+        else if (error?.Error == PlayFabErrorCode.ItemNotFound)
+            friendly = "Item não encontrado";
 
+        var purchaseResult = new PurchaseResult { Success = false, ItemId = item.itemId, Error = friendly };
         onComplete?.Invoke(purchaseResult);
-        OnPurchaseFailed?.Invoke("Falha ao processar compra");
-    }
-
-    private Dictionary<string, object> TryExtractResultData(object functionResult)
-    {
-        if (functionResult == null)
-            return null;
-
-        // Se for Dictionary, retorna diretamente
-        if (functionResult is Dictionary<string, object> dict)
-            return dict;
-
-        // Muitos retornos do PlayFab chegam como IDictionary (não genérico)
-        if (functionResult is IDictionary<string, object> genericDict)
-        {
-            var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-            foreach (var pair in genericDict)
-            {
-                map[pair.Key] = pair.Value;
-            }
-
-            return map;
-        }
-
-        if (functionResult is IDictionary nonGenericDict)
-        {
-            var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-            foreach (DictionaryEntry entry in nonGenericDict)
-            {
-                if (entry.Key == null)
-                {
-                    continue;
-                }
-
-                map[entry.Key.ToString()] = entry.Value;
-            }
-
-            return map.Count > 0 ? map : null;
-        }
-
-        // Se for string (JSON), tenta parsear
-        if (functionResult is string json)
-        {
-            try
-            {
-                var parsed = JsonUtility.FromJson<PurchaseResultJson>(json);
-                return new Dictionary<string, object>
-                {
-                    { "success", parsed.success },
-                    { "error", parsed.error },
-                    { "itemId", parsed.itemId },
-                    { "currencyCode", parsed.currencyCode },
-                    { "newBalance", parsed.newBalance },
-                    { "currentBalance", parsed.currentBalance }
-                };
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning($"[StoreService] Erro ao parsear JSON: {ex.Message}");
-            }
-        }
-
-        return null;
-    }
-
-    private static bool TryGetBool(Dictionary<string, object> data, string key)
-    {
-        if (data == null || string.IsNullOrWhiteSpace(key) || !data.TryGetValue(key, out var raw) || raw == null)
-        {
-            return false;
-        }
-
-        if (raw is bool boolValue)
-        {
-            return boolValue;
-        }
-
-        var text = raw.ToString();
-        if (bool.TryParse(text, out var parsedBool))
-        {
-            return parsedBool;
-        }
-
-        if (int.TryParse(text, out var parsedInt))
-        {
-            return parsedInt != 0;
-        }
-
-        return false;
-    }
-
-    private static int TryGetInt(Dictionary<string, object> data, string key)
-    {
-        if (data == null || string.IsNullOrWhiteSpace(key) || !data.TryGetValue(key, out var raw) || raw == null)
-        {
-            return 0;
-        }
-
-        if (raw is int intValue)
-        {
-            return intValue;
-        }
-
-        if (raw is long longValue)
-        {
-            return (int)longValue;
-        }
-
-        if (raw is float floatValue)
-        {
-            return (int)floatValue;
-        }
-
-        if (raw is double doubleValue)
-        {
-            return (int)doubleValue;
-        }
-
-        return int.TryParse(raw.ToString(), out var parsed) ? parsed : 0;
+        OnPurchaseFailed?.Invoke(friendly);
     }
 
     private void OnLoadCatalogSuccess(GetCatalogItemsResult result, string catalogVersion, Action<List<StoreItemData>> onSuccess)
@@ -473,6 +292,20 @@ public class StoreService : MonoBehaviour
         }
 
         return string.Empty;
+    }
+
+    private static PowerUpType ResolvePowerUpFromItemId(string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(itemId)) return PowerUpType.None;
+        switch (itemId.ToLowerInvariant())
+        {
+            case "itemescudosimples": return PowerUpType.SimpleShield;
+            case "itemescudoduplo":  return PowerUpType.DoubleShield;
+            case "itemeliminardois": return PowerUpType.EliminateTwo;
+            case "itemaposta":       return PowerUpType.Bet;
+            case "itemroubo":        return PowerUpType.Steal;
+            default:                 return PowerUpType.None;
+        }
     }
 
     private bool ValidateAuth()

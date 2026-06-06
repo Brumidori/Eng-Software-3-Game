@@ -31,6 +31,7 @@ namespace BrainDuel.Server
         // Chave no Title Data com os IDs dos decks iniciais
         // Valor esperado: JSON array de strings, ex. ["deckHistoria","deckCiencia"]
         private const string StarterDecksKey   = "starter_decks";
+        private const string StarterAvatarSkinId = "skinDefault";
 
         // Cache de decks em memória — persiste durante a vida da instância Azure Function.
         // Evita múltiplas leituras ao Title Data para a mesma partida.
@@ -624,6 +625,7 @@ namespace BrainDuel.Server
 
             // Lê a lista de decks iniciais do Title Data (configurável sem redeploy)
             List<string> starterIds = await LoadStarterDeckIds(catalogVer);
+            AddIfMissing(starterIds, StarterAvatarSkinId);
 
             List<string> granted;
             try
@@ -681,6 +683,15 @@ namespace BrainDuel.Server
 
         private static List<string> DefaultStarterDecks()
             => new List<string> { "deckHistoria", "deckCiencia" };
+
+        private static void AddIfMissing(List<string> itemIds, string itemId)
+        {
+            if (itemIds == null || string.IsNullOrWhiteSpace(itemId))
+                return;
+
+            if (!itemIds.Any(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase)))
+                itemIds.Add(itemId);
+        }
 
         // ----------------------------------------------------------
         // Party broadcast (via PlayFab Party Management API)
