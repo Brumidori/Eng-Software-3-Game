@@ -139,16 +139,7 @@ public class PlayerDataService : MonoBehaviour
     {
         cachedProfile ??= PlayerProfileData.CreateDefault();
         cachedProfile.equippedPowerUp = type.ToString();
-
-        string json = JsonUtility.ToJson(cachedProfile);
-        PlayFabService.Client.UpdateUserData(
-            new UpdateUserDataRequest
-            {
-                Data = new Dictionary<string, string> { { PlayerProfileKey, json } }
-            },
-            _ => Debug.Log($"[PlayerDataService] Power-up equipado salvo: {type}"),
-            e => Debug.LogError($"[PlayerDataService] Falha ao salvar power-up: {e.GenerateErrorReport()}")
-        );
+        PersistProfile(cachedProfile, $"[PlayerDataService] Power-up equipado salvo: {type}");
     }
 
     /// <summary>

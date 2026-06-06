@@ -121,26 +121,13 @@ public class StoreService : MonoBehaviour
 
     private void OnDirectPurchaseSuccess(PurchaseItemResult result, StoreItemData item, Action<PurchaseResult> onComplete)
     {
-        Debug.Log($"[StoreService] ✅ Compra concluída: ItemId={item.itemId}");
+        Debug.Log($"[StoreService] ✅ Compra concluída com sucesso: ItemId={item.itemId}");
 
         if (item.itemId.StartsWith("deck", StringComparison.OrdinalIgnoreCase))
         {
-            // Deck: adiciona ao player_profile usando o ItemId exato do catálogo
             if (PlayerDataService.Instance != null)
-                PlayerDataService.Instance.AddDeckToProfile(item.itemId);
-            else
-                Debug.LogWarning("[StoreService] PlayerDataService não encontrado para atualizar deck no perfil.");
-        }
-        else
-        {
-            // Power-up ou outro item
-            var resolvedPowerUp = ResolvePowerUpFromItemId(item.itemId);
-            if (resolvedPowerUp != PowerUpType.None)
             {
-                if (PlayerDataService.Instance != null)
-                    PlayerDataService.Instance.EquipPowerUp(resolvedPowerUp);
-                else
-                    Debug.LogWarning("[StoreService] PlayerDataService não encontrado para equipar power-up.");
+                PlayerDataService.Instance.AddDeckToProfile(item.itemId);
             }
         }
 
@@ -155,6 +142,11 @@ public class StoreService : MonoBehaviour
 
         onComplete?.Invoke(successResult);
         OnPurchaseCompletedSecure?.Invoke(successResult);
+
+        if (InventoryService.Instance != null)
+        {
+            InventoryService.Instance.LoadInventory();
+        }
     }
 
     private void OnCloudScriptPurchaseError(PlayFabError error, StoreItemData item, Action<PurchaseResult> onComplete)
@@ -335,3 +327,16 @@ public class StoreService : MonoBehaviour
 }
 
 /// <summary>
+/// Classe helper para parsear resposta JSON do CloudScript PurchaseItemSecure
+/// </summary>
+[System.Serializable]
+public class PurchaseResultJson
+{
+    public bool success;
+    public string error;
+    public string itemId;
+    public string currencyCode;
+    public int priceDeducted;
+    public int newBalance;
+    public int currentBalance;
+}

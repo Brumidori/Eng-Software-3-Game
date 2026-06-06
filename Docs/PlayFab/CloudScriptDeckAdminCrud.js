@@ -117,6 +117,7 @@ var DECK_INDEX_KEY = "deck_index";
 var ROLE_KEY = "role";
 var ADMIN_ROLE = "admin";
 var DEFAULT_CATALOG_VERSION = "mainCatalog";
+var DEFAULT_STARTER_SKIN_ID = "skinDefault";
 
 handlers.ValidatePlayerRole = function (args, context) {
     var roleResult = getCurrentPlayerRole();
@@ -140,6 +141,7 @@ function grantStarterDecksCore(args, context) {
 
         var catalogResult = server.GetCatalogItems({ CatalogVersion: catalogVersion });
         var eligibleItemIds = findStarterDeckItemIds(catalogResult);
+        addUniqueItemId(eligibleItemIds, DEFAULT_STARTER_SKIN_ID);
 
         if (eligibleItemIds.length === 0) {
             return fail("no starter decks configured for catalog version: " + catalogVersion);
@@ -595,6 +597,21 @@ function findStarterDeckItemIds(catalogResult) {
     }
 
     return eligible;
+}
+
+function addUniqueItemId(itemIds, itemId) {
+    if (!Array.isArray(itemIds) || !isNonEmptyString(itemId)) {
+        return;
+    }
+
+    var normalized = String(itemId).toLowerCase();
+    for (var i = 0; i < itemIds.length; i++) {
+        if (String(itemIds[i]).toLowerCase() === normalized) {
+            return;
+        }
+    }
+
+    itemIds.push(itemId);
 }
 
 function isStarterDeckCatalogItem(item) {

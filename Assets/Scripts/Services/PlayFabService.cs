@@ -175,6 +175,6 @@ public class PlayFabService : MonoBehaviour
     /// </summary>
     public bool IsLoggedIn()
     {
-        return PlayFabSettings.staticPlayer.IsEntityLoggedIn();
+        return PlayFabClientAPI.IsClientLoggedIn();
     }
 }

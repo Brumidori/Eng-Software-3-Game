@@ -574,7 +574,180 @@ function removeFromActiveIndex(matchId) {
     if (idx !== -1) { ids.splice(idx, 1); saveActiveIndex(ids); }
 }
 
-// --- Handlers de partida ---
+// ============================================================
+// PERFIL DO JOGADOR
+// Atualiza o avatar equipado no payload player_profile.
+// Valida posse da skin no inventário antes de persistir.
+// ============================================================
+
+handlers.EquipAvatarSkin = function(args) {
+    var avatarId = args && args.avatarId ? String(args.avatarId) : "";
+
+    if (!avatarId)
+        throw new Error("avatarId inválido");
+
+    if (avatarId.toLowerCase().indexOf("skin") !== 0)
+        throw new Error("avatarId inválido para skin");
+
+    var inventory = server.GetUserInventory({ PlayFabId: currentPlayerId });
+    var items = inventory && inventory.Inventory ? inventory.Inventory : [];
+    var ownsSkin = false;
+
+    for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (item && item.ItemId && String(item.ItemId).toLowerCase() === avatarId.toLowerCase()) {
+            ownsSkin = true;
+            break;
+        }
+    }
+
+    if (!ownsSkin)
+        throw new Error("Skin não encontrada no inventário do jogador");
+
+    var userData = server.GetUserData({
+        PlayFabId: currentPlayerId,
+        Keys: ["player_profile"]
+    });
+
+    var profileJson = userData && userData.Data && userData.Data.player_profile ? userData.Data.player_profile.Value : null;
+    var profile = {};
+
+    if (profileJson) {
+        try {
+            profile = JSON.parse(profileJson) || {};
+        } catch (e) {
+            profile = {};
+        }
+    }
+
+    profile.avatarId = avatarId;
+
+    server.UpdateUserData({
+        PlayFabId: currentPlayerId,
+        Data: {
+            player_profile: JSON.stringify(profile)
+        }
+    });
+
+    return {
+        success: true,
+        avatarId: avatarId
+    };
+};
+
+// ============================================================
+// LOJA
+// Compra server-authoritative: valida saldo, debita moeda,
+// concede o item no inventario e reembolsa se a concessao falhar.
+// ============================================================
+
+handlers.PurchaseItemSecure = function (args, context) {
+    var itemId          = args && args.itemId          ? String(args.itemId)          : null;
+    var virtualCurrency = args && args.virtualCurrency ? String(args.virtualCurrency) : null;
+    var price           = args && args.price           ? parseInt(args.price, 10)     : 0;
+    var storeId         = args && args.storeId         ? String(args.storeId)         : "store_default";
+    var catalogVersion  = "mainCatalog";
+
+    if (!itemId)          return { success: false, error: "itemId is required" };
+    if (!virtualCurrency) return { success: false, error: "virtualCurrency is required" };
+    if (!price || price <= 0) return { success: false, error: "price must be > 0" };
+
+    var inventory      = server.GetUserInventory({ PlayFabId: currentPlayerId });
+    var currentBalance = inventory.VirtualCurrency && inventory.VirtualCurrency[virtualCurrency]
+        ? inventory.VirtualCurrency[virtualCurrency] : 0;
+
+    var isUniqueItem = itemId.toLowerCase().indexOf("deck") === 0
+        || itemId.toLowerCase().indexOf("skin") === 0;
+
+    if (isUniqueItem && inventory.Inventory) {
+        for (var ownedIndex = 0; ownedIndex < inventory.Inventory.length; ownedIndex++) {
+            var ownedItem = inventory.Inventory[ownedIndex];
+            if (ownedItem && ownedItem.ItemId && ownedItem.ItemId.toLowerCase() === itemId.toLowerCase()) {
+                return {
+                    success: false,
+                    error: "already_owned",
+                    itemId: itemId,
+                    currencyCode: virtualCurrency,
+                    currentBalance: currentBalance
+                };
+            }
+        }
+    }
+
+    if (currentBalance < price) {
+        return { success: false, error: "insufficient_balance", itemId: itemId, currencyCode: virtualCurrency, price: price, currentBalance: currentBalance };
+    }
+
+    var catalogItems = server.GetCatalogItems({ CatalogVersion: catalogVersion });
+    var itemFound    = false;
+    if (catalogItems && catalogItems.Catalog) {
+        for (var i = 0; i < catalogItems.Catalog.length; i++) {
+            if (catalogItems.Catalog[i].ItemId === itemId) { itemFound = true; break; }
+        }
+    }
+    if (!itemFound) return { success: false, error: "item_not_found", itemId: itemId };
+
+    var subtractResult = server.SubtractUserVirtualCurrency({
+        PlayFabId: currentPlayerId,
+        VirtualCurrency: virtualCurrency,
+        Amount: price
+    });
+
+    var newBalance = subtractResult.Balance !== undefined ? subtractResult.Balance : (currentBalance - price);
+    var grantResult = null;
+
+    try {
+        grantResult = server.GrantItemsToUser({
+            PlayFabId: currentPlayerId,
+            CatalogVersion: catalogVersion,
+            ItemIds: [itemId],
+            Annotation: "PurchaseItemSecure:" + storeId
+        });
+    } catch (grantError) {
+        var refundResult = server.AddUserVirtualCurrency({
+            PlayFabId: currentPlayerId,
+            VirtualCurrency: virtualCurrency,
+            Amount: price
+        });
+
+        return {
+            success: false,
+            error: "grant_failed_refunded",
+            itemId: itemId,
+            currencyCode: virtualCurrency,
+            refundedAmount: price,
+            newBalance: refundResult.Balance !== undefined ? refundResult.Balance : currentBalance,
+            details: grantError && grantError.message ? grantError.message : String(grantError)
+        };
+    }
+
+    var grantedItemInstanceIds = [];
+    if (grantResult && grantResult.ItemGrantResults) {
+        for (var grantIndex = 0; grantIndex < grantResult.ItemGrantResults.length; grantIndex++) {
+            var granted = grantResult.ItemGrantResults[grantIndex];
+            if (granted && granted.ItemInstanceId) {
+                grantedItemInstanceIds.push(granted.ItemInstanceId);
+            }
+        }
+    }
+
+    return {
+        success: true,
+        operation: "purchase",
+        itemId: itemId,
+        currencyCode: virtualCurrency,
+        priceDeducted: price,
+        newBalance: newBalance,
+        grantedItemInstanceIds: grantedItemInstanceIds,
+        storeId: storeId
+    };
+};
+
+// ============================================================
+// HANDLER: CreateMatch
+// Chamado pelo cliente após matchmaking encontrar partida.
+// Idempotente — retorna estado existente se já criado.
+// ============================================================
 
 handlers.CreateMatch = function (args) {
     var matchId = args.matchId;
