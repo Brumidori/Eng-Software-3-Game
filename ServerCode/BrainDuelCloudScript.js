@@ -714,6 +714,86 @@ handlers.StartNextRound = function (args) {
     };
 };
 
+// Barreira de sincronização: ambos os jogadores devem chamar PlayerReady antes de
+// começar a rodada 1. O segundo jogador a confirmar cria a rodada com um timestamp
+// autoritativo único, garantindo que os dois timers partam do mesmo ponto.
+handlers.PlayerReady = function(args) {
+    var state = loadMatchState(args.matchId);
+    if (!state || !state.IsActive) return { error: "Match inativo" };
+
+    // Idempotente: rodada 1 já iniciada (inclui retries e clientes legados que chamam StartNextRound diretamente)
+    if (state.CurrentRound >= 1 && state.CurrentRoundState) {
+        return {
+            status:             "ready",
+            roundNumber:        state.CurrentRound,
+            themeId:            state.CurrentRoundState.ThemeId,
+            themeName:          state.CurrentRoundState.ThemeName,
+            serverTimestampMs:  state.PhaseStartTimestampMs,
+            themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
+            questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
+            player1Id:          state.Player1Id,
+            player2Id:          state.Player2Id,
+            player1State:       state.Player1State,
+            player2State:       state.Player2State
+        };
+    }
+
+    // Careful merge: recarrega estado fresco antes de salvar IsReady para não
+    // sobrescrever o IsReady do outro jogador em chamadas concorrentes.
+    var ps = getPlayerState(state, currentPlayerId);
+    if (ps && !ps.IsReady) {
+        var freshState = loadMatchState(args.matchId);
+        if (freshState && freshState.CurrentRound < 1) {
+            var freshPs = getPlayerState(freshState, currentPlayerId);
+            if (freshPs) { freshPs.IsReady = true; saveMatchState(freshState); state = freshState; }
+        } else if (freshState) {
+            state = freshState;
+        }
+    }
+
+    var p1Ready = state.Player1State && state.Player1State.IsReady;
+    var p2Ready = state.Player2State && state.Player2State.IsReady;
+
+    if (!p1Ready || !p2Ready) {
+        return { status: "waiting", readyCount: (p1Ready ? 1 : 0) + (p2Ready ? 1 : 0) };
+    }
+
+    // Ambos prontos — inicia rodada 1 com timestamp único e autoritativo
+    var question = getQuestionForRound(state, 1);
+    if (!question) return { error: "Pergunta não encontrada para rodada 1" };
+
+    state.CurrentRound          = 1;
+    state.Phase                 = "ThemeAndPowerUp";
+    state.PhaseStartTimestampMs = Date.now();
+    state.CurrentRoundState     = {
+        RoundNumber:     1,
+        QuestionId:      question.QuestionId,
+        ThemeId:         question.ThemeId,
+        ThemeName:       question.ThemeName,
+        CorrectAnswerId: question.CorrectOptionId,
+        Player1Action:   makeAction(state.Player1Id),
+        Player2Action:   makeAction(state.Player2Id),
+        IsProcessed:     false,
+        Player1Result:   null,
+        Player2Result:   null
+    };
+    saveMatchState(state);
+
+    return {
+        status:             "ready",
+        roundNumber:        1,
+        themeId:            question.ThemeId,
+        themeName:          question.ThemeName,
+        serverTimestampMs:  state.PhaseStartTimestampMs,
+        themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
+        questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
+        player1Id:          state.Player1Id,
+        player2Id:          state.Player2Id,
+        player1State:       state.Player1State,
+        player2State:       state.Player2State
+    };
+};
+
 handlers.StartQuestion = function (args) {
     
     var state = loadMatchState(args.matchId);
@@ -762,21 +842,43 @@ handlers.StartQuestion = function (args) {
 };
 
 handlers.SubmitAnswer = function (args) {
-    
+
     var playerId = currentPlayerId;
     var state    = loadMatchState(args.matchId);
 
     if (!state)            return { error: "Match inativo", reason: "not_found", matchId: args.matchId };
-    if (!state.IsActive)   return { error: "Match inativo", reason: "ended", endReason: state.EndReason, winnerId: state.WinnerId };    if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round", serverRound: state.CurrentRound, clientRound: args.roundNumber };
+    if (!state.IsActive)   return { error: "Match inativo", reason: "ended", endReason: state.EndReason, winnerId: state.WinnerId };
+    // Se o servidor ainda não avançou para a rodada do cliente (eventual consistency),
+    // tenta uma leitura fresca antes de rejeitar.
+    if (state.CurrentRound !== args.roundNumber) {
+        var freshCheck = loadMatchState(args.matchId);
+        if (freshCheck && freshCheck.CurrentRound === args.roundNumber)
+            state = freshCheck;
+        else
+            return { status: "wrong_round", serverRound: state.CurrentRound, clientRound: args.roundNumber };
+    }
     if (state.Phase !== "Question")               return { status: "wrong_phase", serverPhase: state.Phase };
 
     var action = getPlayerAction(state, playerId);
     if (action.HasAnswered) return { status: "already_answered" };
 
-    action.AnswerId          = args.answerId;
-    action.AnswerTimestampMs = args.clientTimestampMs || Date.now();
-    action.HasAnswered       = true;
-    saveMatchState(state);
+    // Recarrega estado fresco antes de salvar para não sobrescrever a resposta
+    // concorrente do outro jogador (race condition em respostas simultâneas).
+    var stateParaSalvar = loadMatchState(args.matchId);
+    if (stateParaSalvar && stateParaSalvar.CurrentRound === args.roundNumber && stateParaSalvar.Phase === "Question") {
+        var actionFresco = getPlayerAction(stateParaSalvar, playerId);
+        if (actionFresco.HasAnswered) return { status: "already_answered" };
+        actionFresco.AnswerId          = args.answerId;
+        actionFresco.AnswerTimestampMs = args.clientTimestampMs || Date.now();
+        actionFresco.HasAnswered       = true;
+        saveMatchState(stateParaSalvar);
+        state = stateParaSalvar;
+    } else {
+        action.AnswerId          = args.answerId;
+        action.AnswerTimestampMs = args.clientTimestampMs || Date.now();
+        action.HasAnswered       = true;
+        saveMatchState(state);
+    }
 
     var roundResult = null;
     if (bothPlayersAnswered(state)) roundResult = processRoundInternal(state);
@@ -1085,6 +1187,7 @@ function makePlayerState(playerId, displayName, level, equippedPowerUp) {
         HP:                      MATCH_CONFIG.InitialHP,
         Streak:                  0,
         HasUsedPowerUp:          false,
+        IsReady:                 false,
         EquippedPowerUp:         equippedPowerUp || "None",
         DoubleShieldCharges:     0,
         IsConnected:             true,

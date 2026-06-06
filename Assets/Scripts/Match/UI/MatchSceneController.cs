@@ -715,6 +715,7 @@ namespace BrainDuel.Match.UI
 
         // Congela o painel de pergunta: timer em 0, botões não-interativos.
         // Chamado ao responder OU quando o tempo esgota.
+        // ProcessRound é responsabilidade do QuestionState — não disparar aqui.
         void CongelarPainelPergunta()
         {
             PararTimer();
@@ -727,9 +728,6 @@ namespace BrainDuel.Match.UI
             if (opcaoButtons != null)
                 foreach (var btn in opcaoButtons)
                     if (btn != null) btn.interactable = false;
-
-            // Em modo real, solicita ao servidor que processe a rodada (caso de timeout)
-            stateMachine?.TriggerProcessRound();
         }
 
         // ----------------------------------------------------------

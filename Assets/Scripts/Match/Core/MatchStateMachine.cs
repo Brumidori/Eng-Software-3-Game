@@ -43,6 +43,7 @@ namespace BrainDuel.Match.Core
         private Dictionary<MatchPhase, BaseMatchState> _states;
         private ReconnectionManager                    _reconnectionManager;
         private Coroutine                              _stubConductorCoroutine;
+        private int                                    _lastHandledRound = -1;
 
         private struct StubRoundData { public string ThemeName; public Carta Carta; }
         private StubRoundData[] _stubRoundPool;
@@ -157,47 +158,82 @@ namespace BrainDuel.Match.Core
             }
             else
             {
-                bool roundStarted = false;
-                CloudScriptClient.Call("StartNextRound",
-                    new { matchId = Context.MatchId, roundNumber = 1 },
-                    onSuccess: result =>
-                    {
-                        // Verifica se o servidor retornou erro (ex: "Match inativo" — CreateMatch não foi chamado)
-                        if (result != null)
-                        {
-                            try
-                            {
-                                var chkJson = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
-                                var chk     = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<Dictionary<string, object>>(chkJson);
-                                if (chk != null && chk.ContainsKey("error"))
-                                {
-                                    Debug.LogError($"[Match] StartNextRound erro do servidor: {chk["error"]} | matchId={Context.MatchId}");
-                                    roundStarted = true;
-                                    return;
-                                }
-                            }
-                            catch { /* ignora falha no check, continua normalmente */ }
-                        }
+                yield return StartCoroutine(PollPlayerReady());
+            }
+        }
 
-                        if (result != null && Context.ServerState == null)
-                            InicializarServerStateDoRetorno(result);
+        // Faz polling ao CloudScript PlayerReady até o servidor confirmar que ambos
+        // os jogadores estão prontos. Só então inicia a rodada 1 com o timestamp
+        // autoritativo do servidor — garantindo que os dois timers partam do mesmo ponto.
+        private IEnumerator PollPlayerReady()
+        {
+            const float pollInterval = 1.5f;
+            const float timeout      = 60f;
+            float       elapsed      = 0f;
 
-                        // Dispara a transição de fase diretamente — não depende de Party broadcast
-                        var payload = ParsearRoundStart(result, 1);
-                        if (payload != null)
-                            HandleRoundStart(payload);
+            Debug.Log("[Match] Aguardando oponente (PlayerReady)…");
 
-                        roundStarted = true;
-                    },
-                    onError: _ => roundStarted = true);
+            while (elapsed < timeout)
+            {
+                bool   callCompleted = false;
+                object callResult    = null;
+                bool   callErrored   = false;
+
+                CloudScriptClient.Call("PlayerReady",
+                    new { matchId = Context.MatchId },
+                    onSuccess: result => { callResult = result; callCompleted = true; },
+                    onError:   _      => { callErrored = true;  callCompleted = true; });
 
                 float waited = 0f;
-                while (!roundStarted && waited < 5f)
+                while (!callCompleted && waited < 8f)
                 {
                     waited += Time.deltaTime;
                     yield return null;
                 }
+
+                if (!callErrored && callResult != null)
+                {
+                    string status = null;
+                    try
+                    {
+                        var json = PlayFab.Json.PlayFabSimpleJson.SerializeObject(callResult);
+                        var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<Dictionary<string, object>>(json);
+                        if (dict != null)
+                        {
+                            if (dict.ContainsKey("error"))
+                            {
+                                Debug.LogError($"[Match] PlayerReady erro: {dict["error"]}");
+                                yield break;
+                            }
+                            dict.TryGetValue("status", out var s);
+                            status = s?.ToString();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[Match] PlayerReady parse falhou: {ex.Message}");
+                    }
+
+                    if (status == "ready")
+                    {
+                        Debug.Log("[Match] Ambos prontos — iniciando rodada 1.");
+                        if (Context.ServerState == null)
+                            InicializarServerStateDoRetorno(callResult);
+
+                        var payload = ParsearRoundStart(callResult, 1);
+                        if (payload != null)
+                            HandleRoundStart(payload);
+                        yield break;
+                    }
+
+                    Debug.Log($"[Match] PlayerReady: aguardando oponente ({elapsed:F0}s)…");
+                }
+
+                yield return new WaitForSeconds(pollInterval);
+                elapsed += pollInterval;
             }
+
+            Debug.LogError("[Match] PlayerReady timeout — oponente não confirmou em 60s.");
         }
 
         public void Initialize(MatchContext context)
@@ -696,53 +732,6 @@ namespace BrainDuel.Match.Core
         }
 
         // ----------------------------------------------------------
-        // Processamento de rodada por timeout (chamado pelo UI quando o timer esgota)
-        // ----------------------------------------------------------
-
-        public void TriggerProcessRound()
-        {
-            if (Context.IsStubMode || Phase != MatchPhase.Question) return;
-
-            CloudScriptClient.Call("ProcessRound",
-                new { matchId = Context.MatchId, roundNumber = Context.CurrentRound },
-                onSuccess: result =>
-                {
-                    if (result == null) return;
-                    try
-                    {
-                        var json        = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
-                        var roundResult = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<RoundResultPayload>(json);
-                        if (roundResult != null && !string.IsNullOrEmpty(roundResult.CorrectAnswerId))
-                        {
-                            HandleRoundResult(roundResult);
-                        }
-                        else if (Phase == MatchPhase.Question)
-                        {
-                            // Pendente — timer do cliente e do servidor ligeiramente dessincronizados.
-                            // Retenta em 1.5s para destravar a partida.
-                            Debug.Log("[Match] TriggerProcessRound pendente — retentando em 1.5s.");
-                            StartCoroutine(RetryTriggerProcessRound());
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogWarning($"[Match] TriggerProcessRound parse falhou: {ex.Message}");
-                    }
-                },
-                onError: err =>
-                {
-                    Debug.LogWarning($"[Match] ProcessRound falhou: {err}");
-                    if (Phase == MatchPhase.Question)
-                        StartCoroutine(RetryTriggerProcessRound());
-                });
-        }
-
-        private IEnumerator RetryTriggerProcessRound()
-        {
-            yield return new WaitForSeconds(1.5f);
-            TriggerProcessRound();
-        }
-
         private RoundStartPayload ParsearRoundStart(object result, int roundNumber)
         {
             if (result == null) return null;
@@ -939,6 +928,11 @@ namespace BrainDuel.Match.Core
 
         private void HandleRoundResult(RoundResultPayload p)
         {
+            // Ignora resultados duplicados para a mesma rodada (podem chegar de
+            // QuestionState e TriggerProcessRound ao mesmo tempo).
+            if (p.RoundNumber <= _lastHandledRound) return;
+            _lastHandledRound = p.RoundNumber;
+
             Context.LastRoundResult = p;
 
             var localResult    = Context.GetLocalResult(p);

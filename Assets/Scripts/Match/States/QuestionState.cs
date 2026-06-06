@@ -97,7 +97,10 @@ namespace BrainDuel.Match.States
         private System.Collections.IEnumerator RetryAfterDelay(float seconds)
         {
             yield return new UnityEngine.WaitForSeconds(seconds);
-            RequestProcessRound();
+            // Não retenta se a máquina já avançou para outra fase: evita
+            // chamar HandleRoundResult fora da fase Question e sobrescrever HP.
+            if (Machine.Phase == MatchPhase.Question)
+                RequestProcessRound();
         }
     }
 }
