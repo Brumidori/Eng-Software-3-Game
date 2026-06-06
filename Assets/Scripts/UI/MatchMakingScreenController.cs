@@ -180,7 +180,8 @@ public class MatchMakingScreenController : MonoBehaviour
     private void HandleMatchFound(string matchId)
     {
         BrainDuel.Match.Core.MatchSessionData.MatchId       = matchId;
-        BrainDuel.Match.Core.MatchSessionData.LocalPlayerId = PlayFab.PlayFabSettings.staticPlayer?.EntityId;
+        // PlayFabId clássico — necessário para o CloudScript V1 identificar corretamente o jogador
+        BrainDuel.Match.Core.MatchSessionData.LocalPlayerId = PlayFab.PlayFabSettings.staticPlayer?.PlayFabId;
         // IsRealMatch é definido em BuscarNomeEIniciar após GetMatch confirmar a partida real
 
         StopAnimations();
@@ -189,26 +190,40 @@ public class MatchMakingScreenController : MonoBehaviour
 
     private IEnumerator BuscarNomeEIniciar()
     {
-        // 1. Verifica se é partida real consultando o PlayFab Matchmaking
-        string opponentId  = string.Empty;
-        bool   matchFetched = false;
+        // 1. Verifica se é partida real consultando o PlayFab Matchmaking.
+        //    ReturnMemberAttributes=true para recuperar o PlayFabId clássico do oponente.
+        string opponentPlayFabId = string.Empty;
+        bool   matchFetched      = false;
 
         PlayFabMultiplayerAPI.GetMatch(
             new GetMatchRequest
             {
                 QueueName              = queueName,
                 MatchId                = BrainDuel.Match.Core.MatchSessionData.MatchId,
-                ReturnMemberAttributes = false
+                ReturnMemberAttributes = true
             },
             result =>
             {
                 // GetMatch bem-sucedido → partida real com oponente
                 BrainDuel.Match.Core.MatchSessionData.IsRealMatch = true;
-                var myId = PlayFabSettings.staticPlayer?.EntityId ?? string.Empty;
+
+                // Usa EntityId apenas para identificar quem é o oponente na lista
+                var myEntityId = PlayFabSettings.staticPlayer?.EntityId ?? string.Empty;
                 if (result.Members != null)
                     foreach (var m in result.Members)
-                        if (m.Entity != null && m.Entity.Id != myId)
-                        { opponentId = m.Entity.Id; break; }
+                        if (m.Entity != null && m.Entity.Id != myEntityId)
+                        {
+                            // Extrai o PlayFabId clássico dos atributos do ticket
+                            try
+                            {
+                                var attrs = m.Attributes?.DataObject
+                                    as System.Collections.Generic.Dictionary<string, object>;
+                                if (attrs != null && attrs.TryGetValue("PlayFabId", out var pfId))
+                                    opponentPlayFabId = pfId?.ToString() ?? string.Empty;
+                            }
+                            catch { }
+                            break;
+                        }
                 matchFetched = true;
             },
             _ =>
@@ -219,9 +234,13 @@ public class MatchMakingScreenController : MonoBehaviour
 
         while (!matchFetched) yield return null;
 
-        // 2. Inicializa estado no servidor apenas em partida real
+        // 2. Inicializa estado no servidor apenas em partida real.
+        //    player1Id e player2Id são PlayFabIds clássicos para que o CloudScript V1
+        //    possa chamar server.UpdatePlayerStatistics / server.GetUserInventory corretamente.
         if (BrainDuel.Match.Core.MatchSessionData.IsRealMatch)
         {
+            string localPlayFabId = PlayFabSettings.staticPlayer?.PlayFabId ?? string.Empty;
+
             bool matchCreated = false;
             PlayFabClientAPI.ExecuteCloudScript(
                 new ExecuteCloudScriptRequest
@@ -230,8 +249,8 @@ public class MatchMakingScreenController : MonoBehaviour
                     FunctionParameter = new
                     {
                         matchId   = BrainDuel.Match.Core.MatchSessionData.MatchId,
-                        player1Id = PlayFabSettings.staticPlayer?.EntityId ?? string.Empty,
-                        player2Id = opponentId
+                        player1Id = localPlayFabId,
+                        player2Id = opponentPlayFabId
                     },
                     GeneratePlayStreamEvent = false
                 },

@@ -676,7 +676,9 @@ handlers.StartNextRound = function (args) {
 
 handlers.StartQuestion = function (args) {
     var state = loadMatchState(args.matchId);
-    if (!state || state.CurrentRound !== args.roundNumber) return { status: "ignored" };
+    if (!state) return { status: "ignored", reason: "match_not_found", matchId: args.matchId };
+    if (state.CurrentRound !== args.roundNumber)
+        return { status: "ignored", reason: "round_mismatch", serverRound: state.CurrentRound, clientRound: args.roundNumber, phase: state.Phase };
 
     // Idempotente: aceita tanto ThemeAndPowerUp quanto Question (segundo jogador a chamar)
     if (state.Phase !== "ThemeAndPowerUp" && state.Phase !== "Question")

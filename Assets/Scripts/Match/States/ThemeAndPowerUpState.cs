@@ -39,18 +39,31 @@ namespace BrainDuel.Match.States
 
         public override void OnExit() { }
 
-        // Solicita ao servidor que revele a pergunta e entrega ao cliente
-        private void RequestQuestion()
+        // Solicita ao servidor que revele a pergunta e entrega ao cliente.
+        // Retry automático se o servidor retornar estado inválido (ex: round ainda não salvo).
+        private void RequestQuestion() => TryGetQuestion(0);
+
+        private const int MaxQuestionAttempts = 5;
+
+        private void TryGetQuestion(int attempt)
         {
             if (Context.IsStubMode) return;
+
+            int roundNumber = Context.CurrentRound;
+            Debug.Log($"[State] StartQuestion → matchId={Context.MatchId} roundNumber={roundNumber} (tentativa {attempt + 1}/{MaxQuestionAttempts})");
 
             CloudScriptClient.Call("StartQuestion", new
             {
                 matchId     = Context.MatchId,
-                roundNumber = Context.CurrentRound
+                roundNumber = roundNumber
             }, onSuccess: result =>
             {
-                if (result == null) { Debug.LogError("[State] StartQuestion retornou null"); return; }
+                if (result == null)
+                {
+                    Debug.LogWarning("[State] StartQuestion retornou null — retentando");
+                    ScheduleRetry(attempt);
+                    return;
+                }
                 try
                 {
                     var json    = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
@@ -58,7 +71,8 @@ namespace BrainDuel.Match.States
 
                     if (payload == null || string.IsNullOrEmpty(payload.QuestionText))
                     {
-                        Debug.LogError($"[State] StartQuestion: payload inválido — {json}");
+                        Debug.LogWarning($"[State] StartQuestion: payload inválido (tentativa {attempt + 1}) — {json}");
+                        ScheduleRetry(attempt);
                         return;
                     }
 
@@ -71,8 +85,23 @@ namespace BrainDuel.Match.States
                 }
             }, onError: err =>
             {
-                Debug.LogError($"[State] StartQuestion falhou: {err}");
+                Debug.LogWarning($"[State] StartQuestion falhou (tentativa {attempt + 1}): {err}");
+                ScheduleRetry(attempt);
             });
+        }
+
+        private void ScheduleRetry(int attempt)
+        {
+            if (attempt + 1 < MaxQuestionAttempts)
+                Machine.StartCoroutine(RetryAfterDelay(attempt + 1));
+            else
+                Debug.LogError($"[State] StartQuestion: {MaxQuestionAttempts} tentativas falharam. Partida pode estar travada.");
+        }
+
+        private System.Collections.IEnumerator RetryAfterDelay(int nextAttempt)
+        {
+            yield return new UnityEngine.WaitForSeconds(1f);
+            TryGetQuestion(nextAttempt);
         }
     }
 }
