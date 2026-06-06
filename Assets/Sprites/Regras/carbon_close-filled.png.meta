@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: d84648a0627e94e84a5d6ed15c19db38
+guid: a681657b5e67bfa4d98492971df04303
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -5552033822331656447
-    second: CardAstronomia_0
+      213: -1061005054480762160
+    second: carbon_close-filled_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -96,30 +96,17 @@ TextureImporter:
     ignorePlatformSupport: 0
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
-  - serializedVersion: 4
-    buildTarget: WebGL
-    maxTextureSize: 2048
-    resizeAlgorithm: 0
-    textureFormat: -1
-    textureCompression: 1
-    compressionQuality: 50
-    crunchedCompression: 0
-    allowsAlphaSplitting: 0
-    overridden: 0
-    ignorePlatformSupport: 0
-    androidETC2FallbackOverride: 0
-    forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: CardAstronomia_0
+      name: carbon_close-filled_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 0
-        width: 742
-        height: 942
+        x: 9
+        y: 9
+        width: 142
+        height: 142
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 107a7fe87a633f2b0800000000000000
-      internalID: -5552033822331656447
+      spriteID: 0dab7ce368d8641f0800000000000000
+      internalID: -1061005054480762160
       vertices: []
       indices: 
       edges: []
@@ -148,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      CardAstronomia_0: -5552033822331656447
+      carbon_close-filled_0: -1061005054480762160
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

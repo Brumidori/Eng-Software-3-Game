@@ -4,9 +4,11 @@
 // Ao fim, chama CloudScript StartQuestion para que o servidor
 // revele a pergunta de forma idempotente.
 // ============================================================
+using System;
 using UnityEngine;
 using BrainDuel.Match.Core;
 using BrainDuel.Match;
+using BrainDuel.Network;
 
 namespace BrainDuel.Match.States
 {
@@ -37,7 +39,7 @@ namespace BrainDuel.Match.States
 
         public override void OnExit() { }
 
-        // Solicita ao servidor que revele a pergunta (idempotente)
+        // Solicita ao servidor que revele a pergunta e entrega ao cliente
         private void RequestQuestion()
         {
             if (Context.IsStubMode) return;
@@ -48,7 +50,25 @@ namespace BrainDuel.Match.States
                 roundNumber = Context.CurrentRound
             }, onSuccess: result =>
             {
-                Debug.Log("[State] StartQuestion confirmado pelo servidor");
+                if (result == null) { Debug.LogError("[State] StartQuestion retornou null"); return; }
+                try
+                {
+                    var json    = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                    var payload = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<QuestionRevealPayload>(json);
+
+                    if (payload == null || string.IsNullOrEmpty(payload.QuestionText))
+                    {
+                        Debug.LogError($"[State] StartQuestion: payload inválido — {json}");
+                        return;
+                    }
+
+                    Debug.Log($"[State] Pergunta recebida: {payload.QuestionText}");
+                    Machine.ReceiveQuestionReveal(payload);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[State] Falha ao parsear StartQuestion: {ex.Message}");
+                }
             }, onError: err =>
             {
                 Debug.LogError($"[State] StartQuestion falhou: {err}");

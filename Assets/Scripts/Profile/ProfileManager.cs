@@ -27,6 +27,7 @@ public class ProfileManager : MonoBehaviour
     private string equippedDeckId = string.Empty;
     private bool inventoryLoaded;
     private bool equippedLoaded;
+    private bool profileDecksLoaded;
     private bool statsLoaded;
     private bool profileDataLoaded;
     private bool profileLoadStarted;
@@ -105,6 +106,7 @@ public class ProfileManager : MonoBehaviour
 
         RequestInventory();
         RequestEquippedDeck();
+        RequestProfileDecks();
         RequestPlayerStats();
         RequestPlayerProfile();
     }
@@ -175,6 +177,43 @@ public class ProfileManager : MonoBehaviour
                 TryBuildProfile();
             },
             HandlePlayFabError);
+    }
+
+    private void RequestProfileDecks()
+    {
+        PlayFabClientAPI.GetUserData(
+            new GetUserDataRequest { Keys = new List<string> { "player_profile" } },
+            result =>
+            {
+                if (result?.Data != null && result.Data.TryGetValue("player_profile", out var entry)
+                    && !string.IsNullOrWhiteSpace(entry.Value))
+                {
+                    try
+                    {
+                        var profile = JsonUtility.FromJson<PlayerProfileData>(entry.Value);
+                        if (profile?.decks != null)
+                        {
+                            foreach (var deck in profile.decks)
+                            {
+                                if (deck != null && !string.IsNullOrWhiteSpace(deck.id) && deck.isOwned)
+                                    ownedDeckIds.Add(deck.id);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[ProfileManager] Erro ao ler player_profile: {ex.Message}");
+                    }
+                }
+
+                profileDecksLoaded = true;
+                TryBuildProfile();
+            },
+            _ =>
+            {
+                profileDecksLoaded = true;
+                TryBuildProfile();
+            });
     }
 
     private void RequestPlayerStats()

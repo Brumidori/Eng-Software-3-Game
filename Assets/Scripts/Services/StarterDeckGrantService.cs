@@ -2,9 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using PlayFab;
-using PlayFab.ClientModels;
-using PlayFab.CloudScriptModels;
 using UnityEngine;
+using BrainDuel.Match.Core;
 
 public class StarterDeckGrantResult
 {
@@ -40,11 +39,7 @@ public class StarterDeckGrantService : MonoBehaviour
     {
         if (!ValidateAuth())
         {
-            onComplete?.Invoke(new StarterDeckGrantResult
-            {
-                Success = false,
-                Error = "Sessao PlayFab nao autenticada para conceder decks iniciais."
-            });
+            onComplete?.Invoke(new StarterDeckGrantResult { Success = false, Error = "Sessao PlayFab nao autenticada." });
             return;
         }
 

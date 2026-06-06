@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using BrainDuel.Match.Core;
 using BrainDuel.Match.UI;
+using BrainDuel.Match;
 
 namespace BrainDuel.Match.UI
 {
@@ -38,28 +39,36 @@ namespace BrainDuel.Match.UI
         {
             FecharModal();
 
-            // Notifica servidor — CloudScript aplica penalidade ao perdedor
-            // e concede 40 moedas + 20 XP ao vencedor
             if (stateMachine?.Context != null)
             {
+                // 1. Notifica oponente via Party imediatamente
+                stateMachine.NotificarAbandono();
+
+                // 2. Registra abandono no servidor
                 CloudScriptClient.Call("AbandonMatch", new
                 {
-                    matchId  = stateMachine.Context.MatchId,
-                    playerId = stateMachine.Context.LocalPlayerId
-                }, onSuccess: _ =>
+                    matchId = stateMachine.Context.MatchId
+                }, onSuccess: _ => Debug.Log("[Modal] AbandonMatch confirmado."),
+                   onError:   err => Debug.LogWarning($"[Modal] Erro ao notificar abandono: {err}"));
+
+                // 3. Para a state machine imediatamente (impede que timers/estados
+                //    sobrescrevam o painel de fim de partida após o abandono)
+                var opponentId = stateMachine.Context.OpponentPlayer?.PlayerId
+                                 ?? stateMachine.Context.ServerState?.Player2Id
+                                 ?? "opponent";
+
+                stateMachine.ForcarFimDePartida(new BrainDuel.Network.MatchEndPayload
                 {
-                    Debug.Log("[Modal] AbandonMatch confirmado pelo servidor.");
-                }, onError: err =>
-                {
-                    Debug.LogWarning($"[Modal] Erro ao notificar abandono: {err}");
+                    WinnerId          = opponentId,
+                    WinnerHP          = stateMachine.Context.OpponentHP,
+                    LoserHP           = 0,
+                    Reason            = BrainDuel.Match.MatchEndReason.Abandonment,
+                    TotalRoundsPlayed = stateMachine.Context.CurrentRound,
                 });
             }
 
-            // Registra derrota e penalidade de XP no cliente
+            // 4. Penalidade de XP no cliente (modo stub/offline)
             StatisticsService.Instance?.UpdateMatchStatistics(-10, wonMatch: false);
-
-            // Mostra tela de derrota sem navegar — jogador clica em Menu ou Outra Partida
-            sceneController?.MostrarDerrotaPorAbandono();
         }
     }
 }

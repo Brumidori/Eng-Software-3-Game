@@ -1268,9 +1268,21 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3332584876184702642, guid: 77296cb712d214588bfced04aae7e368, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3525209695459435878, guid: 77296cb712d214588bfced04aae7e368, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0.000030517578
+      objectReference: {fileID: 0}
     - target: {fileID: 3578783378972729283, guid: 77296cb712d214588bfced04aae7e368, type: 3}
       propertyPath: m_Name
       value: MainMenu
+      objectReference: {fileID: 0}
+    - target: {fileID: 4526345913375609940, guid: 77296cb712d214588bfced04aae7e368, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0.000030517578
       objectReference: {fileID: 0}
     - target: {fileID: 5201024009984295284, guid: 77296cb712d214588bfced04aae7e368, type: 3}
       propertyPath: m_AnchorMax.y
@@ -1292,6 +1304,10 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5519575638397878237, guid: 77296cb712d214588bfced04aae7e368, type: 3}
+      propertyPath: currentSprite
+      value: 
+      objectReference: {fileID: 21300000, guid: fa328f2c5deb140f68a888f6864ae573, type: 3}
     - target: {fileID: 5743497389621876395, guid: 77296cb712d214588bfced04aae7e368, type: 3}
       propertyPath: m_Pivot.x
       value: 0
@@ -1411,6 +1427,14 @@ PrefabInstance:
     - target: {fileID: 6000755406268090206, guid: 77296cb712d214588bfced04aae7e368, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7019869363438348633, guid: 77296cb712d214588bfced04aae7e368, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -0.000030517578
+      objectReference: {fileID: 0}
+    - target: {fileID: 8636428280093179645, guid: 77296cb712d214588bfced04aae7e368, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -0.000045776367
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
