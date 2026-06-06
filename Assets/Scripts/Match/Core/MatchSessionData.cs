@@ -6,6 +6,8 @@ namespace BrainDuel.Match.Core
         public static string LocalPlayerId    { get; set; }
         public static string LocalDisplayName { get; set; } = "Você";
         public static int    LocalLevel       { get; set; } = 1;
+        // false = modo stub (bot local); true = partida real com oponente via CloudScript
+        public static bool   IsRealMatch      { get; set; } = false;
 
         public static void Clear()
         {
@@ -13,6 +15,7 @@ namespace BrainDuel.Match.Core
             LocalPlayerId    = null;
             LocalDisplayName = "Você";
             LocalLevel       = 1;
+            IsRealMatch      = false;
         }
     }
 }

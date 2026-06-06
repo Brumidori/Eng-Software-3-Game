@@ -514,7 +514,7 @@ function fail(message, details) {
 var MATCH_CONFIG = {
     InitialHP:               100,
     MaxRounds:               20,
-    ThemePhaseDurationMs:    4000,
+    ThemePhaseDurationMs:    5000,
     QuestionPhaseDurationMs: 20000,
     SpeedBonusThresholdMs:   200,
     AfkRoundLimit:           3,
@@ -618,8 +618,25 @@ handlers.CreateMatch = function (args) {
 handlers.StartNextRound = function (args) {
     var state = loadMatchState(args.matchId);
     if (!state || !state.IsActive)            return { error: "Match inativo" };
-    if (state.CurrentRound >= args.roundNumber) return { status: "already_started" };
     if (args.roundNumber > MATCH_CONFIG.MaxRounds) return finalizeMatch(state, determineWinnerByHP(state), "RoundsOver");
+
+    // Idempotente: segundo jogador a chamar recebe os dados da rodada já iniciada
+    if (state.CurrentRound >= args.roundNumber) {
+        var existingRound = state.CurrentRoundState;
+        return {
+            status:             "already_started",
+            roundNumber:        state.CurrentRound,
+            themeId:            existingRound ? existingRound.ThemeId   : "",
+            themeName:          existingRound ? existingRound.ThemeName : "",
+            serverTimestampMs:  state.PhaseStartTimestampMs,
+            themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
+            questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
+            player1Id:          state.Player1Id,
+            player2Id:          state.Player2Id,
+            player1State:       state.Player1State,
+            player2State:       state.Player2State
+        };
+    }
 
     var question = getQuestionForRound(state, args.roundNumber);
     if (!question) return { error: "Pergunta nao encontrada para rodada " + args.roundNumber };
@@ -921,6 +938,7 @@ function determineWinnerByHP(state) {
 function buildRoundResponse(state, alreadyProcessed) {
     var round = state.CurrentRoundState;
     return {
+        RoundNumber:      round.RoundNumber,
         AlreadyProcessed: alreadyProcessed,
         CorrectAnswerId:  round.CorrectAnswerId,
         Player1Result:    round.Player1Result,
@@ -980,9 +998,12 @@ function makeAction(playerId) {
 // --- Carregamento de decks e perguntas ---
 
 function getEquippedPowerUp(playerId) {
-    var result = server.GetUserInternalData({ PlayFabId: playerId, Keys: ["EquippedPowerUp"] });
-    if (result.Data && result.Data["EquippedPowerUp"])
-        return result.Data["EquippedPowerUp"].Value || "None";
+    if (!isNonEmptyString(playerId)) return "None";
+    try {
+        var result = server.GetUserInternalData({ PlayFabId: playerId, Keys: ["EquippedPowerUp"] });
+        if (result.Data && result.Data["EquippedPowerUp"])
+            return result.Data["EquippedPowerUp"].Value || "None";
+    } catch (e) { }
     return "None";
 }
 
