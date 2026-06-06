@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using PlayFab;
 using PlayFab.ClientModels;
+using PlayFab.MultiplayerModels;
 
 public class MatchMakingScreenController : MonoBehaviour
 {
@@ -180,6 +181,7 @@ public class MatchMakingScreenController : MonoBehaviour
     {
         BrainDuel.Match.Core.MatchSessionData.MatchId       = matchId;
         BrainDuel.Match.Core.MatchSessionData.LocalPlayerId = PlayFab.PlayFabSettings.staticPlayer?.EntityId;
+        // IsRealMatch é definido em BuscarNomeEIniciar após GetMatch confirmar a partida real
 
         StopAnimations();
         _contagemCoroutine = StartCoroutine(BuscarNomeEIniciar());
@@ -187,6 +189,63 @@ public class MatchMakingScreenController : MonoBehaviour
 
     private IEnumerator BuscarNomeEIniciar()
     {
+        // 1. Verifica se é partida real consultando o PlayFab Matchmaking
+        string opponentId  = string.Empty;
+        bool   matchFetched = false;
+
+        PlayFabMultiplayerAPI.GetMatch(
+            new GetMatchRequest
+            {
+                QueueName              = queueName,
+                MatchId                = BrainDuel.Match.Core.MatchSessionData.MatchId,
+                ReturnMemberAttributes = false
+            },
+            result =>
+            {
+                // GetMatch bem-sucedido → partida real com oponente
+                BrainDuel.Match.Core.MatchSessionData.IsRealMatch = true;
+                var myId = PlayFabSettings.staticPlayer?.EntityId ?? string.Empty;
+                if (result.Members != null)
+                    foreach (var m in result.Members)
+                        if (m.Entity != null && m.Entity.Id != myId)
+                        { opponentId = m.Entity.Id; break; }
+                matchFetched = true;
+            },
+            _ =>
+            {
+                // GetMatch falhou → modo stub (matchId simulado ou sem oponente real)
+                matchFetched = true;
+            });
+
+        while (!matchFetched) yield return null;
+
+        // 2. Inicializa estado no servidor apenas em partida real
+        if (BrainDuel.Match.Core.MatchSessionData.IsRealMatch)
+        {
+            bool matchCreated = false;
+            PlayFabClientAPI.ExecuteCloudScript(
+                new ExecuteCloudScriptRequest
+                {
+                    FunctionName      = "CreateMatch",
+                    FunctionParameter = new
+                    {
+                        matchId   = BrainDuel.Match.Core.MatchSessionData.MatchId,
+                        player1Id = PlayFabSettings.staticPlayer?.EntityId ?? string.Empty,
+                        player2Id = opponentId
+                    },
+                    GeneratePlayStreamEvent = false
+                },
+                _ => matchCreated = true,
+                err =>
+                {
+                    Debug.LogWarning($"[MatchMaking] CreateMatch falhou: {err.ErrorMessage}");
+                    matchCreated = true;
+                });
+
+            while (!matchCreated) yield return null;
+        }
+
+        // 3. Busca nome de exibição e nível local
         bool done = false;
 
         PlayFabClientAPI.GetAccountInfo(

@@ -31,7 +31,11 @@ namespace BrainDuel.Match.States
             {
                 _roundProcessRequested = true;
                 RequestProcessRound();
+                return;
             }
+
+            // Não há polling antecipado: o servidor retorna "pending" antes do timer expirar.
+            // Ambos os jogadores aguardam o timer → TriggerProcessRound() cuida do Reveal sincronizado.
         }
 
         public override void OnExit() { }
