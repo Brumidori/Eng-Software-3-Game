@@ -514,8 +514,8 @@ function fail(message, details) {
 var MATCH_CONFIG = {
     InitialHP:               100,
     MaxRounds:               20,
-    ThemePhaseDurationMs:    4000,
-    QuestionPhaseDurationMs: 20000,
+    ThemePhaseDurationMs:    5000,
+    QuestionPhaseDurationMs: 15000,
     SpeedBonusThresholdMs:   200,
     AfkRoundLimit:           3,
     ReconnectWindowMs:       30000
@@ -749,14 +749,27 @@ handlers.PurchaseItemSecure = function (args, context) {
 // Idempotente — retorna estado existente se já criado.
 // ============================================================
 
-handlers.CreateMatch = function(args) {
-    var matchId   = args.matchId;
-    var player1Id = args.player1Id;
+handlers.CreateMatch = function (args) {
+    var matchId = args.matchId;
+    // currentPlayerId é sempre o PlayFabId clássico do chamador — usa como fallback se player1Id vier vazio
+    var player1Id = isNonEmptyString(args.player1Id) ? args.player1Id : currentPlayerId;
     var player2Id = args.player2Id;
 
     var existing = loadMatchState(matchId);
-    if (existing && existing.IsActive)
+    if (existing && existing.IsActive) {
+        // Registra P2 se ainda estiver vazio e o chamador for diferente de P1
+        if (!isNonEmptyString(existing.Player2Id)
+                && isNonEmptyString(currentPlayerId)
+                && currentPlayerId !== existing.Player1Id) {
+            existing.Player2Id = currentPlayerId;
+            if (existing.Player2State) existing.Player2State.PlayerId = currentPlayerId;
+            // Atualiza ação de P2 na rodada atual, se existir
+            if (existing.CurrentRoundState && existing.CurrentRoundState.Player2Action)
+                existing.CurrentRoundState.Player2Action.PlayerId = currentPlayerId;
+            saveMatchState(existing);
+        }
         return { success: true, matchId: matchId, networkDescriptor: existing.PartyNetworkDescriptor };
+    }
 
     var p1PowerUp    = getEquippedPowerUp(player1Id);
     var p2PowerUp    = getEquippedPowerUp(player2Id);
@@ -791,8 +804,25 @@ handlers.CreateMatch = function(args) {
 handlers.StartNextRound = function (args) {
     var state = loadMatchState(args.matchId);
     if (!state || !state.IsActive)            return { error: "Match inativo" };
-    if (state.CurrentRound >= args.roundNumber) return { status: "already_started" };
     if (args.roundNumber > MATCH_CONFIG.MaxRounds) return finalizeMatch(state, determineWinnerByHP(state), "RoundsOver");
+
+    // Idempotente: segundo jogador a chamar recebe os dados da rodada já iniciada
+    if (state.CurrentRound >= args.roundNumber) {
+        var existingRound = state.CurrentRoundState;
+        return {
+            status:             "already_started",
+            roundNumber:        state.CurrentRound,
+            themeId:            existingRound ? existingRound.ThemeId   : "",
+            themeName:          existingRound ? existingRound.ThemeName : "",
+            serverTimestampMs:  state.PhaseStartTimestampMs,
+            themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
+            questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
+            player1Id:          state.Player1Id,
+            player2Id:          state.Player2Id,
+            player1State:       state.Player1State,
+            player2State:       state.Player2State
+        };
+    }
 
     var question = getQuestionForRound(state, args.roundNumber);
     if (!question) return { error: "Pergunta nao encontrada para rodada " + args.roundNumber };
@@ -832,7 +862,9 @@ handlers.StartNextRound = function (args) {
 
 handlers.StartQuestion = function (args) {
     var state = loadMatchState(args.matchId);
-    if (!state || state.CurrentRound !== args.roundNumber) return { status: "ignored" };
+    if (!state) return { status: "ignored", reason: "match_not_found", matchId: args.matchId };
+    if (state.CurrentRound !== args.roundNumber)
+        return { status: "ignored", reason: "round_mismatch", serverRound: state.CurrentRound, clientRound: args.roundNumber, phase: state.Phase };
 
     // Idempotente: aceita tanto ThemeAndPowerUp quanto Question (segundo jogador a chamar)
     if (state.Phase !== "ThemeAndPowerUp" && state.Phase !== "Question")
@@ -841,7 +873,17 @@ handlers.StartQuestion = function (args) {
     if (state.Phase === "ThemeAndPowerUp") {
         state.Phase                 = "Question";
         state.PhaseStartTimestampMs = Date.now();
-        saveMatchState(state);
+        try {
+            saveMatchState(state);
+        } catch (saveErr) {
+            // Conflito de escrita concorrente: o outro jogador já salvou a transição.
+            // Recarrega apenas o timestamp correto para sincronizar os timers.
+            try {
+                var reloaded = loadMatchState(args.matchId);
+                if (reloaded && reloaded.Phase === "Question")
+                    state.PhaseStartTimestampMs = reloaded.PhaseStartTimestampMs;
+            } catch (e2) { /* ignora */ }
+        }
     }
 
     var question = loadQuestion(state, state.CurrentRoundState.QuestionId);
@@ -909,6 +951,14 @@ handlers.ProcessRound = function (args) {
     if (!state || !state.IsActive)               return { error: "Match inativo" };
     if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round" };
     if (state.CurrentRoundState.IsProcessed)      return buildRoundResponse(state, true);
+
+    // Só processa depois que o timer de pergunta expirou no servidor.
+    // Garante que ambos os jogadores vejam o Reveal ao mesmo tempo (quando o timer chega a 0),
+    // independentemente de quando cada um respondeu.
+    var elapsed = Date.now() - state.PhaseStartTimestampMs;
+    if (elapsed < MATCH_CONFIG.QuestionPhaseDurationMs)
+        return { status: "pending" };
+
     return processRoundInternal(state);
 };
 
@@ -1094,6 +1144,7 @@ function determineWinnerByHP(state) {
 function buildRoundResponse(state, alreadyProcessed) {
     var round = state.CurrentRoundState;
     return {
+        RoundNumber:      round.RoundNumber,
         AlreadyProcessed: alreadyProcessed,
         CorrectAnswerId:  round.CorrectAnswerId,
         Player1Result:    round.Player1Result,
@@ -1153,9 +1204,12 @@ function makeAction(playerId) {
 // --- Carregamento de decks e perguntas ---
 
 function getEquippedPowerUp(playerId) {
-    var result = server.GetUserInternalData({ PlayFabId: playerId, Keys: ["EquippedPowerUp"] });
-    if (result.Data && result.Data["EquippedPowerUp"])
-        return result.Data["EquippedPowerUp"].Value || "None";
+    if (!isNonEmptyString(playerId)) return "None";
+    try {
+        var result = server.GetUserInternalData({ PlayFabId: playerId, Keys: ["EquippedPowerUp"] });
+        if (result.Data && result.Data["EquippedPowerUp"])
+            return result.Data["EquippedPowerUp"].Value || "None";
+    } catch (e) { }
     return "None";
 }
 
@@ -1186,43 +1240,23 @@ function parseDeckQuestions(deckData, themeName) {
     return questions;
 }
 
-// Constrói um mapa itemId → custom_id (chave do TitleData) lendo o CustomData do catálogo.
-// O campo "custom_id" no CustomData de cada item de deck aponta para a key do TitleData
-// onde estão as perguntas daquele deck.
-// Retorna mapa itemId → { customId, theme } lendo o CustomData de cada item de deck do catálogo
-function buildCatalogCustomDataMap(catalogResult) {
-    var map = {};
-    if (!catalogResult || !Array.isArray(catalogResult.Catalog)) return map;
-    for (var i = 0; i < catalogResult.Catalog.length; i++) {
-        var item = catalogResult.Catalog[i];
-        if (!item || !item.ItemId) continue;
-        if (String(item.ItemId).toLowerCase().indexOf("deck") !== 0) continue;
-        if (!item.CustomData) continue;
-        try {
-            var cd = JSON.parse(item.CustomData);
-            if (cd && cd.custom_id)
-                map[item.ItemId] = { customId: cd.custom_id, theme: cd.theme || cd.custom_id };
-        } catch (e) { }
-    }
-    return map;
-}
-
-// Retorna as TitleData keys dos decks que o jogador possui no inventário,
-// resolvendo cada ItemId pelo custom_id do CustomData do catálogo.
-// Retorna array de { key, theme } para os decks que o jogador possui no inventário
-function getPlayerDeckTitleKeys(playerId, catalogMap) {
+// Lê deck_id do CustomData de cada item de deck no inventário do jogador.
+// O deck_id é a chave no TitleData onde estão as perguntas do deck.
+function getPlayerDeckEntries(playerId) {
     var entries = [];
     var seenKeys = {};
+    if (!isNonEmptyString(playerId)) return entries;
     try {
         var result = server.GetUserInventory({ PlayFabId: playerId });
-        if (!result.Inventory) return entries;
+        if (!result || !result.Inventory) return entries;
         for (var i = 0; i < result.Inventory.length; i++) {
-            var itemId = result.Inventory[i].ItemId;
-            if (!itemId || String(itemId).toLowerCase().indexOf("deck") !== 0) continue;
-            var entry = catalogMap[itemId];
-            if (entry && entry.customId && !seenKeys[entry.customId]) {
-                seenKeys[entry.customId] = true;
-                entries.push({ key: entry.customId, theme: entry.theme });
+            var item = result.Inventory[i];
+            if (!item || !isNonEmptyString(item.ItemId)) continue;
+            var deckId = item.CustomData && item.CustomData.deck_id
+                ? String(item.CustomData.deck_id).trim() : null;
+            if (deckId && !seenKeys[deckId]) {
+                seenKeys[deckId] = true;
+                entries.push({ key: deckId });
             }
         }
     } catch (e) { }
@@ -1231,21 +1265,16 @@ function getPlayerDeckTitleKeys(playerId, catalogMap) {
 
 // Monta o pool de 20 perguntas combinando os decks de ambos os jogadores.
 // Fluxo:
-//   1. Carrega catálogo → extrai mapa itemId → custom_id (TitleData key)
-//   2. Lê inventário de cada jogador → resolve TitleData keys via catalogMap
-//   3. Une as keys dos dois jogadores (sem duplicatas)
-//   4. Carrega todos os decks em uma única chamada GetTitleData
-//   5. Fisher-Yates shuffle → 20 perguntas
+//   1. Lê CustomData.deck_id do inventário de cada jogador → TitleData keys
+//   2. Une as keys (sem duplicatas)
+//   3. Carrega todos os decks em uma única chamada GetTitleData
+//   4. Fisher-Yates shuffle → 20 perguntas
 function buildQuestionPool(p1Id, p2Id) {
-    // 1. Catálogo → mapa de custom_id
-    var catalogResult = server.GetCatalogItems({ CatalogVersion: DEFAULT_CATALOG_VERSION });
-    var catalogMap    = buildCatalogCustomDataMap(catalogResult);
+    // 1. Entries { key } de cada jogador via inventário
+    var p1Entries = getPlayerDeckEntries(p1Id);
+    var p2Entries = getPlayerDeckEntries(p2Id);
 
-    // 2. Entries { key, theme } de cada jogador
-    var p1Entries = getPlayerDeckTitleKeys(p1Id, catalogMap);
-    var p2Entries = getPlayerDeckTitleKeys(p2Id, catalogMap);
-
-    // 3. União sem duplicatas de keys
+    // 2. União sem duplicatas de keys
     var entryMap = {};
     var allEntries = [];
     function addEntry(e) {
@@ -1256,7 +1285,7 @@ function buildQuestionPool(p1Id, p2Id) {
 
     var keysToLoad = allEntries.map(function(e) { return e.key; });
 
-    // 4. Carrega decks
+    // 3. Carrega decks do TitleData
     var allQuestions = [];
     var seenIds      = {};
 
@@ -1264,13 +1293,11 @@ function buildQuestionPool(p1Id, p2Id) {
         try {
             var deckResult = server.GetTitleData({ Keys: keysToLoad });
             for (var k = 0; k < allEntries.length; k++) {
-                var entry = allEntries[k];
-                var key   = entry.key;
+                var key = allEntries[k].key;
                 if (!deckResult.Data || !deckResult.Data[key]) continue;
                 try {
                     var deckData  = JSON.parse(deckResult.Data[key]);
-                    // Tema vem do catálogo (catalog CustomData.theme), fallback para TitleData.theme
-                    var themeName = entry.theme || deckData.theme || key;
+                    var themeName = deckData.theme || key;
                     var questions = parseDeckQuestions(deckData, themeName);
                     for (var q = 0; q < questions.length; q++) {
                         if (!seenIds[questions[q].QuestionId]) {
@@ -1297,7 +1324,7 @@ function buildQuestionPool(p1Id, p2Id) {
         return allQuestions;
     }
 
-    // 5. Fisher-Yates shuffle
+    // 4. Fisher-Yates shuffle
     for (var i = allQuestions.length - 1; i > 0; i--) {
         var j   = Math.floor(Math.random() * (i + 1));
         var tmp = allQuestions[i]; allQuestions[i] = allQuestions[j]; allQuestions[j] = tmp;

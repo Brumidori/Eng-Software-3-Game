@@ -31,7 +31,11 @@ namespace BrainDuel.Match.States
             {
                 _roundProcessRequested = true;
                 RequestProcessRound();
+                return;
             }
+
+            // Não há polling antecipado: o servidor retorna "pending" antes do timer expirar.
+            // Ambos os jogadores aguardam o timer → TriggerProcessRound() cuida do Reveal sincronizado.
         }
 
         public override void OnExit() { }
@@ -46,9 +50,9 @@ namespace BrainDuel.Match.States
             }
         }
 
-        // Solicita ao servidor que processe a rodada (idempotente)
-        // Ambos os clientes chamam — servidor processa apenas uma vez
-        // Em modo stub o StubConductor já cuida da transição, então não chama o servidor
+        // Solicita ao servidor que processe a rodada (idempotente).
+        // Ambos os clientes chamam — servidor processa apenas uma vez.
+        // Resultado tratado diretamente: sem dependência do Party SDK (não suportado em WebGL).
         private void RequestProcessRound()
         {
             if (Context.IsStubMode) return;
@@ -59,11 +63,30 @@ namespace BrainDuel.Match.States
                 roundNumber = Context.CurrentRound
             }, onSuccess: result =>
             {
-                // RoundResult chega via Party broadcast pelo servidor
-                Debug.Log("[State] ProcessRound solicitado");
+                if (result == null) { Machine.StartCoroutine(RetryAfterDelay(1f)); return; }
+                try
+                {
+                    var json        = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                    var roundResult = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<
+                        RoundResultPayload>(json);
+
+                    if (roundResult != null && !string.IsNullOrEmpty(roundResult.CorrectAnswerId))
+                    {
+                        Debug.Log("[State] ProcessRound: resultado recebido — avançando.");
+                        Machine.HandleRoundResultFromState(roundResult);
+                    }
+                    else
+                    {
+                        // Servidor ainda não processou (pending) — UI timer vai disparar TriggerProcessRound
+                        Debug.Log("[State] ProcessRound pendente — aguardando UI timer.");
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogWarning($"[State] ProcessRound: erro ao parsear resultado: {ex.Message}");
+                }
             }, onError: err =>
             {
-                // Retry em 1s
                 Machine.StartCoroutine(RetryAfterDelay(1f));
                 Debug.LogWarning($"[State] ProcessRound falhou — retentando: {err}");
             });

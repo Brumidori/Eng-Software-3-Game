@@ -510,7 +510,15 @@ public class MatchmakingService : MonoBehaviour
             {
                 QueueName          = queueName,
                 GiveUpAfterSeconds = timeoutSeconds,
-                Creator            = new MatchmakingPlayer { Entity = user.entity }
+                Creator            = new MatchmakingPlayer
+                {
+                    Entity     = user.entity,
+                    Attributes = new MatchmakingPlayerAttributes
+                    {
+                        // Expõe o PlayFabId clássico para que o oponente possa extraí-lo via GetMatch
+                        DataObject = new { PlayFabId = user.authContext?.PlayFabId ?? string.Empty }
+                    }
+                }
             },
             result => { ticketResult = result; done = true; },
             error  => { ticketError  = error;  done = true; });

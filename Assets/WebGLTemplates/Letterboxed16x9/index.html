@@ -106,6 +106,18 @@
           // Ensure canvas buffer matches visible size after Unity initializes
           setTimeout(resizeUnityCanvasToContainer, 50);
           setTimeout(resizeUnityCanvasToContainer, 300);
+          // Resume AudioContext on first user gesture to silence the browser warning
+          var resumeAudio = function () {
+            if (unityInstance && unityInstance.Module && unityInstance.Module.resumeAudioContext) {
+              unityInstance.Module.resumeAudioContext();
+            }
+            document.removeEventListener('click',     resumeAudio);
+            document.removeEventListener('touchstart', resumeAudio);
+            document.removeEventListener('keydown',   resumeAudio);
+          };
+          document.addEventListener('click',     resumeAudio, { once: true });
+          document.addEventListener('touchstart', resumeAudio, { once: true });
+          document.addEventListener('keydown',   resumeAudio, { once: true });
         }).catch(function (message) {
           alert(message);
         });

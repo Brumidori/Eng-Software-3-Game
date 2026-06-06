@@ -59,8 +59,9 @@ namespace BrainDuel.Match.Core
             Context = new MatchContext
             {
                 MatchId          = MatchSessionData.MatchId          ?? string.Empty,
+                // PlayFabId clássico — deve bater com o Player1Id/Player2Id armazenado no CloudScript
                 LocalPlayerId    = MatchSessionData.LocalPlayerId
-                                   ?? PlayFab.PlayFabSettings.staticPlayer?.EntityId
+                                   ?? PlayFab.PlayFabSettings.staticPlayer?.PlayFabId
                                    ?? string.Empty,
                 LocalDisplayName = MatchSessionData.LocalDisplayName,
                 LocalLevel       = MatchSessionData.LocalLevel,
@@ -92,40 +93,20 @@ namespace BrainDuel.Match.Core
 
         private IEnumerator IniciarPartida()
         {
-            var party = PartyNetworkManager.Instance;
-            if (party == null)
+            // Garante que o singleton existe para SubscribeToNetworkEvents
+            if (PartyNetworkManager.Instance == null)
             {
                 var go = new GameObject("PartyNetworkManager");
-                party = go.AddComponent<PartyNetworkManager>();
-                // Awake() runs synchronously; give Start() one frame
+                go.AddComponent<PartyNetworkManager>();
                 yield return null;
-                // Re-subscribe now that the instance exists
                 SubscribeToNetworkEvents();
             }
 
-            bool joinDone  = false;
-            bool joinError = false;
-
-            party.JoinNetwork(Context.MatchId,
-                onJoined: ()  => joinDone  = true,
-                onError:  _   => { joinDone = true; joinError = true; });
-
-            while (!joinDone) yield return null;
-
-            if (joinError)
-            {
-                Debug.LogError("[Match] Falha ao entrar na rede Party");
-                yield break;
-            }
-
-            // Garante que todos os Start() dos outros MonoBehaviours já rodaram e
-            // subscreveram aos eventos antes de disparar a primeira rodada.
-            // Necessário porque em stub mode JoinNetwork chama onJoined de forma
-            // síncrona, não dando tempo para o Start() do MatchSceneController rodar.
+            // Aguarda todos os Start() dos outros MonoBehaviours (MatchSceneController, etc.)
             yield return null;
 
             // Modo stub: cria ServerState mínimo para que HP / round funcionem na UI
-            if (party.IsStubMode && Context.ServerState == null)
+            if (Context.IsStubMode && Context.ServerState == null)
             {
                 Context.ServerState = new ServerMatchState
                 {
@@ -155,7 +136,7 @@ namespace BrainDuel.Match.Core
                 };
             }
 
-            if (party.IsStubMode)
+            if (Context.IsStubMode)
             {
                 yield return BuildStubRoundPool();
 
@@ -181,8 +162,31 @@ namespace BrainDuel.Match.Core
                     new { matchId = Context.MatchId, roundNumber = 1 },
                     onSuccess: result =>
                     {
+                        // Verifica se o servidor retornou erro (ex: "Match inativo" — CreateMatch não foi chamado)
+                        if (result != null)
+                        {
+                            try
+                            {
+                                var chkJson = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                                var chk     = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<Dictionary<string, object>>(chkJson);
+                                if (chk != null && chk.ContainsKey("error"))
+                                {
+                                    Debug.LogError($"[Match] StartNextRound erro do servidor: {chk["error"]} | matchId={Context.MatchId}");
+                                    roundStarted = true;
+                                    return;
+                                }
+                            }
+                            catch { /* ignora falha no check, continua normalmente */ }
+                        }
+
                         if (result != null && Context.ServerState == null)
                             InicializarServerStateDoRetorno(result);
+
+                        // Dispara a transição de fase diretamente — não depende de Party broadcast
+                        var payload = ParsearRoundStart(result, 1);
+                        if (payload != null)
+                            HandleRoundStart(payload);
+
                         roundStarted = true;
                     },
                     onError: _ => roundStarted = true);
@@ -217,6 +221,7 @@ namespace BrainDuel.Match.Core
 
         private void OnDestroy()
         {
+            MatchSessionData.Clear();
             UnsubscribeFromNetworkEvents();
         }
 
@@ -238,8 +243,7 @@ namespace BrainDuel.Match.Core
                 OnPhaseChanged?.Invoke(newPhase);
                 Debug.Log($"[Match] → {newPhase} | Round {Context.CurrentRound}/{MatchConfig.MaxRounds}");
 
-                var party = PartyNetworkManager.Instance;
-                if (party != null && party.IsStubMode)
+                if (Context.IsStubMode)
                 {
                     if (_stubConductorCoroutine != null)
                         StopCoroutine(_stubConductorCoroutine);
@@ -623,26 +627,11 @@ namespace BrainDuel.Match.Core
                 RoundNumber       = Context.CurrentRound,
                 AnswerId          = answerId,
                 ClientTimestampMs = Context.AnswerTimestampMs
-            }, onSuccess: result =>
+            }, onSuccess: _ =>
             {
-                // Se o servidor já processou a rodada (ambos responderam), o resultado
-                // vem embutido na resposta — processa localmente e reenvia ao oponente.
-                var roundResult = TentarParsearRoundResult(result);
-                if (roundResult != null)
-                {
-                    PartyNetworkManager.Instance?.Broadcast(MessageType.RoundResult, roundResult);
-                    HandleRoundResult(roundResult);
-                }
-                else
-                {
-                    // Ainda aguardando o oponente — apenas notifica que respondemos
-                    PartyNetworkManager.Instance?.Broadcast(MessageType.OpponentAnswered,
-                        new OpponentAnsweredPayload
-                        {
-                            PlayerId    = Context.LocalPlayerId,
-                            TimestampMs = Context.AnswerTimestampMs
-                        });
-                }
+                // O resultado da rodada NÃO é processado aqui.
+                // Ambos os jogadores aguardam o timer expirar → TriggerProcessRound() garante
+                // que o Reveal aparece ao mesmo tempo para os dois.
             });
         }
 
@@ -699,14 +688,63 @@ namespace BrainDuel.Match.Core
                 new { matchId = Context.MatchId, roundNumber = Context.CurrentRound },
                 onSuccess: result =>
                 {
-                    var roundResult = TentarParsearRoundResult(result);
-                    if (roundResult != null)
+                    if (result == null) return;
+                    try
                     {
-                        PartyNetworkManager.Instance?.Broadcast(MessageType.RoundResult, roundResult);
-                        HandleRoundResult(roundResult);
+                        // ProcessRound retorna o payload diretamente (PascalCase, sem wrapper "roundResult")
+                        var json        = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                        var roundResult = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<RoundResultPayload>(json);
+                        // CorrectAnswerId vazio = rodada pendente ("pending") ou erro — não processa
+                        if (roundResult != null && !string.IsNullOrEmpty(roundResult.CorrectAnswerId))
+                            HandleRoundResult(roundResult);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[Match] TriggerProcessRound parse falhou: {ex.Message}");
                     }
                 },
                 onError: err => Debug.LogWarning($"[Match] ProcessRound falhou: {err}"));
+        }
+
+        private RoundStartPayload ParsearRoundStart(object result, int roundNumber)
+        {
+            if (result == null) return null;
+            try
+            {
+                var json = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                Debug.Log($"[Match] StartNextRound resposta: {json.Substring(0, Mathf.Min(300, json.Length))}");
+                var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<Dictionary<string, object>>(json);
+                if (dict == null) return null;
+
+                // Tenta camelCase (CloudScript JS) e PascalCase como fallback
+                object tidRaw, tnRaw, tsRaw;
+                dict.TryGetValue("themeId",   out tidRaw); if (tidRaw == null) dict.TryGetValue("ThemeId",   out tidRaw);
+                dict.TryGetValue("themeName", out tnRaw);  if (tnRaw  == null) dict.TryGetValue("ThemeName", out tnRaw);
+                dict.TryGetValue("serverTimestampMs", out tsRaw); if (tsRaw == null) dict.TryGetValue("ServerTimestampMs", out tsRaw);
+
+                string themeId   = tidRaw != null ? tidRaw.ToString() : string.Empty;
+                string themeName = tnRaw  != null ? tnRaw.ToString()  : themeId;
+                if (string.IsNullOrEmpty(themeName)) themeName = themeId;
+
+                long serverTs = 0;
+                if (tsRaw != null) long.TryParse(tsRaw.ToString(), out serverTs);
+                if (serverTs == 0) serverTs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+                return new RoundStartPayload
+                {
+                    RoundNumber        = roundNumber,
+                    ThemeId            = themeId,
+                    ThemeName          = themeName,
+                    ServerTimestampMs  = serverTs,
+                    ThemeDurationMs    = MatchConfig.ThemePhaseDurationMs,
+                    QuestionDurationMs = MatchConfig.QuestionPhaseDurationMs,
+                };
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Match] Falha ao parsear RoundStart: {ex.Message}");
+                return null;
+            }
         }
 
         private RoundResultPayload TentarParsearRoundResult(object result)
@@ -824,6 +862,11 @@ namespace BrainDuel.Match.Core
             Context.ResetRoundInputs();
             Context.PhaseStartServerMs = p.ServerTimestampMs;
             Context.PhaseDurationMs    = p.ThemeDurationMs;
+
+            // Mantém CurrentRound sincronizado — sem isso StartQuestion envia roundNumber errado
+            if (Context.ServerState != null)
+                Context.ServerState.CurrentRound = p.RoundNumber;
+
             OnRoundStarted?.Invoke(p);
             TransitionTo(MatchPhase.ThemeAndPowerUp);
         }
@@ -834,6 +877,14 @@ namespace BrainDuel.Match.Core
         // Chamado pelo ThemeAndPowerUpState após receber a resposta do StartQuestion
         public void ReceiveQuestionReveal(QuestionRevealPayload payload) =>
             HandleQuestionReveal(payload);
+
+        // Chamado pelos estados (RoundEndState) após receber a resposta do StartNextRound
+        public void ReceiveRoundStart(RoundStartPayload payload) =>
+            HandleRoundStart(payload);
+
+        // Chamado pelo QuestionState após receber o resultado de ProcessRound diretamente
+        public void HandleRoundResultFromState(RoundResultPayload payload) =>
+            HandleRoundResult(payload);
 
         private void HandleQuestionReveal(QuestionRevealPayload p)
         {
