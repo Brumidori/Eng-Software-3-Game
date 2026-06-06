@@ -2855,6 +2855,8 @@ MonoBehaviour:
     sprite: {fileID: -4558846155265381309, guid: d648fb2328a63a544a25e0cbb68da43b, type: 3}
   - key: skinHat
     sprite: {fileID: -2027455640051515771, guid: b45b77c793fa0c74997069dcbb50edbb, type: 3}
+  - key: 
+    sprite: {fileID: 21300000, guid: c2e2b41bd5f064d1f9225890da89b6be, type: 3}
   populateDecks: 1
   clearExistingDecks: 1
   decksContainer: {fileID: 832309930}

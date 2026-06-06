@@ -5,7 +5,7 @@ using UnityEngine;
 public class PlayerProfileData
 {
     public string displayName = "JOGADOR";
-    public string avatarId = "";
+    public string avatarId = "skinDefault";
     public string avatarUrl = "";
     public int level = 1;
     public int currentXp = 0;

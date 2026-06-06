@@ -98,6 +98,7 @@ public class PlayerDataService : MonoBehaviour
         cachedProfile = PlayerProfileData.CreateDefault();
         if (!string.IsNullOrWhiteSpace(displayName))
             cachedProfile.displayName = displayName;
+        cachedProfile.avatarId = "skinDefault";
         cachedProfile.equippedDeckId = "deckHistoria";
 
         string json = JsonUtility.ToJson(cachedProfile);
