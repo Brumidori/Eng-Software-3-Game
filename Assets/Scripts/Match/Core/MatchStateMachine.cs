@@ -625,13 +625,14 @@ namespace BrainDuel.Match.Core
 
             if (Context.IsStubMode) return;
 
-            // Envia ao servidor via CloudScript (autoritativo)
-            CloudScriptClient.Call("SubmitAnswer", new SubmitAnswerRequest
+            // Envia ao servidor via CloudScript (autoritativo).
+            // Usa objeto anônimo com camelCase — o CloudScript V1 recebe args.matchId, não args.MatchId.
+            CloudScriptClient.Call("SubmitAnswer", new
             {
-                MatchId           = Context.MatchId,
-                RoundNumber       = Context.CurrentRound,
-                AnswerId          = answerId,
-                ClientTimestampMs = Context.AnswerTimestampMs
+                matchId           = Context.MatchId,
+                roundNumber       = Context.CurrentRound,
+                answerId          = answerId,
+                clientTimestampMs = Context.AnswerTimestampMs
             }, onSuccess: result =>
             {
                 try
@@ -653,11 +654,12 @@ namespace BrainDuel.Match.Core
 
             if (Context.IsStubMode) return;
 
-            CloudScriptClient.Call("ActivatePowerUp", new ActivatePowerUpRequest
+            // Usa objeto anônimo com camelCase — mesmo motivo do SubmitAnswer.
+            CloudScriptClient.Call("ActivatePowerUp", new
             {
-                MatchId     = Context.MatchId,
-                RoundNumber = Context.CurrentRound,
-                PowerUp     = type
+                matchId     = Context.MatchId,
+                roundNumber = Context.CurrentRound,
+                powerUp     = type.ToString()   // string "SimpleShield" etc. — CloudScript compara com string
             }, onSuccess: _ =>
             {
                 PartyNetworkManager.Instance?.Broadcast(MessageType.PowerUpActivated,

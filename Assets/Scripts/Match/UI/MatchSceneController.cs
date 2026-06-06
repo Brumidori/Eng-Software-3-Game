@@ -360,7 +360,7 @@ namespace BrainDuel.Match.UI
             _inventarioItens = itens ?? new List<ItemInstance>();
             _poderesNoInventario.Clear();
 
-            // Conta quantidades por tipo usando mapeamento do Inspector (powerUpItemIds)
+            // Usa _inventarioItens (garantidamente não-null) em vez do parâmetro itens
             if (powerUpItemIds != null)
             {
                 for (int i = 0; i < OrdemPoderes.Length; i++)
@@ -368,20 +368,20 @@ namespace BrainDuel.Match.UI
                     if (i >= powerUpItemIds.Length) break;
                     string itemId = powerUpItemIds[i];
                     int count = 0;
-                    foreach (var it in itens)
-                        if (it.ItemId == itemId) count++;
+                    foreach (var it in _inventarioItens)
+                        if (it != null && it.ItemId == itemId) count++;
                     if (count > 0)
                         _poderesNoInventario[OrdemPoderes[i]] = count;
                 }
             }
 
-            // Se o EquippedPowerUp no contexto ainda é None (perfil não estava disponível
-            // quando a partida inicializou), resolve agora que o inventário carregou
-            if (_ctx?.LocalPlayer != null && _ctx.LocalPlayer.EquippedPowerUp == PowerUpType.None)
+            // Cacheia LocalPlayer uma vez — é uma propriedade que reavalia ServerState a cada acesso.
+            // Sem cache, pode retornar null na segunda chamada se ServerState mudar entre as avaliações.
+            var localPlayer = _ctx?.LocalPlayer;
+            if (localPlayer != null && localPlayer.EquippedPowerUp == PowerUpType.None)
             {
                 var equipado = ResolveEquippedPowerUpFromProfile();
 
-                // Último recurso: usa o primeiro poder encontrado no inventário
                 if (equipado == PowerUpType.None)
                 {
                     foreach (var kv in _poderesNoInventario)
@@ -392,20 +392,18 @@ namespace BrainDuel.Match.UI
 
                 if (equipado != PowerUpType.None)
                 {
-                    _ctx.LocalPlayer.EquippedPowerUp = equipado;
+                    localPlayer.EquippedPowerUp = equipado;
                     powerUpManager?.Initialize(_ctx, stateMachine, equipado);
                     Debug.Log($"[Match] EquippedPowerUp resolvido após inventário: {equipado}");
                 }
             }
 
-            // Garante que o poder equipado aparece no inventário visual (mesmo sem item cadastrado)
             if (_ctx != null && _ctx.EquippedPowerUp != PowerUpType.None)
             {
                 if (!_poderesNoInventario.ContainsKey(_ctx.EquippedPowerUp))
                     _poderesNoInventario[_ctx.EquippedPowerUp] = 1;
             }
 
-            // No modo stub todos os poderes ficam disponíveis para teste
             if (_ctx?.IsStubMode == true)
             {
                 foreach (PowerUpType tipo in OrdemPoderes)
@@ -415,7 +413,8 @@ namespace BrainDuel.Match.UI
 
             AtualizarQuantidadesTexto();
 
-            if (panelTemaPoderes.activeSelf)
+            // Guarda nula antes de chamar activeSelf — campo Inspector pode não estar conectado
+            if (panelTemaPoderes != null && panelTemaPoderes.activeSelf)
                 AtualizarEstadoBotoesPoder();
         }
 
