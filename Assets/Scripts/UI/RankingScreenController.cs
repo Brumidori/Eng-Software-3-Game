@@ -125,7 +125,7 @@ public class RankingScreenController : MonoBehaviour
                 linhasRanking[i].SetupLine(
                     EntradaParaPosicao(_ultimoTop15[i]),
                     EntradaParaNome(_ultimoTop15[i]),
-                    _ultimoTop15[i].StatValue.ToString(),
+                    ExtrairPartidas(_ultimoTop15[i]).ToString(),
                     ExtrairVitorias(_ultimoTop15[i]).ToString(),
                     CalcularWinrate(_ultimoTop15[i])
                 );
@@ -136,7 +136,7 @@ public class RankingScreenController : MonoBehaviour
                 linhasRanking[i].SetupLine(
                     (i + 1).ToString(),
                     EntradaParaNome(_entradaJogador),
-                    _entradaJogador.StatValue.ToString(),
+                    ExtrairPartidas(_entradaJogador).ToString(),
                     ExtrairVitorias(_entradaJogador).ToString(),
                     CalcularWinrate(_entradaJogador)
                 );
@@ -155,7 +155,7 @@ public class RankingScreenController : MonoBehaviour
         linhaDoJogador.SetupLine(
             (_entradaJogador.Position + 1).ToString(),
             EntradaParaNome(_entradaJogador),
-            _entradaJogador.StatValue.ToString(),
+            ExtrairPartidas(_entradaJogador).ToString(),
             ExtrairVitorias(_entradaJogador).ToString(),
             CalcularWinrate(_entradaJogador)
         );
