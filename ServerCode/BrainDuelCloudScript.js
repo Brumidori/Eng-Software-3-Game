@@ -594,6 +594,7 @@ function removeFromActiveIndex(matchId) {
 // --- Handlers de partida ---
 
 handlers.CreateMatch = function (args) {
+    
     var matchId = args.matchId;
     // currentPlayerId é sempre o PlayFabId clássico do chamador — usa como fallback se player1Id vier vazio
     var player1Id = isNonEmptyString(args.player1Id) ? args.player1Id : currentPlayerId;
@@ -654,6 +655,7 @@ handlers.CreateMatch = function (args) {
 };
 
 handlers.StartNextRound = function (args) {
+    
     var state = loadMatchState(args.matchId);
     if (!state || !state.IsActive)            return { error: "Match inativo" };
     if (args.roundNumber > MATCH_CONFIG.MaxRounds) return finalizeMatch(state, determineWinnerByHP(state), "RoundsOver");
@@ -713,6 +715,7 @@ handlers.StartNextRound = function (args) {
 };
 
 handlers.StartQuestion = function (args) {
+    
     var state = loadMatchState(args.matchId);
     if (!state) return { status: "ignored", reason: "match_not_found", matchId: args.matchId };
     if (state.CurrentRound !== args.roundNumber)
@@ -759,11 +762,12 @@ handlers.StartQuestion = function (args) {
 };
 
 handlers.SubmitAnswer = function (args) {
+    
     var playerId = currentPlayerId;
     var state    = loadMatchState(args.matchId);
 
-    if (!state || !state.IsActive)               return { error: "Match inativo" };
-    if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round", serverRound: state.CurrentRound, clientRound: args.roundNumber };
+    if (!state)            return { error: "Match inativo", reason: "not_found", matchId: args.matchId };
+    if (!state.IsActive)   return { error: "Match inativo", reason: "ended", endReason: state.EndReason, winnerId: state.WinnerId };    if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round", serverRound: state.CurrentRound, clientRound: args.roundNumber };
     if (state.Phase !== "Question")               return { status: "wrong_phase", serverPhase: state.Phase };
 
     var action = getPlayerAction(state, playerId);
@@ -780,6 +784,7 @@ handlers.SubmitAnswer = function (args) {
 };
 
 handlers.ActivatePowerUp = function (args) {
+    
     var playerId = currentPlayerId;
     var state    = loadMatchState(args.matchId);
 
@@ -791,30 +796,44 @@ handlers.ActivatePowerUp = function (args) {
     var action = getPlayerAction(state, playerId);
 
     if (ps.HasUsedPowerUp)                       return { error: "Power-up ja usado nesta partida" };
-    if (ps.EquippedPowerUp !== args.powerUp)      return { error: "Power-up nao equipado" };
-
+    // Compara ignorando case — player_profile pode salvar "doubleshield" e o cliente envia "DoubleShield"
+    var equippedNorm = String(ps.EquippedPowerUp || "None").toLowerCase();
+    var requestedNorm = String(args.powerUp      || "None").toLowerCase();
+    if (equippedNorm !== "none" && equippedNorm !== requestedNorm)
+        return { error: "Power-up nao equipado", equipped: ps.EquippedPowerUp, requested: args.powerUp };
     action.ActivatedPowerUp = args.powerUp;
     saveMatchState(state);
     return { status: "ok" };
 };
 
 handlers.ProcessRound = function (args) {
-    var state = loadMatchState(args.matchId);
-    if (!state || !state.IsActive)               return { error: "Match inativo" };
-    if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round" };
-    if (state.CurrentRoundState.IsProcessed)      return buildRoundResponse(state, true);
+    try {
+        var state = loadMatchState(args.matchId);
+        if (!state || !state.IsActive)               return { error: "Match inativo" };
+        if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round" };
+        if (state.CurrentRoundState.IsProcessed)      return buildRoundResponse(state, true);
 
-    // Só processa depois que o timer de pergunta expirou no servidor.
-    // Garante que ambos os jogadores vejam o Reveal ao mesmo tempo (quando o timer chega a 0),
-    // independentemente de quando cada um respondeu.
-    var elapsed = Date.now() - state.PhaseStartTimestampMs;
-    if (elapsed < MATCH_CONFIG.QuestionPhaseDurationMs)
-        return { status: "pending" };
+        // Só processa depois que o timer de pergunta expirou no servidor.
+        // Garante que ambos os jogadores vejam o Reveal ao mesmo tempo (quando o timer chega a 0),
+        // independentemente de quando cada um respondeu.
+        var elapsed = Date.now() - state.PhaseStartTimestampMs;
+        if (elapsed < MATCH_CONFIG.QuestionPhaseDurationMs)
+            return { status: "pending" };
 
-    return processRoundInternal(state);
+        return processRoundInternal(state);
+
+    } catch (e) {
+        var info = e && e.apiErrorInfo ? e.apiErrorInfo : null;
+        return {
+            error:    "ProcessRound_api_error",
+            apiName:  info ? info.api : null,
+            apiError: info ? info.apiError : String(e)
+        };
+    }
 };
 
 handlers.RejoinMatch = function (args) {
+    
     var playerId = currentPlayerId;
     var state    = loadMatchState(args.matchId);
     if (!state || !state.IsActive) return { error: "Match nao encontrado" };
@@ -832,6 +851,7 @@ handlers.RejoinMatch = function (args) {
 };
 
 handlers.AbandonMatch = function (args) {
+    
     var loserId = currentPlayerId;
     var state   = loadMatchState(args.matchId);
     if (!state)             return { error: "Match nao encontrado" };
@@ -843,6 +863,7 @@ handlers.AbandonMatch = function (args) {
 };
 
 handlers.FinalizeMatch = function (args) {
+    
     var state = loadMatchState(args.matchId);
     if (!state)          return { error: "Match nao encontrado" };
     if (!state.IsActive) return { status: "already_ended" };   // evita double-processing
@@ -1063,10 +1084,15 @@ function makeAction(playerId) {
 
 function getEquippedPowerUp(playerId) {
     if (!isNonEmptyString(playerId)) return "None";
+    // Lê do player_profile (UserData) — mesma fonte que o cliente C# usa para exibir o power-up equipado.
+    // UserInternalData["EquippedPowerUp"] nunca é populado pela app atual.
     try {
-        var result = server.GetUserInternalData({ PlayFabId: playerId, Keys: ["EquippedPowerUp"] });
-        if (result.Data && result.Data["EquippedPowerUp"])
-            return result.Data["EquippedPowerUp"].Value || "None";
+        var r = server.GetUserData({ PlayFabId: playerId, Keys: ["player_profile"] });
+        if (r.Data && r.Data["player_profile"]) {
+            var p = JSON.parse(r.Data["player_profile"].Value);
+            if (p && isNonEmptyString(p.equippedPowerUp) && p.equippedPowerUp !== "None")
+                return p.equippedPowerUp;
+        }
     } catch (e) { }
     return "None";
 }
@@ -1105,13 +1131,26 @@ function getPlayerDeckEntries(playerId) {
     var seenKeys = {};
     if (!isNonEmptyString(playerId)) return entries;
     try {
-        var result = server.GetUserInventory({ PlayFabId: playerId });
-        if (!result || !result.Inventory) return entries;
-        for (var i = 0; i < result.Inventory.length; i++) {
-            var item = result.Inventory[i];
+        var inv = server.GetUserInventory({ PlayFabId: playerId });
+        if (!inv || !inv.Inventory) return entries;
+
+        // deck_id vive no CustomData do CATÁLOGO (string JSON), não na instância do inventário
+        var cat = server.GetCatalogItems({ CatalogVersion: DEFAULT_CATALOG_VERSION });
+        var deckIdByItem = {};
+        if (cat && cat.Catalog) {
+            for (var c = 0; c < cat.Catalog.length; c++) {
+                var ci = cat.Catalog[c];
+                if (!ci || !isNonEmptyString(ci.CustomData)) continue;
+                var parsed = safeJsonParse(ci.CustomData);
+                if (parsed.success && parsed.value && parsed.value.deck_id)
+                    deckIdByItem[ci.ItemId] = String(parsed.value.deck_id).trim();
+            }
+        }
+
+        for (var i = 0; i < inv.Inventory.length; i++) {
+            var item = inv.Inventory[i];
             if (!item || !isNonEmptyString(item.ItemId)) continue;
-            var deckId = item.CustomData && item.CustomData.deck_id
-                ? String(item.CustomData.deck_id).trim() : null;
+            var deckId = deckIdByItem[item.ItemId];
             if (deckId && !seenKeys[deckId]) {
                 seenKeys[deckId] = true;
                 entries.push({ key: deckId });
@@ -1274,6 +1313,66 @@ function aplicarResultadoJogador(playerId, ganhou, empate, abandono) {
     }
 }
 
+// ============================================================
+// PERFIL DO JOGADOR
+// Atualiza o avatar equipado no payload player_profile.
+// Valida posse da skin no inventário antes de persistir.
+// ============================================================
+
+handlers.EquipAvatarSkin = function(args) {
+    var avatarId = args && args.avatarId ? String(args.avatarId) : "";
+
+    if (!avatarId)
+        throw new Error("avatarId inválido");
+
+    if (avatarId.toLowerCase().indexOf("skin") !== 0)
+        throw new Error("avatarId inválido para skin");
+
+    var inventory = server.GetUserInventory({ PlayFabId: currentPlayerId });
+    var items = inventory && inventory.Inventory ? inventory.Inventory : [];
+    var ownsSkin = false;
+
+    for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (item && item.ItemId && String(item.ItemId).toLowerCase() === avatarId.toLowerCase()) {
+            ownsSkin = true;
+            break;
+        }
+    }
+
+    if (!ownsSkin)
+        throw new Error("Skin não encontrada no inventário do jogador");
+
+    var userData = server.GetUserData({
+        PlayFabId: currentPlayerId,
+        Keys: ["player_profile"]
+    });
+
+    var profileJson = userData && userData.Data && userData.Data.player_profile ? userData.Data.player_profile.Value : null;
+    var profile = {};
+
+    if (profileJson) {
+        try {
+            profile = JSON.parse(profileJson) || {};
+        } catch (e) {
+            profile = {};
+        }
+    }
+
+    profile.avatarId = avatarId;
+
+    server.UpdateUserData({
+        PlayFabId: currentPlayerId,
+        Data: {
+            player_profile: JSON.stringify(profile)
+        }
+    });
+
+    return {
+        success: true,
+        avatarId: avatarId
+    };
+};
 
 // ============================================================
 // SEÇÃO 4 — LOJA
@@ -1350,4 +1449,12 @@ handlers.EquiparSkinSimples = function (args, context) {
 
     // Retorna para o Unity dizendo que deu tudo certo
     return { success: true, skinSalva: skinId };
+};
+
+handlers.DebugActiveMatches = function (args, context) {
+    return {
+        activeMatchIds:   loadActiveIndex(),
+        askedFor:         args ? args.matchId : null,
+        existsForAskedId: args && args.matchId ? !!loadMatchState(args.matchId) : null
+    };
 };

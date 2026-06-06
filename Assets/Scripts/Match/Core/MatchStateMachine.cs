@@ -659,16 +659,24 @@ namespace BrainDuel.Match.Core
             {
                 matchId     = Context.MatchId,
                 roundNumber = Context.CurrentRound,
-                powerUp     = type.ToString()   // string "SimpleShield" etc. — CloudScript compara com string
-            }, onSuccess: _ =>
+                powerUp     = type.ToString()
+            }, onSuccess: result =>
             {
+                try
+                {
+                    var j = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                    if (j != null && j.Contains("error"))
+                        Debug.LogWarning($"[Match] ActivatePowerUp erro do servidor: {j}");
+                }
+                catch { }
                 PartyNetworkManager.Instance?.Broadcast(MessageType.PowerUpActivated,
                     new PowerUpActivatedPayload
                     {
                         PlayerId = Context.LocalPlayerId,
                         PowerUp  = type
                     });
-            });
+            },
+            onError: err => Debug.LogWarning($"[Match] ActivatePowerUp falhou: {err}"));
         }
 
         // ----------------------------------------------------------
