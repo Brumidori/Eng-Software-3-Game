@@ -137,7 +137,6 @@ public class PlayFabService : MonoBehaviour
             {
                 Debug.Log($"[PlayFabService] Registro realizado com sucesso. PlayFabId: {result.PlayFabId}");
                 OnRegisterSuccess?.Invoke();
-                TryGrantStarterDecks();
             },
             error =>
             {
@@ -192,6 +191,6 @@ public class PlayFabService : MonoBehaviour
     /// </summary>
     public bool IsLoggedIn()
     {
-        return PlayFabSettings.staticPlayer.IsEntityLoggedIn();
+        return PlayFabClientAPI.IsClientLoggedIn();
     }
 }

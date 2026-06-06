@@ -58,22 +58,23 @@ public class StarterDeckGrantService : MonoBehaviour
             return;
         }
 
-        var request = new ExecuteFunctionRequest
+        var request = new PlayFab.ClientModels.ExecuteCloudScriptRequest
         {
             FunctionName = grantFunctionName,
             FunctionParameter = new Dictionary<string, object>
             {
                 { "catalogVersion", catalogVersion }
-            }
+            },
+            GeneratePlayStreamEvent = true
         };
 
-        PlayFabService.Client.ExecuteFunction(
+        PlayFabService.Client.ExecuteCloudScript(
             request,
             result => HandleGrantSuccess(result, onComplete),
             error => HandleGrantError(error, onComplete));
     }
 
-    private void HandleGrantSuccess(ExecuteFunctionResult result, Action<StarterDeckGrantResult> onComplete)
+    private void HandleGrantSuccess(PlayFab.ClientModels.ExecuteCloudScriptResult result, Action<StarterDeckGrantResult> onComplete)
     {
         if (result.Error != null)
         {
