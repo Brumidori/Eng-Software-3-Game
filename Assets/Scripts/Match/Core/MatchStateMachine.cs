@@ -59,8 +59,9 @@ namespace BrainDuel.Match.Core
             Context = new MatchContext
             {
                 MatchId          = MatchSessionData.MatchId          ?? string.Empty,
+                // PlayFabId clássico — deve bater com o Player1Id/Player2Id armazenado no CloudScript
                 LocalPlayerId    = MatchSessionData.LocalPlayerId
-                                   ?? PlayFab.PlayFabSettings.staticPlayer?.EntityId
+                                   ?? PlayFab.PlayFabSettings.staticPlayer?.PlayFabId
                                    ?? string.Empty,
                 LocalDisplayName = MatchSessionData.LocalDisplayName,
                 LocalLevel       = MatchSessionData.LocalLevel,
@@ -861,6 +862,11 @@ namespace BrainDuel.Match.Core
             Context.ResetRoundInputs();
             Context.PhaseStartServerMs = p.ServerTimestampMs;
             Context.PhaseDurationMs    = p.ThemeDurationMs;
+
+            // Mantém CurrentRound sincronizado — sem isso StartQuestion envia roundNumber errado
+            if (Context.ServerState != null)
+                Context.ServerState.CurrentRound = p.RoundNumber;
+
             OnRoundStarted?.Invoke(p);
             TransitionTo(MatchPhase.ThemeAndPowerUp);
         }
@@ -875,6 +881,10 @@ namespace BrainDuel.Match.Core
         // Chamado pelos estados (RoundEndState) após receber a resposta do StartNextRound
         public void ReceiveRoundStart(RoundStartPayload payload) =>
             HandleRoundStart(payload);
+
+        // Chamado pelo QuestionState após receber o resultado de ProcessRound diretamente
+        public void HandleRoundResultFromState(RoundResultPayload payload) =>
+            HandleRoundResult(payload);
 
         private void HandleQuestionReveal(QuestionRevealPayload p)
         {
