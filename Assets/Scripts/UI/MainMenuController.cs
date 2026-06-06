@@ -42,8 +42,19 @@ public class MainMenuController : MonoBehaviour
             var captured = item;
             item.button.onClick.AddListener(() => HandleItemClick(captured));
         }
+        string currentScene = SceneManager.GetActiveScene().name;
+
+        foreach (var item in items)
+        {
+            if (item.targetScene == currentScene)
+            {
+                _activeTab = item.tab;
+                break;
+            }
+        }        
 
         RefreshAll();
+        
     }
 
     // ── API pública ───────────────────────────────────────────────────────────
