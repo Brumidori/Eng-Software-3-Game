@@ -149,7 +149,9 @@ namespace BrainDuel.Match.Core
         // Helpers
         // ----------------------------------------------------------
 
-        public bool IsStubMode => BrainDuel.Match.Network.PartyNetworkManager.Instance?.IsStubMode == true;
+        // Stub = partida local contra bot (Party SDK não necessário).
+        // Real = dois jogadores reais sincronizados via CloudScript (suportado em WebGL).
+        public bool IsStubMode => !BrainDuel.Match.Core.MatchSessionData.IsRealMatch;
 
         public bool IsLocalPlayer(string playerId) => playerId == LocalPlayerId;
 
