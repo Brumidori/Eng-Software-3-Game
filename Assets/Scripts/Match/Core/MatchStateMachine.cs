@@ -220,6 +220,7 @@ namespace BrainDuel.Match.Core
 
         private void OnDestroy()
         {
+            MatchSessionData.Clear();
             UnsubscribeFromNetworkEvents();
         }
 
@@ -625,26 +626,11 @@ namespace BrainDuel.Match.Core
                 RoundNumber       = Context.CurrentRound,
                 AnswerId          = answerId,
                 ClientTimestampMs = Context.AnswerTimestampMs
-            }, onSuccess: result =>
+            }, onSuccess: _ =>
             {
-                // Se o servidor já processou a rodada (ambos responderam), o resultado
-                // vem embutido na resposta — processa localmente e reenvia ao oponente.
-                var roundResult = TentarParsearRoundResult(result);
-                if (roundResult != null)
-                {
-                    PartyNetworkManager.Instance?.Broadcast(MessageType.RoundResult, roundResult);
-                    HandleRoundResult(roundResult);
-                }
-                else
-                {
-                    // Ainda aguardando o oponente — apenas notifica que respondemos
-                    PartyNetworkManager.Instance?.Broadcast(MessageType.OpponentAnswered,
-                        new OpponentAnsweredPayload
-                        {
-                            PlayerId    = Context.LocalPlayerId,
-                            TimestampMs = Context.AnswerTimestampMs
-                        });
-                }
+                // O resultado da rodada NÃO é processado aqui.
+                // Ambos os jogadores aguardam o timer expirar → TriggerProcessRound() garante
+                // que o Reveal aparece ao mesmo tempo para os dois.
             });
         }
 
@@ -701,11 +687,19 @@ namespace BrainDuel.Match.Core
                 new { matchId = Context.MatchId, roundNumber = Context.CurrentRound },
                 onSuccess: result =>
                 {
-                    var roundResult = TentarParsearRoundResult(result);
-                    if (roundResult != null)
+                    if (result == null) return;
+                    try
                     {
-                        PartyNetworkManager.Instance?.Broadcast(MessageType.RoundResult, roundResult);
-                        HandleRoundResult(roundResult);
+                        // ProcessRound retorna o payload diretamente (PascalCase, sem wrapper "roundResult")
+                        var json        = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                        var roundResult = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<RoundResultPayload>(json);
+                        // CorrectAnswerId vazio = rodada pendente ("pending") ou erro — não processa
+                        if (roundResult != null && !string.IsNullOrEmpty(roundResult.CorrectAnswerId))
+                            HandleRoundResult(roundResult);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[Match] TriggerProcessRound parse falhou: {ex.Message}");
                     }
                 },
                 onError: err => Debug.LogWarning($"[Match] ProcessRound falhou: {err}"));

@@ -515,7 +515,7 @@ var MATCH_CONFIG = {
     InitialHP:               100,
     MaxRounds:               20,
     ThemePhaseDurationMs:    5000,
-    QuestionPhaseDurationMs: 20000,
+    QuestionPhaseDurationMs: 15000,
     SpeedBonusThresholdMs:   200,
     AfkRoundLimit:           3,
     ReconnectWindowMs:       30000
@@ -753,6 +753,14 @@ handlers.ProcessRound = function (args) {
     if (!state || !state.IsActive)               return { error: "Match inativo" };
     if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round" };
     if (state.CurrentRoundState.IsProcessed)      return buildRoundResponse(state, true);
+
+    // Só processa depois que o timer de pergunta expirou no servidor.
+    // Garante que ambos os jogadores vejam o Reveal ao mesmo tempo (quando o timer chega a 0),
+    // independentemente de quando cada um respondeu.
+    var elapsed = Date.now() - state.PhaseStartTimestampMs;
+    if (elapsed < MATCH_CONFIG.QuestionPhaseDurationMs)
+        return { status: "pending" };
+
     return processRoundInternal(state);
 };
 

@@ -12,9 +12,7 @@ namespace BrainDuel.Match.States
 {
     public class QuestionState : BaseMatchState
     {
-        private bool  _roundProcessRequested;
-        private float _pollTimer;
-        private const float PollIntervalSeconds = 2f;
+        private bool _roundProcessRequested;
 
         public QuestionState(MatchContext ctx, MatchStateMachine machine)
             : base(ctx, machine) { }
@@ -22,7 +20,6 @@ namespace BrainDuel.Match.States
         public override void OnEnter()
         {
             _roundProcessRequested = false;
-            _pollTimer             = 0f;
             Debug.Log($"[State] Question | Round {Context.CurrentRound}");
         }
 
@@ -37,17 +34,8 @@ namespace BrainDuel.Match.States
                 return;
             }
 
-            // Polling: após responder, verifica periodicamente se o oponente já respondeu
-            // (substitui o broadcast via Party que não funciona no WebGL)
-            if (!Context.IsStubMode && Context.HasAnsweredThisRound)
-            {
-                _pollTimer += deltaTime;
-                if (_pollTimer >= PollIntervalSeconds)
-                {
-                    _pollTimer = 0f;
-                    Machine.TriggerProcessRound();
-                }
-            }
+            // Não há polling antecipado: o servidor retorna "pending" antes do timer expirar.
+            // Ambos os jogadores aguardam o timer → TriggerProcessRound() cuida do Reveal sincronizado.
         }
 
         public override void OnExit() { }
