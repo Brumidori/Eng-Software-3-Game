@@ -710,19 +710,37 @@ namespace BrainDuel.Match.Core
                     if (result == null) return;
                     try
                     {
-                        // ProcessRound retorna o payload diretamente (PascalCase, sem wrapper "roundResult")
                         var json        = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
                         var roundResult = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<RoundResultPayload>(json);
-                        // CorrectAnswerId vazio = rodada pendente ("pending") ou erro — não processa
                         if (roundResult != null && !string.IsNullOrEmpty(roundResult.CorrectAnswerId))
+                        {
                             HandleRoundResult(roundResult);
+                        }
+                        else if (Phase == MatchPhase.Question)
+                        {
+                            // Pendente — timer do cliente e do servidor ligeiramente dessincronizados.
+                            // Retenta em 1.5s para destravar a partida.
+                            Debug.Log("[Match] TriggerProcessRound pendente — retentando em 1.5s.");
+                            StartCoroutine(RetryTriggerProcessRound());
+                        }
                     }
                     catch (Exception ex)
                     {
                         Debug.LogWarning($"[Match] TriggerProcessRound parse falhou: {ex.Message}");
                     }
                 },
-                onError: err => Debug.LogWarning($"[Match] ProcessRound falhou: {err}"));
+                onError: err =>
+                {
+                    Debug.LogWarning($"[Match] ProcessRound falhou: {err}");
+                    if (Phase == MatchPhase.Question)
+                        StartCoroutine(RetryTriggerProcessRound());
+                });
+        }
+
+        private IEnumerator RetryTriggerProcessRound()
+        {
+            yield return new WaitForSeconds(1.5f);
+            TriggerProcessRound();
         }
 
         private RoundStartPayload ParsearRoundStart(object result, int roundNumber)

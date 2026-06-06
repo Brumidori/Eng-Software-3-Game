@@ -77,8 +77,10 @@ namespace BrainDuel.Match.States
                     }
                     else
                     {
-                        // Servidor ainda não processou (pending) — UI timer vai disparar TriggerProcessRound
-                        Debug.Log("[State] ProcessRound pendente — aguardando UI timer.");
+                        // Servidor ainda não processou (timer ligeiramente dessincronizado).
+                        // Retenta em 1s para não travar caso o UI timer já tenha disparado junto.
+                        Debug.Log("[State] ProcessRound pendente — retentando em 1s.");
+                        Machine.StartCoroutine(RetryAfterDelay(1f));
                     }
                 }
                 catch (System.Exception ex)

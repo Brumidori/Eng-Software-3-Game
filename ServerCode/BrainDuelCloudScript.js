@@ -938,14 +938,30 @@ function processRoundInternal(state) {
         state.Phase     = "Reveal";
     }
 
-    // Race-condition guard: se StartNextRound(n+1) salvou CurrentRound mais alto
-    // enquanto este processamento estava em andamento, preserva o valor maior.
-    var latestState = loadMatchState(state.MatchId);
-    if (latestState && latestState.CurrentRound > state.CurrentRound)
-        state.CurrentRound = latestState.CurrentRound;
-
-    saveMatchState(state);
-    if (matchOver) { removeFromActiveIndex(state.MatchId); updatePlayerStats(state, winnerId); }
+    // Salva sem regredir campos de um StartNextRound concorrente.
+    // Recarrega o estado atual e atualiza só os campos que processRoundInternal é dono:
+    // Player1State/Player2State (HP, streak), LastProcessedRound e, se mesma rodada, CurrentRoundState.
+    // CurrentRound, Phase e PhaseStartTimestampMs são preservados do estado atual.
+    var stateAtual = loadMatchState(state.MatchId);
+    if (stateAtual) {
+        stateAtual.Player1State       = state.Player1State;
+        stateAtual.Player2State       = state.Player2State;
+        stateAtual.LastProcessedRound = state.LastProcessedRound;
+        // Só sobrescreve CurrentRoundState se o servidor ainda está na rodada processada
+        if (stateAtual.CurrentRound === round.RoundNumber)
+            stateAtual.CurrentRoundState = state.CurrentRoundState;
+        if (matchOver) {
+            stateAtual.IsActive  = false;
+            stateAtual.WinnerId  = winnerId;
+            stateAtual.EndReason = endReason;
+            stateAtual.Phase     = "MatchEnd";
+        }
+        saveMatchState(stateAtual);
+        if (matchOver) { removeFromActiveIndex(stateAtual.MatchId); updatePlayerStats(stateAtual, winnerId); }
+    } else {
+        saveMatchState(state);
+        if (matchOver) { removeFromActiveIndex(state.MatchId); updatePlayerStats(state, winnerId); }
+    }
     return buildRoundResponse(state, false);
 }
 
