@@ -675,8 +675,18 @@ namespace BrainDuel.Match.Core
                 {
                     var j = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
                     Debug.Log($"[Match] SubmitAnswer resposta: {j}");
+
+                    // Quando ambos os jogadores já responderam, o servidor processa
+                    // a rodada e devolve roundResult diretamente — sem precisar de
+                    // uma chamada separada ao ProcessRound.
+                    var roundResult = TentarParsearRoundResult(result);
+                    if (roundResult != null && !string.IsNullOrEmpty(roundResult.CorrectAnswerId))
+                    {
+                        Debug.Log("[Match] SubmitAnswer: resultado imediato recebido — avançando.");
+                        HandleRoundResultFromState(roundResult);
+                    }
                 }
-                catch { Debug.Log("[Match] SubmitAnswer: resposta recebida (parse ignorado)."); }
+                catch (Exception ex) { Debug.LogWarning($"[Match] SubmitAnswer parse: {ex.Message}"); }
             },
             onError: err => Debug.LogWarning($"[Match] SubmitAnswer erro: {err}"));
         }
@@ -698,18 +708,39 @@ namespace BrainDuel.Match.Core
                 powerUp     = type.ToString()
             }, onSuccess: result =>
             {
+                int[] eliminatedIndices = null;
                 try
                 {
                     var j = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
                     if (j != null && j.Contains("error"))
                         Debug.LogWarning($"[Match] ActivatePowerUp erro do servidor: {j}");
+
+                    // EliminateTwo: lê os índices calculados pelo servidor
+                    if (type == PowerUpType.EliminateTwo && result != null)
+                    {
+                        var d = PlayFab.Json.PlayFabSimpleJson
+                            .DeserializeObject<Dictionary<string, object>>(j);
+                        if (d != null && d.TryGetValue("eliminatedIndices", out var eiRaw) && eiRaw != null)
+                        {
+                            var eiJson = PlayFab.Json.PlayFabSimpleJson.SerializeObject(eiRaw);
+                            var eiList = PlayFab.Json.PlayFabSimpleJson
+                                .DeserializeObject<System.Collections.Generic.List<int>>(eiJson);
+                            if (eiList != null) eliminatedIndices = eiList.ToArray();
+                        }
+                        // Aplica localmente para o jogador que ativou o poder
+                        if (eliminatedIndices != null)
+                            MatchEvents.NotifyEliminateTwo(eliminatedIndices);
+                    }
                 }
-                catch { }
+                catch (Exception ex) { Debug.LogWarning($"[Match] ActivatePowerUp parse: {ex.Message}"); }
+
+                // Broadcast para o oponente (inclui índices para EliminateTwo)
                 PartyNetworkManager.Instance?.Broadcast(MessageType.PowerUpActivated,
                     new PowerUpActivatedPayload
                     {
-                        PlayerId = Context.LocalPlayerId,
-                        PowerUp  = type
+                        PlayerId          = Context.LocalPlayerId,
+                        PowerUp           = type,
+                        EliminatedIndices = eliminatedIndices
                     });
             },
             onError: err => Debug.LogWarning($"[Match] ActivatePowerUp falhou: {err}"));
@@ -756,6 +787,25 @@ namespace BrainDuel.Match.Core
                 if (tsRaw != null) long.TryParse(tsRaw.ToString(), out serverTs);
                 if (serverTs == 0) serverTs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+                // Pergunta embutida: evita a chamada separada ao StartQuestion
+                QuestionRevealPayload cachedQuestion = null;
+                if (dict.TryGetValue("question", out var qRaw) && qRaw != null)
+                {
+                    try
+                    {
+                        var qJson = PlayFab.Json.PlayFabSimpleJson.SerializeObject(qRaw);
+                        cachedQuestion = PlayFab.Json.PlayFabSimpleJson
+                            .DeserializeObject<QuestionRevealPayload>(qJson);
+                        // Timestamp da fase de pergunta = roundStart + themeDuration
+                        if (cachedQuestion != null)
+                        {
+                            cachedQuestion.ServerTimestampMs = serverTs + MatchConfig.ThemePhaseDurationMs;
+                            cachedQuestion.DurationMs        = MatchConfig.QuestionPhaseDurationMs;
+                        }
+                    }
+                    catch { /* resposta sem pergunta — fallback para StartQuestion */ }
+                }
+
                 return new RoundStartPayload
                 {
                     RoundNumber        = roundNumber,
@@ -764,6 +814,7 @@ namespace BrainDuel.Match.Core
                     ServerTimestampMs  = serverTs,
                     ThemeDurationMs    = MatchConfig.ThemePhaseDurationMs,
                     QuestionDurationMs = MatchConfig.QuestionPhaseDurationMs,
+                    CachedQuestion     = cachedQuestion,
                 };
             }
             catch (Exception ex)
@@ -889,9 +940,22 @@ namespace BrainDuel.Match.Core
             Context.PhaseStartServerMs = p.ServerTimestampMs;
             Context.PhaseDurationMs    = p.ThemeDurationMs;
 
-            // Mantém CurrentRound sincronizado — sem isso StartQuestion envia roundNumber errado
             if (Context.ServerState != null)
                 Context.ServerState.CurrentRound = p.RoundNumber;
+
+            // Armazena pergunta embutida — ThemeAndPowerUpState usa diretamente
+            // sem precisar chamar StartQuestion separadamente.
+            Context.CurrentQuestion = p.CachedQuestion != null
+                ? new QuestionData
+                {
+                    QuestionId = p.CachedQuestion.QuestionId,
+                    Text       = p.CachedQuestion.QuestionText,
+                    Options    = p.CachedQuestion.Answers != null
+                        ? System.Array.ConvertAll(p.CachedQuestion.Answers,
+                            a => new AnswerOption { Id = a.Id, Text = a.Text })
+                        : null,
+                }
+                : null;
 
             OnRoundStarted?.Invoke(p);
             TransitionTo(MatchPhase.ThemeAndPowerUp);

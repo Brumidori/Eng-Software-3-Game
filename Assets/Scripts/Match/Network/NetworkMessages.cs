@@ -57,12 +57,15 @@ namespace BrainDuel.Network
     [Serializable]
     public class RoundStartPayload
     {
-        public int    RoundNumber;
-        public string ThemeId;
-        public string ThemeName;
-        public long   ServerTimestampMs;   // referência para sincronizar timers
-        public int    ThemeDurationMs;     // padrão: 4000
-        public int    QuestionDurationMs;  // padrão: 20000
+        public int                  RoundNumber;
+        public string               ThemeId;
+        public string               ThemeName;
+        public long                 ServerTimestampMs;   // referência para sincronizar timers
+        public int                  ThemeDurationMs;     // padrão: 5000
+        public int                  QuestionDurationMs;  // padrão: 15000
+        // Pergunta já embutida: elimina a chamada separada ao StartQuestion.
+        // Null em respostas antigas (fallback para StartQuestion ainda funciona).
+        public QuestionRevealPayload CachedQuestion;
     }
 
     /// <summary>Revela a pergunta após os 4 s do tema.</summary>

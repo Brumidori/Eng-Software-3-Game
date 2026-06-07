@@ -117,6 +117,33 @@ namespace BrainDuel.Match.States
                     if (serverTs == 0)
                         serverTs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+                    // Parseia a pergunta embutida — elimina a chamada assíncrona ao StartQuestion
+                    // para as rodadas 2-20, evitando a janela de race onde IrParaPergunta exibe
+                    // o painel enquanto Phase ainda é ThemeAndPowerUp e a resposta seria rejeitada.
+                    QuestionRevealPayload cachedQuestion = null;
+                    if (dict.TryGetValue("question", out var qRaw) && qRaw != null)
+                    {
+                        try
+                        {
+                            var qJson = PlayFab.Json.PlayFabSimpleJson.SerializeObject(qRaw);
+                            cachedQuestion = PlayFab.Json.PlayFabSimpleJson
+                                .DeserializeObject<QuestionRevealPayload>(qJson);
+                            if (cachedQuestion != null)
+                            {
+                                // A fase de pergunta começa após o tema: roundStart + themeDuration
+                                cachedQuestion.ServerTimestampMs = serverTs + MatchConfig.ThemePhaseDurationMs;
+                                cachedQuestion.DurationMs        = MatchConfig.QuestionPhaseDurationMs;
+                            }
+                        }
+                        catch (System.Exception ex)
+                        {
+                            Debug.LogWarning($"[State] StartNextRound: falha ao parsear pergunta embutida: {ex.Message}");
+                        }
+                    }
+
+                    if (cachedQuestion == null)
+                        Debug.LogWarning($"[State] StartNextRound round={nextRound}: pergunta embutida ausente — fallback para StartQuestion.");
+
                     Machine.ReceiveRoundStart(new RoundStartPayload
                     {
                         RoundNumber        = nextRound,
@@ -125,6 +152,7 @@ namespace BrainDuel.Match.States
                         ServerTimestampMs  = serverTs,
                         ThemeDurationMs    = MatchConfig.ThemePhaseDurationMs,
                         QuestionDurationMs = MatchConfig.QuestionPhaseDurationMs,
+                        CachedQuestion     = cachedQuestion,
                     });
                 }
                 catch (System.Exception ex)
