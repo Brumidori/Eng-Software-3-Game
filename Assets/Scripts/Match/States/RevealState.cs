@@ -64,6 +64,7 @@ namespace BrainDuel.Match.States
         {
             _elapsed            = 0f;
             _nextRoundRequested = false;
+            Debug.Log($"[State] RoundEnd | Round {Context.CurrentRound} | próxima={Context.CurrentRound + 1}");
         }
 
         public override void OnUpdate(float deltaTime)
@@ -86,7 +87,12 @@ namespace BrainDuel.Match.States
         {
             if (Context.IsStubMode) return;
 
-            int nextRound = Context.CurrentRound + 1;
+            // Captura CurrentRound no momento da decisão para evitar que uma
+            // mudança de estado assíncrona altere o nextRound enviado ao servidor.
+            int currentRound = Context.CurrentRound;
+            int nextRound    = currentRound + 1;
+
+            Debug.Log($"[State] StartNextRound → currentRound={currentRound} nextRound={nextRound}");
 
             CloudScriptClient.Call("StartNextRound", new
             {

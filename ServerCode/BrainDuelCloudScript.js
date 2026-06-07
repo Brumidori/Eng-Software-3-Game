@@ -869,10 +869,25 @@ handlers.SubmitAnswer = function (args) {
     // tenta uma leitura fresca antes de rejeitar.
     if (state.CurrentRound !== args.roundNumber) {
         var freshCheck = loadMatchState(args.matchId);
-        if (freshCheck && freshCheck.CurrentRound === args.roundNumber)
+        if (freshCheck && freshCheck.CurrentRound === args.roundNumber) {
             state = freshCheck;
-        else
-            return { status: "wrong_round", serverRound: state.CurrentRound, clientRound: args.roundNumber };
+        } else if (freshCheck && freshCheck.CurrentRound > args.roundNumber
+                   && freshCheck.LastProcessedRound >= args.roundNumber) {
+            // A rodada já foi processada e o servidor avançou: retorna o resultado
+            // como "already_processed" para que o cliente possa se ressincronizar.
+            // Isso evita que o cliente fique preso ao receber wrong_round quando
+            // um retry de ProcessRound chegou tarde e o servidor já está na próxima rodada.
+            return {
+                status:      "already_processed",
+                serverRound: freshCheck.CurrentRound,
+                clientRound: args.roundNumber,
+                roundResult: freshCheck.CurrentRoundState && freshCheck.CurrentRoundState.IsProcessed
+                    ? buildRoundResponse(freshCheck, true)
+                    : null
+            };
+        } else {
+            return { status: "wrong_round", serverRound: (freshCheck || state).CurrentRound, clientRound: args.roundNumber };
+        }
     }
     // A checagem de Phase foi removida: StartQuestion não é mais chamado e o servidor
     // permanece em "ThemeAndPowerUp" durante toda a rodada. O controle de timing

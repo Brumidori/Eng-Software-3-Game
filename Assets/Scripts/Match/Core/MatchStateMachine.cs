@@ -684,6 +684,25 @@ namespace BrainDuel.Match.Core
                     {
                         Debug.Log("[Match] SubmitAnswer: resultado imediato recebido — avançando.");
                         HandleRoundResultFromState(roundResult);
+                        return;
+                    }
+
+                    // Caso de ressincronização: o servidor já processou a rodada e avançou
+                    // (already_processed). Extrai o roundResult embutido e avança o cliente.
+                    var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<
+                        System.Collections.Generic.Dictionary<string, object>>(j);
+                    if (dict != null && dict.TryGetValue("status", out var statusRaw)
+                        && statusRaw?.ToString() == "already_processed")
+                    {
+                        Debug.LogWarning("[Match] SubmitAnswer: rodada já processada pelo servidor — ressincronizando.");
+                        if (dict.TryGetValue("roundResult", out var rrRaw) && rrRaw != null)
+                        {
+                            var rrJson = PlayFab.Json.PlayFabSimpleJson.SerializeObject(rrRaw);
+                            var rr2    = PlayFab.Json.PlayFabSimpleJson
+                                .DeserializeObject<RoundResultPayload>(rrJson);
+                            if (rr2 != null && !string.IsNullOrEmpty(rr2.CorrectAnswerId))
+                                HandleRoundResultFromState(rr2);
+                        }
                     }
                 }
                 catch (Exception ex) { Debug.LogWarning($"[Match] SubmitAnswer parse: {ex.Message}"); }

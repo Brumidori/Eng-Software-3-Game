@@ -12,7 +12,12 @@ namespace BrainDuel.Match.States
 {
     public class QuestionState : BaseMatchState
     {
-        private bool _roundProcessRequested;
+        private bool      _roundProcessRequested;
+        // Guarda a referência da corrotina de retry para que OnExit possa cancelá-la.
+        // Sem isso, um retry de uma rodada anterior pode acordar durante a fase
+        // Question da rodada seguinte e chamar ProcessRound com o round errado,
+        // causando o bug "wrong_round".
+        private Coroutine _retryCoroutine;
 
         public QuestionState(MatchContext ctx, MatchStateMachine machine)
             : base(ctx, machine) { }
@@ -38,7 +43,18 @@ namespace BrainDuel.Match.States
             // Ambos os jogadores aguardam o timer → TriggerProcessRound() cuida do Reveal sincronizado.
         }
 
-        public override void OnExit() { }
+        public override void OnExit()
+        {
+            // Cancela qualquer corrotina de retry pendente ao sair da fase Question.
+            // Isso evita que um retry de uma rodada anterior acorde depois que a
+            // state machine já avançou para ThemeAndPowerUp ou Question da próxima
+            // rodada, chamando ProcessRound com o número de rodada errado.
+            if (_retryCoroutine != null)
+            {
+                Machine.StopCoroutine(_retryCoroutine);
+                _retryCoroutine = null;
+            }
+        }
 
         // Chamado pela MatchStateMachine quando recebe PowerUpActivated do oponente
         public void OnPowerUpActivated(PowerUpActivatedPayload payload)
@@ -57,13 +73,29 @@ namespace BrainDuel.Match.States
         {
             if (Context.IsStubMode) return;
 
+            // Captura o round no momento da chamada: o callback assíncrono pode
+            // chegar depois que a state machine já avançou para outra rodada.
+            int roundSnapshot = Context.CurrentRound;
+
             CloudScriptClient.Call("ProcessRound", new
             {
                 matchId     = Context.MatchId,
-                roundNumber = Context.CurrentRound
+                roundNumber = roundSnapshot
             }, onSuccess: result =>
             {
-                if (result == null) { Machine.StartCoroutine(RetryAfterDelay(1f)); return; }
+                // Se a máquina já avançou para outra rodada, ignora completamente.
+                // Isso rompe a cadeia de retries órfãos que causam o wrong_round.
+                if (Context.CurrentRound != roundSnapshot)
+                {
+                    Debug.Log($"[State] ProcessRound(round={roundSnapshot}) ignorado — rodada atual é {Context.CurrentRound}.");
+                    return;
+                }
+
+                if (result == null)
+                {
+                    _retryCoroutine = Machine.StartCoroutine(RetryAfterDelay(1f, roundSnapshot));
+                    return;
+                }
                 try
                 {
                     var json        = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
@@ -80,7 +112,7 @@ namespace BrainDuel.Match.States
                         // Servidor ainda não processou (timer ligeiramente dessincronizado).
                         // Retenta em 1s para não travar caso o UI timer já tenha disparado junto.
                         Debug.Log("[State] ProcessRound pendente — retentando em 1s.");
-                        Machine.StartCoroutine(RetryAfterDelay(1f));
+                        _retryCoroutine = Machine.StartCoroutine(RetryAfterDelay(1f, roundSnapshot));
                     }
                 }
                 catch (System.Exception ex)
@@ -89,17 +121,20 @@ namespace BrainDuel.Match.States
                 }
             }, onError: err =>
             {
-                Machine.StartCoroutine(RetryAfterDelay(1f));
+                if (Context.CurrentRound == roundSnapshot)
+                    _retryCoroutine = Machine.StartCoroutine(RetryAfterDelay(1f, roundSnapshot));
                 Debug.LogWarning($"[State] ProcessRound falhou — retentando: {err}");
             });
         }
 
-        private System.Collections.IEnumerator RetryAfterDelay(float seconds)
+        // Parâmetro roundForWhich garante que o retry só executa se ainda
+        // estivermos na mesma rodada que o gerou — proteção dupla além do OnExit.
+        private System.Collections.IEnumerator RetryAfterDelay(float seconds, int roundForWhich)
         {
             yield return new UnityEngine.WaitForSeconds(seconds);
-            // Não retenta se a máquina já avançou para outra fase: evita
-            // chamar HandleRoundResult fora da fase Question e sobrescrever HP.
-            if (Machine.Phase == MatchPhase.Question)
+            _retryCoroutine = null;
+            // Não retenta se a máquina já avançou para outra fase OU outra rodada.
+            if (Machine.Phase == MatchPhase.Question && Context.CurrentRound == roundForWhich)
                 RequestProcessRound();
         }
     }
