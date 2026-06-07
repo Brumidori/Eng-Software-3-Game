@@ -220,6 +220,8 @@ namespace BrainDuel.Match.Core
                         if (Context.ServerState == null)
                             InicializarServerStateDoRetorno(callResult);
 
+                        ParsearQuestionPool(callResult);
+
                         var payload = ParsearRoundStart(callResult, 1);
                         if (payload != null)
                             HandleRoundStart(payload);
@@ -676,17 +678,6 @@ namespace BrainDuel.Match.Core
                     var j = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
                     Debug.Log($"[Match] SubmitAnswer resposta: {j}");
 
-                    // Quando ambos os jogadores já responderam, o servidor processa
-                    // a rodada e devolve roundResult diretamente — sem precisar de
-                    // uma chamada separada ao ProcessRound.
-                    var roundResult = TentarParsearRoundResult(result);
-                    if (roundResult != null && !string.IsNullOrEmpty(roundResult.CorrectAnswerId))
-                    {
-                        Debug.Log("[Match] SubmitAnswer: resultado imediato recebido — avançando.");
-                        HandleRoundResultFromState(roundResult);
-                        return;
-                    }
-
                     // Caso de ressincronização: o servidor já processou a rodada e avançou
                     // (already_processed). Extrai o roundResult embutido e avança o cliente.
                     var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<
@@ -843,6 +834,36 @@ namespace BrainDuel.Match.Core
             }
         }
 
+        private void ParsearQuestionPool(object result)
+        {
+            if (result == null) return;
+            try
+            {
+                var json = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<Dictionary<string, object>>(json);
+                if (dict == null || !dict.TryGetValue("questionPool", out var poolRaw) || poolRaw == null)
+                {
+                    Debug.LogWarning("[Match] questionPool ausente na resposta — perguntas sem cache local.");
+                    return;
+                }
+                var poolJson = PlayFab.Json.PlayFabSimpleJson.SerializeObject(poolRaw);
+                var pool     = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<QuestionData[]>(poolJson);
+                if (pool != null && pool.Length > 0)
+                {
+                    Context.QuestionPool = pool;
+                    Debug.Log($"[Match] QuestionPool: {pool.Length} perguntas em cache local.");
+                }
+                else
+                {
+                    Debug.LogWarning("[Match] questionPool vazio ou inválido.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Match] Falha ao parsear questionPool: {ex.Message}");
+            }
+        }
+
         private RoundResultPayload TentarParsearRoundResult(object result)
         {
             if (result == null) return null;
@@ -962,10 +983,17 @@ namespace BrainDuel.Match.Core
             if (Context.ServerState != null)
                 Context.ServerState.CurrentRound = p.RoundNumber;
 
-            // Armazena pergunta embutida — ThemeAndPowerUpState usa diretamente
-            // sem precisar chamar StartQuestion separadamente.
-            Context.CurrentQuestion = p.CachedQuestion != null
-                ? new QuestionData
+            // Fonte primária: pool local (todas as 20 perguntas cacheadas no PlayerReady).
+            // Fallback: pergunta embutida no payload (mantém compatibilidade).
+            int _poolIdx = p.RoundNumber - 1;
+            if (Context.QuestionPool != null && _poolIdx >= 0 && _poolIdx < Context.QuestionPool.Length
+                && Context.QuestionPool[_poolIdx] != null)
+            {
+                Context.CurrentQuestion = Context.QuestionPool[_poolIdx];
+            }
+            else if (p.CachedQuestion != null)
+            {
+                Context.CurrentQuestion = new QuestionData
                 {
                     QuestionId = p.CachedQuestion.QuestionId,
                     Text       = p.CachedQuestion.QuestionText,
@@ -973,8 +1001,12 @@ namespace BrainDuel.Match.Core
                         ? System.Array.ConvertAll(p.CachedQuestion.Answers,
                             a => new AnswerOption { Id = a.Id, Text = a.Text })
                         : null,
-                }
-                : null;
+                };
+            }
+            else
+            {
+                Context.CurrentQuestion = null;
+            }
 
             OnRoundStarted?.Invoke(p);
             TransitionTo(MatchPhase.ThemeAndPowerUp);
