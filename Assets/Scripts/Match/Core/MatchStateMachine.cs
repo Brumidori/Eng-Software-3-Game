@@ -48,7 +48,8 @@ namespace BrainDuel.Match.Core
         // Retry do SubmitAnswer quando servidor retorna wrong_round por eventual consistency
         private Coroutine _submitAnswerRetryCoroutine;
         private bool      _submitRetryExhausted;
-        private const int MaxSubmitRetries = 3;
+        private const int MaxSubmitRetries = 15;
+
 
         private struct StubRoundData { public string ThemeName; public Carta Carta; }
         private StubRoundData[] _stubRoundPool;
