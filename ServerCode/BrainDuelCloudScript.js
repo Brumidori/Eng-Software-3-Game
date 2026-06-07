@@ -655,12 +655,12 @@ handlers.CreateMatch = function (args) {
 };
 
 handlers.StartNextRound = function (args) {
-    
     var state = loadMatchState(args.matchId);
     if (!state || !state.IsActive)            return { error: "Match inativo" };
     if (args.roundNumber > MATCH_CONFIG.MaxRounds) return finalizeMatch(state, determineWinnerByHP(state), "RoundsOver");
 
-    // Idempotente: segundo jogador a chamar recebe os dados da rodada já iniciada
+    // Idempotente: rodada ja iniciada — retorna os dados existentes ao segundo jogador.
+    // O timestamp do primeiro chamador e usado por ambos, garantindo sincronizacao de timer.
     if (state.CurrentRound >= args.roundNumber) {
         var existingRound = state.CurrentRoundState;
         var existingQ     = existingRound ? loadQuestion(state, existingRound.QuestionId) : null;
@@ -680,62 +680,20 @@ handlers.StartNextRound = function (args) {
         };
     }
 
-    // Gate de sincronização: ambos os jogadores devem confirmar antes de avançar.
-    // Previne que um jogador entre na próxima rodada enquanto o outro ainda está em Reveal.
-    // Reload fresco minimiza overwrite de confirmações concorrentes.
-    var gateState = loadMatchState(args.matchId);
-    if (!gateState || !gateState.IsActive) return { error: "Match inativo" };
-    if (gateState.CurrentRound >= args.roundNumber) {
-        // Outro caller já iniciou a rodada entre o load inicial e aqui
-        var eR = gateState.CurrentRoundState;
-        var eQ = eR ? loadQuestion(gateState, eR.QuestionId) : null;
-        return {
-            status: "already_started", roundNumber: gateState.CurrentRound,
-            themeId: eR ? eR.ThemeId : "", themeName: eR ? eR.ThemeName : "",
-            serverTimestampMs: gateState.PhaseStartTimestampMs,
-            themeDurationMs: MATCH_CONFIG.ThemePhaseDurationMs, questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
-            question: eQ ? { QuestionId: eQ.QuestionId, QuestionText: eQ.Text, Answers: eQ.Options } : null,
-            player1Id: gateState.Player1Id, player2Id: gateState.Player2Id,
-            player1State: gateState.Player1State, player2State: gateState.Player2State
-        };
-    }
-    if (!gateState.NextRoundConfirmedBy) gateState.NextRoundConfirmedBy = {};
-    if (!gateState.NextRoundConfirmedAt) gateState.NextRoundConfirmedAt = Date.now();
-    gateState.NextRoundConfirmedBy[currentPlayerId] = true;
-    server.SetTitleInternalData({ Key: "match_" + gateState.MatchId, Value: JSON.stringify(gateState) });
-
-    var p1Confirmed    = !!gateState.NextRoundConfirmedBy[gateState.Player1Id];
-    var p2Confirmed    = !!gateState.NextRoundConfirmedBy[gateState.Player2Id];
-    var waitingTooLong = (Date.now() - gateState.NextRoundConfirmedAt) > 8000;
-
-    if ((!p1Confirmed || !p2Confirmed) && !waitingTooLong)
-        return { status: "waiting", confirmedCount: (p1Confirmed ? 1 : 0) + (p2Confirmed ? 1 : 0) };
-
-    // Ambos confirmaram (ou timeout de 8s) — recarrega estado limpo para o setup da rodada
-    state = loadMatchState(args.matchId);
-    if (!state || !state.IsActive) return { error: "Match inativo" };
-    if (state.CurrentRound >= args.roundNumber) {
-        var eR2 = state.CurrentRoundState;
-        var eQ2 = eR2 ? loadQuestion(state, eR2.QuestionId) : null;
-        return {
-            status: "already_started", roundNumber: state.CurrentRound,
-            themeId: eR2 ? eR2.ThemeId : "", themeName: eR2 ? eR2.ThemeName : "",
-            serverTimestampMs: state.PhaseStartTimestampMs,
-            themeDurationMs: MATCH_CONFIG.ThemePhaseDurationMs, questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
-            question: eQ2 ? { QuestionId: eQ2.QuestionId, QuestionText: eQ2.Text, Answers: eQ2.Options } : null,
-            player1Id: state.Player1Id, player2Id: state.Player2Id,
-            player1State: state.Player1State, player2State: state.Player2State
-        };
-    }
-    state.NextRoundConfirmedBy = null;
-    state.NextRoundConfirmedAt = null;
-
+    // Primeiro chamador: cria a rodada com timestamp autoritativo.
+    // IMPORTANTE: nao ha write intermediario aqui — apenas UM write final com CurrentRound=N.
+    // O gate anterior (NextRoundConfirmedBy) fazia um write com CurrentRound=N-1 antes do write
+    // final com CurrentRound=N, o que deixava replicas desatualizadas retornando N-1 ao SubmitAnswer.
+    // Sem o gate, ambos os clientes recebem o mesmo PhaseStartTimestampMs (o do primeiro chamador),
+    // garantindo sincronizacao de timer sem writes intermediarios.
     var question = getQuestionForRound(state, args.roundNumber);
     if (!question) return { error: "Pergunta nao encontrada para rodada " + args.roundNumber };
 
     state.CurrentRound          = args.roundNumber;
     state.Phase                 = "ThemeAndPowerUp";
     state.PhaseStartTimestampMs = Date.now();
+    state.NextRoundConfirmedBy  = null;  // limpa campos legados do gate removido
+    state.NextRoundConfirmedAt  = null;
     state.CurrentRoundState     = {
         RoundNumber:     args.roundNumber,
         QuestionId:      question.QuestionId,
@@ -758,7 +716,6 @@ handlers.StartNextRound = function (args) {
         serverTimestampMs:  state.PhaseStartTimestampMs,
         themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
         questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
-        // Pergunta já incluída: elimina a chamada separada ao StartQuestion
         question:           { QuestionId: question.QuestionId, QuestionText: question.Text, Answers: question.Options },
         player1Id:          state.Player1Id,
         player2Id:          state.Player2Id,
