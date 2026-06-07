@@ -556,17 +556,23 @@ function getStreakBonus(streak) {
 // --- Storage ---
 
 function saveMatchState(state) {
-    server.SetTitleInternalData({ Key: "match_" + state.MatchId, Value: JSON.stringify(state) });
+    server.UpdateSharedGroupData({ SharedGroupId: state.MatchId, Data: { "state": JSON.stringify(state) } });
 }
 
 function loadMatchState(matchId) {
-    var result = server.GetTitleInternalData({ Keys: ["match_" + matchId] });
-    var json   = result.Data["match_" + matchId];
-    return json ? JSON.parse(json) : null;
+    try {
+        var result = server.GetSharedGroupData({ SharedGroupId: matchId, Keys: ["state"] });
+        var json   = result.Data && result.Data["state"] ? result.Data["state"].Value : null;
+        return json ? JSON.parse(json) : null;
+    } catch (e) {
+        return null;
+    }
 }
 
 function deleteMatchState(matchId) {
-    server.SetTitleInternalData({ Key: "match_" + matchId, Value: null });
+    try {
+        server.DeleteSharedGroup({ SharedGroupId: matchId });
+    } catch (e) { }
     removeFromActiveIndex(matchId);
 }
 
@@ -649,6 +655,12 @@ handlers.CreateMatch = function (args) {
         LastProcessedRound:    0
     };
 
+    try {
+        server.CreateSharedGroup({ SharedGroupId: matchId });
+    } catch (e) {
+        // Ignora caso o grupo já exista
+    }
+
     saveMatchState(state);
     addToActiveIndex(matchId);
     return { success: true, matchId: matchId, networkDescriptor: state.PartyNetworkDescriptor };
@@ -679,6 +691,27 @@ handlers.StartNextRound = function (args) {
             player2State:       state.Player2State
         };
     }
+
+    // Bug 2 fix: Protecao contra Lost Update (Eventual Consistency)
+    // Se o cliente esta pedindo a rodada N, a rodada N-1 TEM que estar processada!
+    // Se a rodada atual no state for menor que N-1, ou for N-1 mas IsProcessed == false,
+    // significa que carregamos uma replica STALE do banco de dados (que ainda nao tem o ProcessRound da rodada anterior salvo).
+    // Se salvarmos esse state stale com CurrentRound=N, iremos DESTRUIR o HP calculado na rodada N-1!
+    if (args.roundNumber > 1) {
+        var isStale = false;
+        if (state.CurrentRound < args.roundNumber - 1) {
+            isStale = true;
+        } else if (state.CurrentRound === args.roundNumber - 1 && state.CurrentRoundState && !state.CurrentRoundState.IsProcessed) {
+            isStale = true;
+        }
+
+        if (isStale) {
+            // Retornamos "waiting" para forcar o cliente a retentar o StartNextRound
+            // em alguns milissegundos, quando o cache do PlayFab ja devera estar atualizado.
+            return { status: "waiting", reason: "stale_state_lost_update_protection" };
+        }
+    }
+
 
     // Primeiro chamador: cria a rodada com timestamp autoritativo.
     // IMPORTANTE: nao ha write intermediario aqui — apenas UM write final com CurrentRound=N.
