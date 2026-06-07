@@ -994,7 +994,16 @@ handlers.ActivatePowerUp = function (args) {
 handlers.ProcessRound = function (args) {
     try {
         var state = loadMatchState(args.matchId);
-        if (!state || !state.IsActive)               return { error: "Match inativo" };
+        if (!state) return { error: "Match nao encontrado" };
+        
+        if (!state.IsActive) {
+            // Se a partida encerrou nesta mesma rodada, o cliente tem direito de ler o resultado final!
+            if (state.CurrentRound === args.roundNumber && state.CurrentRoundState && state.CurrentRoundState.IsProcessed) {
+                return buildRoundResponse(state, true);
+            }
+            return { error: "Match inativo" };
+        }
+
         if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round" };
         if (state.CurrentRoundState.IsProcessed)      return buildRoundResponse(state, true);
 
