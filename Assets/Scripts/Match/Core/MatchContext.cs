@@ -48,8 +48,11 @@ namespace BrainDuel.Match.Core
         // ----------------------------------------------------------
         // Estado autoritativo (sincronizado com servidor)
         // ----------------------------------------------------------
-        public ServerMatchState ServerState   { get; set; }
+        public ServerMatchState ServerState     { get; set; }
         public QuestionData     CurrentQuestion { get; set; }
+        // Pool completo da partida (20 perguntas), recebido no PlayerReady e cacheado localmente.
+        // Elimina chamadas de rede por rodada — cada rodada usa QuestionPool[roundNumber-1].
+        public QuestionData[]   QuestionPool    { get; set; }
 
         // ----------------------------------------------------------
         // Estado da rodada atual (local — para UI)

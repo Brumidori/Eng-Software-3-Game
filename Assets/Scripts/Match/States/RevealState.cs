@@ -54,8 +54,11 @@ namespace BrainDuel.Match.States
     // ============================================================
     public class RoundEndState : BaseMatchState
     {
-        private float _elapsed;
-        private bool  _nextRoundRequested;
+        private float     _elapsed;
+        private bool      _nextRoundRequested;
+        private Coroutine _retryCoroutine;
+
+        private const int MaxAttempts = 10;
 
         public RoundEndState(MatchContext ctx, MatchStateMachine machine)
             : base(ctx, machine) { }
@@ -64,6 +67,7 @@ namespace BrainDuel.Match.States
         {
             _elapsed            = 0f;
             _nextRoundRequested = false;
+            Debug.Log($"[State] RoundEnd | Round {Context.CurrentRound} | próxima={Context.CurrentRound + 1}");
         }
 
         public override void OnUpdate(float deltaTime)
@@ -80,32 +84,55 @@ namespace BrainDuel.Match.States
             }
         }
 
-        public override void OnExit() { }
+        public override void OnExit()
+        {
+            if (_retryCoroutine != null)
+            {
+                Machine.StopCoroutine(_retryCoroutine);
+                _retryCoroutine = null;
+            }
+        }
 
         private void RequestNextRound()
         {
             if (Context.IsStubMode) return;
-
             int nextRound = Context.CurrentRound + 1;
+            Debug.Log($"[State] StartNextRound → round={nextRound}");
+            TryStartNextRound(nextRound, 0);
+        }
 
+        private void TryStartNextRound(int nextRound, int attempt)
+        {
             CloudScriptClient.Call("StartNextRound", new
             {
                 matchId     = Context.MatchId,
                 roundNumber = nextRound
             }, onSuccess: result =>
             {
-                if (result == null) { Debug.LogError("[State] StartNextRound retornou null"); return; }
+                if (result == null)
+                {
+                    Debug.LogWarning($"[State] StartNextRound retornou null (tentativa {attempt + 1})");
+                    ScheduleRetry(nextRound, attempt);
+                    return;
+                }
                 try
                 {
                     var json = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
                     var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<
                         System.Collections.Generic.Dictionary<string, object>>(json);
-                    if (dict == null) return;
+                    if (dict == null) { ScheduleRetry(nextRound, attempt); return; }
 
-                    // Não transiciona se o servidor retornou erro (ex: Match inativo)
                     if (dict.ContainsKey("error"))
                     {
                         Debug.LogError($"[State] StartNextRound erro: {dict["error"]} | round={nextRound}");
+                        return;
+                    }
+
+                    // Gate "ambos prontos": oponente ainda não confirmou o Reveal
+                    if (dict.TryGetValue("status", out var st) && st?.ToString() == "waiting")
+                    {
+                        Debug.Log($"[State] StartNextRound: aguardando oponente (tentativa {attempt + 1})…");
+                        ScheduleRetry(nextRound, attempt);
                         return;
                     }
 
@@ -117,9 +144,6 @@ namespace BrainDuel.Match.States
                     if (serverTs == 0)
                         serverTs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-                    // Parseia a pergunta embutida — elimina a chamada assíncrona ao StartQuestion
-                    // para as rodadas 2-20, evitando a janela de race onde IrParaPergunta exibe
-                    // o painel enquanto Phase ainda é ThemeAndPowerUp e a resposta seria rejeitada.
                     QuestionRevealPayload cachedQuestion = null;
                     if (dict.TryGetValue("question", out var qRaw) && qRaw != null)
                     {
@@ -130,7 +154,6 @@ namespace BrainDuel.Match.States
                                 .DeserializeObject<QuestionRevealPayload>(qJson);
                             if (cachedQuestion != null)
                             {
-                                // A fase de pergunta começa após o tema: roundStart + themeDuration
                                 cachedQuestion.ServerTimestampMs = serverTs + MatchConfig.ThemePhaseDurationMs;
                                 cachedQuestion.DurationMs        = MatchConfig.QuestionPhaseDurationMs;
                             }
@@ -158,11 +181,29 @@ namespace BrainDuel.Match.States
                 catch (System.Exception ex)
                 {
                     Debug.LogError($"[State] Falha ao parsear StartNextRound: {ex.Message}");
+                    ScheduleRetry(nextRound, attempt);
                 }
             }, onError: err =>
             {
                 Debug.LogError($"[State] StartNextRound falhou: {err}");
+                ScheduleRetry(nextRound, attempt);
             });
+        }
+
+        private void ScheduleRetry(int nextRound, int attempt)
+        {
+            if (attempt + 1 < MaxAttempts)
+                _retryCoroutine = Machine.StartCoroutine(RetryAfterDelay(nextRound, attempt + 1));
+            else
+                Debug.LogError($"[State] StartNextRound: {MaxAttempts} tentativas falharam — partida pode estar travada.");
+        }
+
+        private System.Collections.IEnumerator RetryAfterDelay(int nextRound, int attempt)
+        {
+            yield return new UnityEngine.WaitForSeconds(1.5f);
+            _retryCoroutine = null;
+            if (Machine.Phase == MatchPhase.RoundEnd)
+                TryStartNextRound(nextRound, attempt);
         }
     }
 }

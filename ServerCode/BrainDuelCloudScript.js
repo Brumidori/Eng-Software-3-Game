@@ -680,6 +680,56 @@ handlers.StartNextRound = function (args) {
         };
     }
 
+    // Gate de sincronização: ambos os jogadores devem confirmar antes de avançar.
+    // Previne que um jogador entre na próxima rodada enquanto o outro ainda está em Reveal.
+    // Reload fresco minimiza overwrite de confirmações concorrentes.
+    var gateState = loadMatchState(args.matchId);
+    if (!gateState || !gateState.IsActive) return { error: "Match inativo" };
+    if (gateState.CurrentRound >= args.roundNumber) {
+        // Outro caller já iniciou a rodada entre o load inicial e aqui
+        var eR = gateState.CurrentRoundState;
+        var eQ = eR ? loadQuestion(gateState, eR.QuestionId) : null;
+        return {
+            status: "already_started", roundNumber: gateState.CurrentRound,
+            themeId: eR ? eR.ThemeId : "", themeName: eR ? eR.ThemeName : "",
+            serverTimestampMs: gateState.PhaseStartTimestampMs,
+            themeDurationMs: MATCH_CONFIG.ThemePhaseDurationMs, questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
+            question: eQ ? { QuestionId: eQ.QuestionId, QuestionText: eQ.Text, Answers: eQ.Options } : null,
+            player1Id: gateState.Player1Id, player2Id: gateState.Player2Id,
+            player1State: gateState.Player1State, player2State: gateState.Player2State
+        };
+    }
+    if (!gateState.NextRoundConfirmedBy) gateState.NextRoundConfirmedBy = {};
+    if (!gateState.NextRoundConfirmedAt) gateState.NextRoundConfirmedAt = Date.now();
+    gateState.NextRoundConfirmedBy[currentPlayerId] = true;
+    server.SetTitleInternalData({ Key: "match_" + gateState.MatchId, Value: JSON.stringify(gateState) });
+
+    var p1Confirmed    = !!gateState.NextRoundConfirmedBy[gateState.Player1Id];
+    var p2Confirmed    = !!gateState.NextRoundConfirmedBy[gateState.Player2Id];
+    var waitingTooLong = (Date.now() - gateState.NextRoundConfirmedAt) > 8000;
+
+    if ((!p1Confirmed || !p2Confirmed) && !waitingTooLong)
+        return { status: "waiting", confirmedCount: (p1Confirmed ? 1 : 0) + (p2Confirmed ? 1 : 0) };
+
+    // Ambos confirmaram (ou timeout de 8s) — recarrega estado limpo para o setup da rodada
+    state = loadMatchState(args.matchId);
+    if (!state || !state.IsActive) return { error: "Match inativo" };
+    if (state.CurrentRound >= args.roundNumber) {
+        var eR2 = state.CurrentRoundState;
+        var eQ2 = eR2 ? loadQuestion(state, eR2.QuestionId) : null;
+        return {
+            status: "already_started", roundNumber: state.CurrentRound,
+            themeId: eR2 ? eR2.ThemeId : "", themeName: eR2 ? eR2.ThemeName : "",
+            serverTimestampMs: state.PhaseStartTimestampMs,
+            themeDurationMs: MATCH_CONFIG.ThemePhaseDurationMs, questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
+            question: eQ2 ? { QuestionId: eQ2.QuestionId, QuestionText: eQ2.Text, Answers: eQ2.Options } : null,
+            player1Id: state.Player1Id, player2Id: state.Player2Id,
+            player1State: state.Player1State, player2State: state.Player2State
+        };
+    }
+    state.NextRoundConfirmedBy = null;
+    state.NextRoundConfirmedAt = null;
+
     var question = getQuestionForRound(state, args.roundNumber);
     if (!question) return { error: "Pergunta nao encontrada para rodada " + args.roundNumber };
 
@@ -736,6 +786,7 @@ handlers.PlayerReady = function(args) {
             themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
             questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
             question:           idempQ ? { QuestionId: idempQ.QuestionId, QuestionText: idempQ.Text, Answers: idempQ.Options } : null,
+            questionPool:       buildClientPool(state.QuestionPool),
             player1Id:          state.Player1Id,
             player2Id:          state.Player2Id,
             player1State:       state.Player1State,
@@ -797,6 +848,7 @@ handlers.PlayerReady = function(args) {
         themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
         questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
         question:           { QuestionId: question.QuestionId, QuestionText: question.Text, Answers: question.Options },
+        questionPool:       buildClientPool(state.QuestionPool),
         player1Id:          state.Player1Id,
         player2Id:          state.Player2Id,
         player1State:       state.Player1State,
@@ -869,10 +921,25 @@ handlers.SubmitAnswer = function (args) {
     // tenta uma leitura fresca antes de rejeitar.
     if (state.CurrentRound !== args.roundNumber) {
         var freshCheck = loadMatchState(args.matchId);
-        if (freshCheck && freshCheck.CurrentRound === args.roundNumber)
+        if (freshCheck && freshCheck.CurrentRound === args.roundNumber) {
             state = freshCheck;
-        else
-            return { status: "wrong_round", serverRound: state.CurrentRound, clientRound: args.roundNumber };
+        } else if (freshCheck && freshCheck.CurrentRound > args.roundNumber
+                   && freshCheck.LastProcessedRound >= args.roundNumber) {
+            // A rodada já foi processada e o servidor avançou: retorna o resultado
+            // como "already_processed" para que o cliente possa se ressincronizar.
+            // Isso evita que o cliente fique preso ao receber wrong_round quando
+            // um retry de ProcessRound chegou tarde e o servidor já está na próxima rodada.
+            return {
+                status:      "already_processed",
+                serverRound: freshCheck.CurrentRound,
+                clientRound: args.roundNumber,
+                roundResult: freshCheck.CurrentRoundState && freshCheck.CurrentRoundState.IsProcessed
+                    ? buildRoundResponse(freshCheck, true)
+                    : null
+            };
+        } else {
+            return { status: "wrong_round", serverRound: (freshCheck || state).CurrentRound, clientRound: args.roundNumber };
+        }
     }
     // A checagem de Phase foi removida: StartQuestion não é mais chamado e o servidor
     // permanece em "ThemeAndPowerUp" durante toda a rodada. O controle de timing
@@ -901,9 +968,10 @@ handlers.SubmitAnswer = function (args) {
         saveMatchState(state);
     }
 
-    var roundResult = null;
-    if (bothPlayersAnswered(state)) roundResult = processRoundInternal(state);
-    return { status: "ok", roundResult: roundResult };
+    // Não processa imediatamente: ProcessRound (polling) é o único ponto de processamento.
+    // Evita a race entre SubmitAnswer e ProcessRound que causava double-processing e
+    // computava respostas tardias como NotAnswered.
+    return { status: "ok" };
 };
 
 handlers.ActivatePowerUp = function (args) {
@@ -950,7 +1018,11 @@ handlers.ProcessRound = function (args) {
             ? state.PhaseStartTimestampMs
             : state.PhaseStartTimestampMs + MATCH_CONFIG.ThemePhaseDurationMs;
         var elapsed = Date.now() - questionPhaseStart;
-        if (elapsed < MATCH_CONFIG.QuestionPhaseDurationMs)
+        // Grace period: dá 1.5s extras para SubmitAnswer tardios chegarem ao servidor
+        // antes de processar. Resolve a race onde o ProcessRound do timer do cliente
+        // chegava antes do SubmitAnswer do jogador (que clicou nos últimos segundos).
+        var graceMs = 1500;
+        if (elapsed < MATCH_CONFIG.QuestionPhaseDurationMs + graceMs)
             return { status: "pending" };
 
         return processRoundInternal(state);
@@ -1172,6 +1244,19 @@ function buildRoundResponse(state, alreadyProcessed) {
         WinnerId:         state.WinnerId,
         EndReason:        state.EndReason || null
     };
+}
+
+// Pool de perguntas para cache local no cliente.
+// Omite CorrectOptionId para não vazar gabarito — servidor continua validando.
+function buildClientPool(serverPool) {
+    if (!serverPool || !Array.isArray(serverPool)) return [];
+    var out = [];
+    for (var i = 0; i < serverPool.length; i++) {
+        var q = serverPool[i];
+        if (!q) continue;
+        out.push({ QuestionId: q.QuestionId, Text: q.Text, ThemeName: q.ThemeName, Options: q.Options });
+    }
+    return out;
 }
 
 // reason aceita string ou número; normaliza para número antes de salvar
