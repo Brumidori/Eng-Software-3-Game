@@ -45,6 +45,11 @@ namespace BrainDuel.Match.Core
         private Coroutine                              _stubConductorCoroutine;
         private int                                    _lastHandledRound = -1;
 
+        // Retry do SubmitAnswer quando servidor retorna wrong_round por eventual consistency
+        private Coroutine _submitAnswerRetryCoroutine;
+        private bool      _submitRetryExhausted;
+        private const int MaxSubmitRetries = 3;
+
         private struct StubRoundData { public string ThemeName; public Carta Carta; }
         private StubRoundData[] _stubRoundPool;
 
@@ -678,27 +683,111 @@ namespace BrainDuel.Match.Core
                     var j = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
                     Debug.Log($"[Match] SubmitAnswer resposta: {j}");
 
-                    // Caso de ressincronização: o servidor já processou a rodada e avançou
-                    // (already_processed). Extrai o roundResult embutido e avança o cliente.
                     var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<
-                        System.Collections.Generic.Dictionary<string, object>>(j);
-                    if (dict != null && dict.TryGetValue("status", out var statusRaw)
-                        && statusRaw?.ToString() == "already_processed")
+                        Dictionary<string, object>>(j);
+                    if (dict == null) return;
+
+                    var status = dict.TryGetValue("status", out var st) ? st?.ToString() : string.Empty;
+
+                    if (status == "wrong_round")
                     {
-                        Debug.LogWarning("[Match] SubmitAnswer: rodada já processada pelo servidor — ressincronizando.");
-                        if (dict.TryGetValue("roundResult", out var rrRaw) && rrRaw != null)
+                        // wrong_round com serverRound < clientRound = eventual consistency:
+                        // o servidor ainda nao propagou a escrita do StartNextRound.
+                        // A resposta foi perdida — retenta automaticamente para nao deixar
+                        // o jogador ser punido com SelfDamage injusto.
+                        int.TryParse(dict.TryGetValue("serverRound", out var sr) ? sr?.ToString() : "0", out int serverRound);
+                        int.TryParse(dict.TryGetValue("clientRound", out var cr) ? cr?.ToString() : "0", out int clientRound);
+
+                        if (serverRound < clientRound
+                            && Context.CurrentRound == clientRound
+                            && Phase == MatchPhase.Question
+                            && !_submitRetryExhausted)
                         {
-                            var rrJson = PlayFab.Json.PlayFabSimpleJson.SerializeObject(rrRaw);
-                            var rr2    = PlayFab.Json.PlayFabSimpleJson
-                                .DeserializeObject<RoundResultPayload>(rrJson);
-                            if (rr2 != null && !string.IsNullOrEmpty(rr2.CorrectAnswerId))
-                                HandleRoundResultFromState(rr2);
+                            Debug.LogWarning($"[Match] SubmitAnswer wrong_round (srv={serverRound} < cli={clientRound}) — retry em 600ms.");
+                            if (_submitAnswerRetryCoroutine != null)
+                                StopCoroutine(_submitAnswerRetryCoroutine);
+                            _submitAnswerRetryCoroutine = StartCoroutine(
+                                RetrySubmitAnswer(answerId, clientRound, 0));
                         }
+                        else
+                        {
+                            Debug.LogWarning($"[Match] SubmitAnswer wrong_round nao retentavel (srv={serverRound} cli={Context.CurrentRound} phase={Phase} exausted={_submitRetryExhausted}).");
+                        }
+                        return;
+                    }
+
+                    // Caso legado already_processed: rodada ja processada pelo servidor
+                    if (status == "already_processed")
+                    {
+                        Debug.LogWarning("[Match] SubmitAnswer: already_processed — resposta ja registrada.");
                     }
                 }
                 catch (Exception ex) { Debug.LogWarning($"[Match] SubmitAnswer parse: {ex.Message}"); }
             },
             onError: err => Debug.LogWarning($"[Match] SubmitAnswer erro: {err}"));
+        }
+
+        // Corrotina de retry do SubmitAnswer.
+        // Chamada quando wrong_round indica que o servidor ainda nao propagou a rodada N.
+        // Para apos MaxSubmitRetries tentativas ou quando a fase/rodada mudar.
+        private IEnumerator RetrySubmitAnswer(string answerId, int roundSnapshot, int attempt)
+        {
+            yield return new WaitForSeconds(0.6f);
+            _submitAnswerRetryCoroutine = null;
+
+            // Desiste se a fase ou rodada mudaram durante a espera
+            if (Phase != MatchPhase.Question || Context.CurrentRound != roundSnapshot)
+            {
+                Debug.Log($"[Match] SubmitAnswer retry {attempt + 1}: cancelado — fase/rodada mudou.");
+                yield break;
+            }
+
+            if (attempt >= MaxSubmitRetries)
+            {
+                _submitRetryExhausted = true;
+                Debug.LogWarning($"[Match] SubmitAnswer: {MaxSubmitRetries} retries esgotados para round={roundSnapshot}. Resposta perdida.");
+                yield break;
+            }
+
+            Debug.Log($"[Match] SubmitAnswer retry {attempt + 1}/{MaxSubmitRetries} | round={roundSnapshot}");
+
+            CloudScriptClient.Call("SubmitAnswer", new
+            {
+                matchId           = Context.MatchId,
+                roundNumber       = roundSnapshot,
+                answerId          = answerId,
+                clientTimestampMs = Context.AnswerTimestampMs
+            }, onSuccess: retryResult =>
+            {
+                try
+                {
+                    var j2 = PlayFab.Json.PlayFabSimpleJson.SerializeObject(retryResult);
+                    Debug.Log($"[Match] SubmitAnswer retry {attempt + 1} resposta: {j2}");
+
+                    var d2     = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<Dictionary<string, object>>(j2);
+                    var status = d2 != null && d2.TryGetValue("status", out var s2) ? s2?.ToString() : string.Empty;
+
+                    if (status == "wrong_round"
+                        && Phase == MatchPhase.Question
+                        && Context.CurrentRound == roundSnapshot
+                        && !_submitRetryExhausted)
+                    {
+                        // Ainda wrong_round — agenda proxima tentativa
+                        _submitAnswerRetryCoroutine = StartCoroutine(
+                            RetrySubmitAnswer(answerId, roundSnapshot, attempt + 1));
+                    }
+                    // ok, already_answered, already_processed — nao faz nada, resposta registrada
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[Match] SubmitAnswer retry {attempt + 1} parse: {ex.Message}");
+                }
+            }, onError: _ =>
+            {
+                if (Phase == MatchPhase.Question && Context.CurrentRound == roundSnapshot && !_submitRetryExhausted)
+                    _submitAnswerRetryCoroutine = StartCoroutine(
+                        RetrySubmitAnswer(answerId, roundSnapshot, attempt + 1));
+            });
         }
 
         public void ActivatePowerUp(PowerUpType type)
@@ -976,6 +1065,14 @@ namespace BrainDuel.Match.Core
 
         private void HandleRoundStart(RoundStartPayload p)
         {
+            // Cancela qualquer retry pendente do SubmitAnswer da rodada anterior
+            if (_submitAnswerRetryCoroutine != null)
+            {
+                StopCoroutine(_submitAnswerRetryCoroutine);
+                _submitAnswerRetryCoroutine = null;
+            }
+            _submitRetryExhausted = false;
+
             Context.ResetRoundInputs();
             Context.PhaseStartServerMs = p.ServerTimestampMs;
             Context.PhaseDurationMs    = p.ThemeDurationMs;
