@@ -708,18 +708,39 @@ namespace BrainDuel.Match.Core
                 powerUp     = type.ToString()
             }, onSuccess: result =>
             {
+                int[] eliminatedIndices = null;
                 try
                 {
                     var j = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
                     if (j != null && j.Contains("error"))
                         Debug.LogWarning($"[Match] ActivatePowerUp erro do servidor: {j}");
+
+                    // EliminateTwo: lê os índices calculados pelo servidor
+                    if (type == PowerUpType.EliminateTwo && result != null)
+                    {
+                        var d = PlayFab.Json.PlayFabSimpleJson
+                            .DeserializeObject<Dictionary<string, object>>(j);
+                        if (d != null && d.TryGetValue("eliminatedIndices", out var eiRaw) && eiRaw != null)
+                        {
+                            var eiJson = PlayFab.Json.PlayFabSimpleJson.SerializeObject(eiRaw);
+                            var eiList = PlayFab.Json.PlayFabSimpleJson
+                                .DeserializeObject<System.Collections.Generic.List<int>>(eiJson);
+                            if (eiList != null) eliminatedIndices = eiList.ToArray();
+                        }
+                        // Aplica localmente para o jogador que ativou o poder
+                        if (eliminatedIndices != null)
+                            MatchEvents.NotifyEliminateTwo(eliminatedIndices);
+                    }
                 }
-                catch { }
+                catch (Exception ex) { Debug.LogWarning($"[Match] ActivatePowerUp parse: {ex.Message}"); }
+
+                // Broadcast para o oponente (inclui índices para EliminateTwo)
                 PartyNetworkManager.Instance?.Broadcast(MessageType.PowerUpActivated,
                     new PowerUpActivatedPayload
                     {
-                        PlayerId = Context.LocalPlayerId,
-                        PowerUp  = type
+                        PlayerId          = Context.LocalPlayerId,
+                        PowerUp           = type,
+                        EliminatedIndices = eliminatedIndices
                     });
             },
             onError: err => Debug.LogWarning($"[Match] ActivatePowerUp falhou: {err}"));

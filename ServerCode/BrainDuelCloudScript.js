@@ -874,15 +874,10 @@ handlers.SubmitAnswer = function (args) {
         else
             return { status: "wrong_round", serverRound: state.CurrentRound, clientRound: args.roundNumber };
     }
-    // StartQuestion pode ainda não ter propagado (eventual consistency entre saveMatchState e loadMatchState).
-    // Tenta leitura fresca antes de rejeitar — mesmo padrão do wrong_round.
-    if (state.Phase !== "Question") {
-        var freshPhase = loadMatchState(args.matchId);
-        if (freshPhase && freshPhase.Phase === "Question" && freshPhase.CurrentRound === args.roundNumber)
-            state = freshPhase;
-        else
-            return { status: "wrong_phase", serverPhase: state.Phase };
-    }
+    // A checagem de Phase foi removida: StartQuestion não é mais chamado e o servidor
+    // permanece em "ThemeAndPowerUp" durante toda a rodada. O controle de timing
+    // é feito pelo cliente (que só envia SubmitAnswer depois do timer de pergunta iniciar)
+    // e pelo ProcessRound (que valida o elapsed antes de processar).
 
     var action = getPlayerAction(state, playerId);
     if (action.HasAnswered) return { status: "already_answered" };
@@ -890,7 +885,8 @@ handlers.SubmitAnswer = function (args) {
     // Recarrega estado fresco antes de salvar para não sobrescrever a resposta
     // concorrente do outro jogador (race condition em respostas simultâneas).
     var stateParaSalvar = loadMatchState(args.matchId);
-    if (stateParaSalvar && stateParaSalvar.CurrentRound === args.roundNumber && stateParaSalvar.Phase === "Question") {
+    if (stateParaSalvar && stateParaSalvar.CurrentRound === args.roundNumber
+            && !stateParaSalvar.CurrentRoundState.IsProcessed) {
         var actionFresco = getPlayerAction(stateParaSalvar, playerId);
         if (actionFresco.HasAnswered) return { status: "already_answered" };
         actionFresco.AnswerId          = args.answerId;
@@ -1384,9 +1380,11 @@ function buildQuestionPool(p1Id, p2Id) {
 
 // Seleciona 2 índices de respostas erradas para o EliminateTwo (nunca elimina a correta)
 function calcularIndicesEliminados(options, correctOptionId) {
+    // Sem gabarito definido não é possível garantir que a correta não seja eliminada
+    if (!options || !correctOptionId) return [];
     var errados = [];
     for (var i = 0; i < options.length; i++) {
-        if (options[i].Id !== correctOptionId) errados.push(i);
+        if (options[i] && options[i].Id !== correctOptionId) errados.push(i);
     }
     // Embaralha e pega os 2 primeiros
     for (var i = errados.length - 1; i > 0; i--) {
