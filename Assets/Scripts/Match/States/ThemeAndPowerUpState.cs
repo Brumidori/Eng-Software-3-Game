@@ -71,6 +71,14 @@ namespace BrainDuel.Match.States
 
                     if (payload == null || string.IsNullOrEmpty(payload.QuestionText))
                     {
+                        // save_error: servidor não conseguiu salvar a transição de fase —
+                        // retry faz com que o próximo jogador a chamar encontre a fase correta.
+                        if (json.Contains("save_error"))
+                        {
+                            Debug.LogWarning($"[State] StartQuestion save_error (tentativa {attempt + 1}) — retentando");
+                            ScheduleRetry(attempt);
+                            return;
+                        }
                         Debug.LogWarning($"[State] StartQuestion: payload inválido (tentativa {attempt + 1}) — {json}");
                         // round_mismatch com serverRound < clientRound:
                         // processRoundInternal atrasado sobrescreveu StartNextRound — re-avança o servidor
