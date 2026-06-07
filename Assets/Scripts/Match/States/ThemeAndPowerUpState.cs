@@ -1,8 +1,7 @@
 // ============================================================
-// ThemeAndPowerUpState.cs — fase de 4 segundos onde o tema é
-// exibido e o jogador pode ativar seu power-up.
-// Ao fim, chama CloudScript StartQuestion para que o servidor
-// revele a pergunta de forma idempotente.
+// ThemeAndPowerUpState.cs — fase de tema/power-up.
+// Usa a pergunta embutida no StartNextRound quando disponível,
+// evitando a chamada separada ao StartQuestion.
 // ============================================================
 using System;
 using UnityEngine;
@@ -39,9 +38,29 @@ namespace BrainDuel.Match.States
 
         public override void OnExit() { }
 
-        // Solicita ao servidor que revele a pergunta e entrega ao cliente.
-        // Retry automático se o servidor retornar estado inválido (ex: round ainda não salvo).
-        private void RequestQuestion() => TryGetQuestion(0);
+        // Usa a pergunta embutida no StartNextRound/PlayerReady quando disponível,
+        // evitando uma chamada separada ao StartQuestion.
+        // Fallback: chama StartQuestion se a pergunta não veio na resposta de round start.
+        private void RequestQuestion()
+        {
+            if (Context.CurrentQuestion != null)
+            {
+                var q = Context.CurrentQuestion;
+                long questionStartMs = Context.PhaseStartServerMs + Context.PhaseDurationMs;
+                Machine.ReceiveQuestionReveal(new QuestionRevealPayload
+                {
+                    QuestionId        = q.QuestionId,
+                    QuestionText      = q.Text,
+                    Answers           = q.Options != null
+                        ? System.Array.ConvertAll(q.Options, o => new AnswerOption { Id = o.Id, Text = o.Text })
+                        : null,
+                    ServerTimestampMs = questionStartMs,
+                    DurationMs        = MatchConfig.QuestionPhaseDurationMs,
+                });
+                return;
+            }
+            TryGetQuestion(0);
+        }
 
         private const int MaxQuestionAttempts = 5;
 

@@ -663,6 +663,7 @@ handlers.StartNextRound = function (args) {
     // Idempotente: segundo jogador a chamar recebe os dados da rodada já iniciada
     if (state.CurrentRound >= args.roundNumber) {
         var existingRound = state.CurrentRoundState;
+        var existingQ     = existingRound ? loadQuestion(state, existingRound.QuestionId) : null;
         return {
             status:             "already_started",
             roundNumber:        state.CurrentRound,
@@ -671,6 +672,7 @@ handlers.StartNextRound = function (args) {
             serverTimestampMs:  state.PhaseStartTimestampMs,
             themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
             questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
+            question:           existingQ ? { QuestionId: existingQ.QuestionId, QuestionText: existingQ.Text, Answers: existingQ.Options } : null,
             player1Id:          state.Player1Id,
             player2Id:          state.Player2Id,
             player1State:       state.Player1State,
@@ -706,7 +708,8 @@ handlers.StartNextRound = function (args) {
         serverTimestampMs:  state.PhaseStartTimestampMs,
         themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
         questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
-        // Inclui estados dos jogadores para o cliente inicializar o ServerState
+        // Pergunta já incluída: elimina a chamada separada ao StartQuestion
+        question:           { QuestionId: question.QuestionId, QuestionText: question.Text, Answers: question.Options },
         player1Id:          state.Player1Id,
         player2Id:          state.Player2Id,
         player1State:       state.Player1State,
@@ -723,6 +726,7 @@ handlers.PlayerReady = function(args) {
 
     // Idempotente: rodada 1 já iniciada (inclui retries e clientes legados que chamam StartNextRound diretamente)
     if (state.CurrentRound >= 1 && state.CurrentRoundState) {
+        var idempQ = loadQuestion(state, state.CurrentRoundState.QuestionId);
         return {
             status:             "ready",
             roundNumber:        state.CurrentRound,
@@ -731,6 +735,7 @@ handlers.PlayerReady = function(args) {
             serverTimestampMs:  state.PhaseStartTimestampMs,
             themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
             questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
+            question:           idempQ ? { QuestionId: idempQ.QuestionId, QuestionText: idempQ.Text, Answers: idempQ.Options } : null,
             player1Id:          state.Player1Id,
             player2Id:          state.Player2Id,
             player1State:       state.Player1State,
@@ -791,6 +796,7 @@ handlers.PlayerReady = function(args) {
         serverTimestampMs:  state.PhaseStartTimestampMs,
         themeDurationMs:    MATCH_CONFIG.ThemePhaseDurationMs,
         questionDurationMs: MATCH_CONFIG.QuestionPhaseDurationMs,
+        question:           { QuestionId: question.QuestionId, QuestionText: question.Text, Answers: question.Options },
         player1Id:          state.Player1Id,
         player2Id:          state.Player2Id,
         player1State:       state.Player1State,
@@ -918,11 +924,17 @@ handlers.ActivatePowerUp = function (args) {
 
     if (ps.HasUsedPowerUp) return { error: "Power-up ja usado nesta partida" };
     // Qualquer power-up do inventário pode ser ativado — basta tê-lo.
-    // A validação de posse é responsabilidade do cliente (consumo do item no inventário).
-    // O servidor garante apenas que o power-up é usado no máximo uma vez por partida.
     action.ActivatedPowerUp = args.powerUp;
     saveMatchState(state);
-    return { status: "ok" };
+
+    // EliminateTwo: calcula quais índices eliminar e devolve ao cliente.
+    // Antes ficava em StartQuestion — movido aqui para eliminar aquela chamada.
+    var eliminatedIndices = null;
+    if (String(args.powerUp).toLowerCase() === "eliminatetwo") {
+        var qElim = loadQuestion(state, state.CurrentRoundState.QuestionId);
+        if (qElim) eliminatedIndices = calcularIndicesEliminados(qElim.Options, qElim.CorrectOptionId);
+    }
+    return { status: "ok", eliminatedIndices: eliminatedIndices };
 };
 
 handlers.ProcessRound = function (args) {
@@ -932,10 +944,10 @@ handlers.ProcessRound = function (args) {
         if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round" };
         if (state.CurrentRoundState.IsProcessed)      return buildRoundResponse(state, true);
 
-        // Só processa depois que o timer de pergunta expirou no servidor.
-        // Garante que ambos os jogadores vejam o Reveal ao mesmo tempo (quando o timer chega a 0),
-        // independentemente de quando cada um respondeu.
-        var elapsed = Date.now() - state.PhaseStartTimestampMs;
+        // A fase de pergunta começa após o tema: roundStart + themeDuration.
+        // Garante que ambos os jogadores vejam o Reveal ao mesmo tempo.
+        var questionPhaseStart = state.PhaseStartTimestampMs + MATCH_CONFIG.ThemePhaseDurationMs;
+        var elapsed            = Date.now() - questionPhaseStart;
         if (elapsed < MATCH_CONFIG.QuestionPhaseDurationMs)
             return { status: "pending" };
 
