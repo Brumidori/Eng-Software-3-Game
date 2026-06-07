@@ -140,23 +140,23 @@ namespace BrainDuel.Server
             int p1HPBefore = p1State.HP;
             int p2HPBefore = p2State.HP;
 
-            // Dano que P1 causa em P2
-            if (!p2Result.WasShielded)
+            // Dano que P1 causa em P2 — bloqueado se P2 tem escudo (p1Result.WasShielded)
+            if (!p1Result.WasShielded)
                 p2State.HP -= p1Result.DamageDealt;
 
-            // Dano que P2 causa em P1
-            if (!p1Result.WasShielded)
+            // Dano que P2 causa em P1 — bloqueado se P1 tem escudo (p2Result.WasShielded)
+            if (!p2Result.WasShielded)
                 p1State.HP -= p2Result.DamageDealt;
 
-            // Steal de P1 em P2
-            if (p1Act.ActivatedPowerUp == PowerUpType.Steal && !p2Result.WasShielded)
+            // Steal de P1 em P2 — bloqueado se P2 tem escudo (p1Result.WasShielded)
+            if (p1Act.ActivatedPowerUp == PowerUpType.Steal && !p1Result.WasShielded)
             {
                 p1State.HP += ServerDamageConfig.StealAmount;
                 p2State.HP -= ServerDamageConfig.StealAmount;
             }
 
-            // Steal de P2 em P1
-            if (p2Act.ActivatedPowerUp == PowerUpType.Steal && !p1Result.WasShielded)
+            // Steal de P2 em P1 — bloqueado se P1 tem escudo (p2Result.WasShielded)
+            if (p2Act.ActivatedPowerUp == PowerUpType.Steal && !p2Result.WasShielded)
             {
                 p2State.HP += ServerDamageConfig.StealAmount;
                 p1State.HP -= ServerDamageConfig.StealAmount;
@@ -185,8 +185,10 @@ namespace BrainDuel.Server
             else p2State.ConsecutiveMissedRounds = 0;
 
             // --- Power-up charges ---
-            UpdatePowerUpCharges(p1State, p1Act, p1Result.WasShielded);
-            UpdatePowerUpCharges(p2State, p2Act, p2Result.WasShielded);
+            // p2Result.WasShielded = P1 estava shielded (P2 atacou e foi bloqueado)
+            // p1Result.WasShielded = P2 estava shielded (P1 atacou e foi bloqueado)
+            UpdatePowerUpCharges(p1State, p1Act, p2Result.WasShielded);
+            UpdatePowerUpCharges(p2State, p2Act, p1Result.WasShielded);
 
             // --- Persiste resultados ---
             round.Player1Result = p1Result;

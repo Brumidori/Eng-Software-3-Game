@@ -1113,6 +1113,10 @@ namespace BrainDuel.Match.Core
         // Resposta correta da rodada atual (apenas em stub mode — usada pelo EliminateTwo)
         public string CurrentStubCorrectAnswerId { get; private set; }
 
+        // Resposta correta da rodada atual — funciona em modo real (question pool) e stub
+        public string CurrentCorrectAnswerId =>
+            Context.CurrentQuestion?.CorrectOptionId ?? CurrentStubCorrectAnswerId;
+
         // Chamado pelo ThemeAndPowerUpState após receber a resposta do StartQuestion
         public void ReceiveQuestionReveal(QuestionRevealPayload payload) =>
             HandleQuestionReveal(payload);
