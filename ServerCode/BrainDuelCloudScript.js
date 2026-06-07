@@ -1080,9 +1080,9 @@ handlers.FinalizeMatch = function (args) {
 
 function processRoundInternal(originalState) {
     // Recarrega estado fresco antes de computar resultados.
-    // O chamador (ProcessRound ou SubmitAnswer) pode ter lido um estado levemente
+    // O chamador (ProcessRound) pode ter lido um estado levemente
     // desatualizado — respostas salvas por SubmitAnswer milissegundos antes poderiam
-    // não estar visíveis, fazendo o jogador ser computado como "não respondeu".
+    // nao estar visiveis, fazendo o jogador ser computado como "nao respondeu".
     var state = loadMatchState(originalState.MatchId);
     if (!state || state.CurrentRound !== originalState.CurrentRoundState.RoundNumber) {
         state = originalState; // fallback: rodada mudou ou leitura falhou
@@ -1090,6 +1090,17 @@ function processRoundInternal(originalState) {
 
     var round = state.CurrentRoundState;
     if (round.IsProcessed) return buildRoundResponse(state, true); // idempotente
+
+    // Bug 1 fix: protecao contra eventual consistency no HP.
+    // Se o estado relido tiver LastProcessedRoundResult da rodada imediatamente anterior,
+    // usa os HPAfter salvos como base — evita que uma replica desatualizada do
+    // TitleInternalData faca o calculo partir de um HP incorreto (ex: 100 em vez de 92),
+    // o que causava o efeito de "vida voltando" visto nos logs.
+    var lpr = state.LastProcessedRoundResult;
+    if (lpr && lpr.RoundNumber === round.RoundNumber - 1) {
+        if (typeof lpr.Player1HPAfter === "number") state.Player1State.HP = lpr.Player1HPAfter;
+        if (typeof lpr.Player2HPAfter === "number") state.Player2State.HP = lpr.Player2HPAfter;
+    }
 
     var p1Act   = round.Player1Action;
     var p2Act   = round.Player2Action;
@@ -1133,6 +1144,16 @@ function processRoundInternal(originalState) {
     round.IsProcessed   = true;
     state.LastProcessedRound = round.RoundNumber;
 
+    // Bug 1 fix: persiste o HP final desta rodada como ancora para a proxima.
+    // Quando processRoundInternal for chamado na rodada N+1 e fizer um reload fresco,
+    // pode receber uma replica ainda desatualizada com HP errado. Este campo garante
+    // que a base do HP seja sempre o valor correto da ultima rodada processada.
+    state.LastProcessedRoundResult = {
+        RoundNumber:    round.RoundNumber,
+        Player1HPAfter: p1State.HP,
+        Player2HPAfter: p2State.HP
+    };
+
     var afkP1     = p1State.ConsecutiveMissedRounds >= MATCH_CONFIG.AfkRoundLimit;
     var afkP2     = p2State.ConsecutiveMissedRounds >= MATCH_CONFIG.AfkRoundLimit;
     var hpOver    = p1State.HP <= 0 || p2State.HP <= 0;
@@ -1141,7 +1162,7 @@ function processRoundInternal(originalState) {
     var winnerId  = null;
     var endReason = 0;
 
-    // Valores numéricos espelham o enum C# MatchEndReason: HPDepleted=0, RoundsOver=1, Abandonment=2
+    // Valores numericos espelham o enum C# MatchEndReason: HPDepleted=0, RoundsOver=1, Abandonment=2
     if (matchOver) {
         if      (afkP1 && afkP2) { winnerId = null;            endReason = 2; }
         else if (afkP1)          { winnerId = state.Player2Id; endReason = 2; }
