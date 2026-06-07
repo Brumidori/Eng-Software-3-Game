@@ -745,7 +745,11 @@ handlers.PlayerReady = function(args) {
         var freshState = loadMatchState(args.matchId);
         if (freshState && freshState.CurrentRound < 1) {
             var freshPs = getPlayerState(freshState, currentPlayerId);
-            if (freshPs) { freshPs.IsReady = true; saveMatchState(freshState); state = freshState; }
+            if (freshPs) {
+                freshPs.IsReady = true;
+                saveMatchState(freshState);
+                state = freshState;
+            }
         } else if (freshState) {
             state = freshState;
         }
@@ -811,13 +815,20 @@ handlers.StartQuestion = function (args) {
         try {
             saveMatchState(state);
         } catch (saveErr) {
-            // Conflito de escrita concorrente: o outro jogador já salvou a transição.
-            // Recarrega apenas o timestamp correto para sincronizar os timers.
+            // Se a escrita falhou, recarrega para saber se o outro jogador já salvou.
             try {
                 var reloaded = loadMatchState(args.matchId);
-                if (reloaded && reloaded.Phase === "Question")
+                if (reloaded && reloaded.Phase === "Question") {
+                    // Outro jogador já fez a transição — usa o timestamp dele
                     state.PhaseStartTimestampMs = reloaded.PhaseStartTimestampMs;
-            } catch (e2) { /* ignora */ }
+                } else {
+                    // Falha real: informa o cliente para que ele retente StartQuestion.
+                    // Sem isso o cliente entraria em Question com o servidor em ThemeAndPowerUp.
+                    return { status: "save_error", reason: "phase_transition_failed" };
+                }
+            } catch (e2) {
+                return { status: "save_error", reason: "reload_failed" };
+            }
         }
     }
 
@@ -857,7 +868,15 @@ handlers.SubmitAnswer = function (args) {
         else
             return { status: "wrong_round", serverRound: state.CurrentRound, clientRound: args.roundNumber };
     }
-    if (state.Phase !== "Question")               return { status: "wrong_phase", serverPhase: state.Phase };
+    // StartQuestion pode ainda não ter propagado (eventual consistency entre saveMatchState e loadMatchState).
+    // Tenta leitura fresca antes de rejeitar — mesmo padrão do wrong_round.
+    if (state.Phase !== "Question") {
+        var freshPhase = loadMatchState(args.matchId);
+        if (freshPhase && freshPhase.Phase === "Question" && freshPhase.CurrentRound === args.roundNumber)
+            state = freshPhase;
+        else
+            return { status: "wrong_phase", serverPhase: state.Phase };
+    }
 
     var action = getPlayerAction(state, playerId);
     if (action.HasAnswered) return { status: "already_answered" };
@@ -897,12 +916,10 @@ handlers.ActivatePowerUp = function (args) {
     var ps     = getPlayerState(state, playerId);
     var action = getPlayerAction(state, playerId);
 
-    if (ps.HasUsedPowerUp)                       return { error: "Power-up ja usado nesta partida" };
-    // Compara ignorando case — player_profile pode salvar "doubleshield" e o cliente envia "DoubleShield"
-    var equippedNorm = String(ps.EquippedPowerUp || "None").toLowerCase();
-    var requestedNorm = String(args.powerUp      || "None").toLowerCase();
-    if (equippedNorm !== "none" && equippedNorm !== requestedNorm)
-        return { error: "Power-up nao equipado", equipped: ps.EquippedPowerUp, requested: args.powerUp };
+    if (ps.HasUsedPowerUp) return { error: "Power-up ja usado nesta partida" };
+    // Qualquer power-up do inventário pode ser ativado — basta tê-lo.
+    // A validação de posse é responsabilidade do cliente (consumo do item no inventário).
+    // O servidor garante apenas que o power-up é usado no máximo uma vez por partida.
     action.ActivatedPowerUp = args.powerUp;
     saveMatchState(state);
     return { status: "ok" };
