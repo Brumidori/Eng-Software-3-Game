@@ -669,8 +669,8 @@ namespace BrainDuel.Match.UI
                 }
                 else
                 {
-                    // Modo stub: usa a resposta correta exposta pelo estado para evitar eliminá-la
-                    string correctId = stateMachine?.CurrentStubCorrectAnswerId;
+                    // Usa a resposta correta do question pool (modo real) ou do stub
+                    string correctId = stateMachine?.CurrentCorrectAnswerId;
                     AplicarEliminateDuas(EscolherDoisErrados(payload.Answers, correctId));
                 }
             }
@@ -758,8 +758,14 @@ namespace BrainDuel.Match.UI
             int danoRecebido1 = localResult.HPBefore    - localResult.HPAfter;
             int danoRecebido2 = oponenteResult.HPBefore - oponenteResult.HPAfter;
 
-            ExibirTextoDano(danoJogador1Text, danoRecebido1, oponenteResult.WasShielded);
-            ExibirTextoDano(danoJogador2Text, danoRecebido2, localResult.WasShielded);
+            // Sufixo de power-up: mostrado no lado que RECEBE o dano
+            // oponenteResult.Breakdown = ataque do OPONENTE → sufixo no dano do LOCAL (danoJogador1Text)
+            // localResult.Breakdown    = ataque do LOCAL    → sufixo no dano do OPONENTE (danoJogador2Text)
+            string sufixoDano1 = SufixoPowerUp(oponenteResult.Breakdown); // poder do oponente → dano recebido pelo local
+            string sufixoDano2 = SufixoPowerUp(localResult.Breakdown);    // poder do local    → dano recebido pelo oponente
+
+            ExibirTextoDano(danoJogador1Text, danoRecebido1, oponenteResult.WasShielded, sufixoDano1);
+            ExibirTextoDano(danoJogador2Text, danoRecebido2, localResult.WasShielded,    sufixoDano2);
 
             // Popup resultado — jogador local
             ExibirPopupResultado(damagePopupText,         localResult.Result);
@@ -786,7 +792,15 @@ namespace BrainDuel.Match.UI
             label.enableVertexGradient = false;
         }
 
-        static void ExibirTextoDano(TMP_Text label, int dano, bool bloqueadoPorEscudo)
+        static string SufixoPowerUp(DamageBreakdown bd)
+        {
+            if (bd == null) return null;
+            if (bd.StolenHP    > 0) return "ROUBO";
+            if (bd.PowerUpBonus > 0) return "APOSTA";
+            return null;
+        }
+
+        static void ExibirTextoDano(TMP_Text label, int dano, bool bloqueadoPorEscudo, string sufixoPowerUp = null)
         {
             if (label == null) return;
             if (bloqueadoPorEscudo)
@@ -796,7 +810,10 @@ namespace BrainDuel.Match.UI
                 label.enableVertexGradient = false;
                 return;
             }
-            label.text                = dano > 0 ? $"-{dano} HP" : "0 HP";
+            string texto = dano > 0 ? $"-{dano} HP" : "0 HP";
+            if (sufixoPowerUp != null && dano > 0)
+                texto += $" + {sufixoPowerUp}";
+            label.text                = texto;
             label.color               = dano > 0 ? Color.red : Color.white;
             label.enableVertexGradient = false;
         }
