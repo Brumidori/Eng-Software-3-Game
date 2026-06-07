@@ -940,10 +940,16 @@ handlers.ProcessRound = function (args) {
         if (state.CurrentRound !== args.roundNumber)  return { status: "wrong_round" };
         if (state.CurrentRoundState.IsProcessed)      return buildRoundResponse(state, true);
 
-        // A fase de pergunta começa após o tema: roundStart + themeDuration.
-        // Garante que ambos os jogadores vejam o Reveal ao mesmo tempo.
-        var questionPhaseStart = state.PhaseStartTimestampMs + MATCH_CONFIG.ThemePhaseDurationMs;
-        var elapsed            = Date.now() - questionPhaseStart;
+        // Calcula o início da fase de pergunta:
+        // - Se o servidor já está em "Question" (StartQuestion foi chamado e resetou
+        //   PhaseStartTimestampMs para o momento da transição), o offset do tema não
+        //   deve ser adicionado — PhaseStartTimestampMs já é o início da pergunta.
+        // - Caso contrário (fase ainda em "ThemeAndPowerUp", fluxo normal com pergunta
+        //   embutida), adiciona ThemePhaseDurationMs para obter o início correto.
+        var questionPhaseStart = state.Phase === "Question"
+            ? state.PhaseStartTimestampMs
+            : state.PhaseStartTimestampMs + MATCH_CONFIG.ThemePhaseDurationMs;
+        var elapsed = Date.now() - questionPhaseStart;
         if (elapsed < MATCH_CONFIG.QuestionPhaseDurationMs)
             return { status: "pending" };
 
@@ -1000,8 +1006,19 @@ handlers.FinalizeMatch = function (args) {
 
 // --- Lógica interna de rodada ---
 
-function processRoundInternal(state) {
-    var round   = state.CurrentRoundState;
+function processRoundInternal(originalState) {
+    // Recarrega estado fresco antes de computar resultados.
+    // O chamador (ProcessRound ou SubmitAnswer) pode ter lido um estado levemente
+    // desatualizado — respostas salvas por SubmitAnswer milissegundos antes poderiam
+    // não estar visíveis, fazendo o jogador ser computado como "não respondeu".
+    var state = loadMatchState(originalState.MatchId);
+    if (!state || state.CurrentRound !== originalState.CurrentRoundState.RoundNumber) {
+        state = originalState; // fallback: rodada mudou ou leitura falhou
+    }
+
+    var round = state.CurrentRoundState;
+    if (round.IsProcessed) return buildRoundResponse(state, true); // idempotente
+
     var p1Act   = round.Player1Action;
     var p2Act   = round.Player2Action;
     var p1State = state.Player1State;
@@ -1028,7 +1045,7 @@ function processRoundInternal(state) {
     p1Result.HPBefore = p1HPBefore; p1Result.HPAfter = p1State.HP;
     p2Result.HPBefore = p2HPBefore; p2Result.HPAfter = p2State.HP;
 
-    p1State.Streak = p1Result.Result === 1 ? p1State.Streak + 1 : 0; // 1 = Correct
+    p1State.Streak = p1Result.Result === 1 ? p1State.Streak + 1 : 0;
     p2State.Streak = p2Result.Result === 1 ? p2State.Streak + 1 : 0;
     p1Result.StreakAfter = p1State.Streak;
     p2Result.StreakAfter = p2State.Streak;
@@ -1050,45 +1067,23 @@ function processRoundInternal(state) {
     var roundsMax = round.RoundNumber >= MATCH_CONFIG.MaxRounds;
     var matchOver = hpOver || roundsMax || afkP1 || afkP2;
     var winnerId  = null;
-    var endReason = "HPDepleted";
+    var endReason = 0;
 
     // Valores numéricos espelham o enum C# MatchEndReason: HPDepleted=0, RoundsOver=1, Abandonment=2
     if (matchOver) {
-        if      (afkP1 && afkP2) { winnerId = null;            endReason = 2; } // ambos AFK → derrota dupla
-        else if (afkP1)          { winnerId = state.Player2Id; endReason = 2; } // Abandonment
-        else if (afkP2)          { winnerId = state.Player1Id; endReason = 2; } // Abandonment
-        else if (roundsMax)      { winnerId = determineWinnerByHP(state); endReason = 1; } // RoundsOver
-        else                     { winnerId = determineWinnerByHP(state); endReason = 0; } // HPDepleted
+        if      (afkP1 && afkP2) { winnerId = null;            endReason = 2; }
+        else if (afkP1)          { winnerId = state.Player2Id; endReason = 2; }
+        else if (afkP2)          { winnerId = state.Player1Id; endReason = 2; }
+        else if (roundsMax)      { winnerId = determineWinnerByHP(state); endReason = 1; }
+        else                     { winnerId = determineWinnerByHP(state); endReason = 0; }
         state.IsActive  = false;
         state.WinnerId  = winnerId;
         state.EndReason = endReason;
-        state.Phase     = "Reveal";
+        state.Phase     = "MatchEnd";
     }
 
-    // Salva sem regredir campos de um StartNextRound concorrente.
-    // Recarrega o estado atual e atualiza só os campos que processRoundInternal é dono:
-    // Player1State/Player2State (HP, streak), LastProcessedRound e, se mesma rodada, CurrentRoundState.
-    // CurrentRound, Phase e PhaseStartTimestampMs são preservados do estado atual.
-    var stateAtual = loadMatchState(state.MatchId);
-    if (stateAtual) {
-        stateAtual.Player1State       = state.Player1State;
-        stateAtual.Player2State       = state.Player2State;
-        stateAtual.LastProcessedRound = state.LastProcessedRound;
-        // Só sobrescreve CurrentRoundState se o servidor ainda está na rodada processada
-        if (stateAtual.CurrentRound === round.RoundNumber)
-            stateAtual.CurrentRoundState = state.CurrentRoundState;
-        if (matchOver) {
-            stateAtual.IsActive  = false;
-            stateAtual.WinnerId  = winnerId;
-            stateAtual.EndReason = endReason;
-            stateAtual.Phase     = "MatchEnd";
-        }
-        saveMatchState(stateAtual);
-        if (matchOver) { removeFromActiveIndex(stateAtual.MatchId); updatePlayerStats(stateAtual, winnerId); }
-    } else {
-        saveMatchState(state);
-        if (matchOver) { removeFromActiveIndex(state.MatchId); updatePlayerStats(state, winnerId); }
-    }
+    saveMatchState(state);
+    if (matchOver) { removeFromActiveIndex(state.MatchId); updatePlayerStats(state, winnerId); }
     return buildRoundResponse(state, false);
 }
 

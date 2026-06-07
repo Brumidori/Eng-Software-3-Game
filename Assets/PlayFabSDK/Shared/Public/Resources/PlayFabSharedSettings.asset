@@ -17,7 +17,7 @@ MonoBehaviour:
   ProductionEnvironmentUrl: 
   RequestType: 2
   DisableDeviceInfo: 0
-  DisableFocusTimeCollection: 0
+  DisableFocusTimeCollection: 1
   RequestTimeout: 2000
   RequestKeepAlive: 1
   CompressResponses: 0
