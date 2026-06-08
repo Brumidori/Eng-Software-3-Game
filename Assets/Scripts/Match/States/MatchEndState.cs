@@ -23,10 +23,21 @@ namespace BrainDuel.Match.States
             _resultSaved = false;
 
             var roundResult = Context.LastRoundResult;
-            var winnerId    = roundResult?.WinnerId;
+            string winnerId = roundResult?.WinnerId;
+
+            if (string.IsNullOrEmpty(winnerId) && Context.MatchEndPayload != null)
+            {
+                winnerId = Context.MatchEndPayload.WinnerId;
+            }
+            if (string.IsNullOrEmpty(winnerId) && Context.ServerState != null)
+            {
+                winnerId = Context.ServerState.WinnerId;
+            }
+
             Debug.Log($"[State] MatchEnd | Vencedor: {winnerId ?? "N/A"}");
 
             // Notifica a UI com quem venceu — necessário quando o fim de partida vem
+            // Se caímos aqui via progressão normal, `roundResult` não é null. Notifica o fim
             // por HP zerado ou 20 rodadas (TransitionTo interno, sem MatchEndPayload da rede).
             if (roundResult != null)
             {
@@ -44,7 +55,15 @@ namespace BrainDuel.Match.States
                 });
             }
 
-            SaveMatchResult();
+            SaveMatchResult(winnerId);
+            // Dá tempo para salvar antes de mudar de cena
+            Machine.StartCoroutine(DelayNavigateToResult());
+        }
+
+        private System.Collections.IEnumerator DelayNavigateToResult()
+        {
+            yield return new UnityEngine.WaitForSeconds(1.5f);
+            NavigateToResult();
         }
 
         public override void OnUpdate(float deltaTime) { }
@@ -54,7 +73,7 @@ namespace BrainDuel.Match.States
             PartyNetworkManager.Instance?.Disconnect();
         }
 
-        private void SaveMatchResult()
+        private void SaveMatchResult(string finalWinnerId)
         {
             if (_resultSaved) return;
             _resultSaved = true;
@@ -62,7 +81,7 @@ namespace BrainDuel.Match.States
             CloudScriptClient.Call("FinalizeMatch", new
             {
                 matchId    = Context.MatchId,
-                winnerId   = Context.LastRoundResult?.WinnerId,
+                winnerId   = finalWinnerId,
                 localHP    = Context.LocalHP,
                 opponentHP = Context.OpponentHP
             }, onSuccess: _ =>

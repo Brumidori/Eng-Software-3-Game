@@ -1001,6 +1001,13 @@ namespace BrainDuel.Match.Core
                     ps.DisplayName = sd.TryGetValue("DisplayName", out var dn) ? dn?.ToString() : string.Empty;
                     if (sd.TryGetValue("Level", out var lv) && lv != null)
                         int.TryParse(lv.ToString(), out ps.Level);
+                    
+                    ps.AvatarId = sd.TryGetValue("AvatarId", out var av) ? av?.ToString() : "skinDefault";
+                    
+                    if (sd.TryGetValue("EquippedPowerUp", out var eq) && eq != null)
+                        if (System.Enum.TryParse<PowerUpType>(eq.ToString(), out var pu))
+                            ps.EquippedPowerUp = pu;
+
                     return ps;
                 }
 
@@ -1208,6 +1215,11 @@ namespace BrainDuel.Match.Core
             TransitionTo(p.FullState.Phase);
         }
 
+        public void TriggerReconnectSync()
+        {
+            _reconnectionManager?.AttemptRejoin();
+        }
+
         private void HandleOpponentDisconnected(string playerId)
         {
             Context.IsOpponentConnected    = false;
@@ -1238,6 +1250,7 @@ namespace BrainDuel.Match.Core
             }
             // Impede MatchEndState de disparar OnMatchEnded uma segunda vez
             Context.LastRoundResult = null;
+            Context.MatchEndPayload = payload;
             OnMatchEnded?.Invoke(payload);
             TransitionTo(MatchPhase.MatchEnd);
         }

@@ -621,6 +621,7 @@ handlers.CreateMatch = function (args) {
                 existing.Player2State.DisplayName     = p2Info.displayName || "";
                 existing.Player2State.Level           = p2Info.level       || 1;
                 existing.Player2State.EquippedPowerUp = p2PowerUp          || "None";
+                existing.Player2State.AvatarId        = p2Info.avatarId    || "skinDefault";
             }
             // Atualiza ação de P2 na rodada atual, se existir
             if (existing.CurrentRoundState && existing.CurrentRoundState.Player2Action)
@@ -640,8 +641,8 @@ handlers.CreateMatch = function (args) {
         MatchId:               matchId,
         Player1Id:             player1Id,
         Player2Id:             player2Id,
-        Player1State:          makePlayerState(player1Id, p1Info.displayName, p1Info.level, p1PowerUp),
-        Player2State:          makePlayerState(player2Id, p2Info.displayName, p2Info.level, p2PowerUp),
+        Player1State:          makePlayerState(player1Id, p1Info.displayName, p1Info.level, p1PowerUp, p1Info.avatarId),
+        Player2State:          makePlayerState(player2Id, p2Info.displayName, p2Info.level, p2PowerUp, p2Info.avatarId),
         CurrentRound:          0,
         Phase:                 "Initializing",
         PhaseStartTimestampMs: 0,
@@ -997,8 +998,12 @@ handlers.ProcessRound = function (args) {
         if (!state) return { error: "Match nao encontrado" };
         
         if (!state.IsActive) {
-            // Se a partida encerrou nesta mesma rodada, o cliente tem direito de ler o resultado final!
-            if (state.CurrentRound === args.roundNumber && state.CurrentRoundState && state.CurrentRoundState.IsProcessed) {
+            // Se a partida encerrou nesta mesma rodada, ou se foi encerrada abruptamente (abandono),
+            // o cliente tem direito de ler o resultado final para disparar a tela de vitoria/derrota.
+            var endedNormally = (state.CurrentRound === args.roundNumber && state.CurrentRoundState && state.CurrentRoundState.IsProcessed);
+            var endedAbruptly = (state.EndReason === 2 || state.EndReason === 3); // Abandonment or Disconnect
+
+            if (endedNormally || endedAbruptly) {
                 return buildRoundResponse(state, true);
             }
             return { error: "Match inativo" };
@@ -1040,11 +1045,13 @@ handlers.RejoinMatch = function (args) {
     
     var playerId = currentPlayerId;
     var state    = loadMatchState(args.matchId);
-    if (!state || !state.IsActive) return { error: "Match nao encontrado" };
+    if (!state) return { error: "Match nao encontrado" };
 
-    var ps = getPlayerState(state, playerId);
-    if (ps) { ps.IsConnected = true; ps.ConsecutiveMissedRounds = 0; }
-    saveMatchState(state);
+    if (state.IsActive) {
+        var ps = getPlayerState(state, playerId);
+        if (ps) { ps.IsConnected = true; ps.ConsecutiveMissedRounds = 0; }
+        saveMatchState(state);
+    }
 
     return {
         status:           "ok",
@@ -1062,6 +1069,11 @@ handlers.AbandonMatch = function (args) {
     if (!state.IsActive)    return { status: "already_ended", winnerId: state.WinnerId };
 
     var winnerId = (state.Player1Id === loserId) ? state.Player2Id : state.Player1Id;
+    if (!winnerId) {
+        // Fallback robusto se o ID oposto estiver nulo no banco
+        winnerId = (state.Player1Id && state.Player1Id !== loserId) ? state.Player1Id : state.Player2Id;
+    }
+
     finalizeMatch(state, winnerId, "Abandonment");
     return { status: "ok", winnerId: winnerId, loserId: loserId };
 };
@@ -1251,18 +1263,27 @@ function determineWinnerByHP(state) {
 }
 
 function buildRoundResponse(state, alreadyProcessed) {
-    var round = state.CurrentRoundState;
+    var round = state.CurrentRoundState || {};
+    var p1Res = round.Player1Result || { Result: 0, DamageDealt: 0, Breakdown: { BaseDamage: 0, SpeedBonus: 0, StreakBonus: 0, PowerUpBonus: 0, StolenHP: 0, SelfDamage: 0 } };
+    var p2Res = round.Player2Result || { Result: 0, DamageDealt: 0, Breakdown: { BaseDamage: 0, SpeedBonus: 0, StreakBonus: 0, PowerUpBonus: 0, StolenHP: 0, SelfDamage: 0 } };
+
+    // Fallback de seguranca para evitar que o C# parseie o HP como 0 caso o resultado venha vazio
+    p1Res.HPAfter = state.Player1State.HP;
+    p1Res.StreakAfter = state.Player1State.Streak;
+    p2Res.HPAfter = state.Player2State.HP;
+    p2Res.StreakAfter = state.Player2State.Streak;
+
     return {
-        RoundNumber:      round.RoundNumber,
+        RoundNumber:      round.RoundNumber || state.CurrentRound,
         AlreadyProcessed: alreadyProcessed,
-        CorrectAnswerId:  round.CorrectAnswerId,
-        Player1Result:    round.Player1Result,
-        Player2Result:    round.Player2Result,
+        CorrectAnswerId:  round.CorrectAnswerId || "A", // Fallback seguro caso abandone antes da questao ser gerada
+        Player1Result:    p1Res,
+        Player2Result:    p2Res,
         Player1HP:        state.Player1State.HP,
         Player2HP:        state.Player2State.HP,
         IsMatchOver:      !state.IsActive,
         WinnerId:         state.WinnerId,
-        EndReason:        state.EndReason || null
+        EndReason:        state.EndReason || 0
     };
 }
 
@@ -1296,15 +1317,15 @@ function finalizeMatch(state, winnerId, reason) {
 function getPlayerDisplayInfo(playerId) {
     try {
         var r = server.GetUserData({ PlayFabId: playerId, Keys: ["player_profile"] });
-        if (!r.Data || !r.Data["player_profile"]) return { displayName: "", level: 1 };
+        if (!r.Data || !r.Data["player_profile"]) return { displayName: "", level: 1, avatarId: "" };
         var p = JSON.parse(r.Data["player_profile"].Value);
-        return { displayName: p.displayName || "", level: p.level || 1 };
+        return { displayName: p.displayName || "", level: p.level || 1, avatarId: p.avatarId || "" };
     } catch(e) {
-        return { displayName: "", level: 1 };
+        return { displayName: "", level: 1, avatarId: "" };
     }
 }
 
-function makePlayerState(playerId, displayName, level, equippedPowerUp) {
+function makePlayerState(playerId, displayName, level, equippedPowerUp, avatarId) {
     return {
         PlayerId:                playerId,
         DisplayName:             displayName || "",
@@ -1316,7 +1337,8 @@ function makePlayerState(playerId, displayName, level, equippedPowerUp) {
         EquippedPowerUp:         equippedPowerUp || "None",
         DoubleShieldCharges:     0,
         IsConnected:             true,
-        ConsecutiveMissedRounds: 0
+        ConsecutiveMissedRounds: 0,
+        AvatarId:                avatarId || "skinDefault"
     };
 }
 
@@ -1549,13 +1571,13 @@ function aplicarResultadoJogador(playerId, ganhou, empate, abandono) {
 
     try {
         server.UpdatePlayerStatistics({ PlayFabId: playerId, Statistics: stats });
-    } catch (e) { log.error("updatePlayerStats falhou para " + playerId + ": " + JSON.stringify(e)); }
+    } catch (e) { log.info("updatePlayerStats falhou para " + playerId + ": " + JSON.stringify(e)); }
 
     // Credita moedas via moeda virtual "BC" (BrainCoins)
     if (moedas > 0) {
         try {
             server.AddUserVirtualCurrency({ PlayFabId: playerId, VirtualCurrency: "BC", Amount: moedas });
-        } catch (e) { log.error("AddUserVirtualCurrency falhou para " + playerId + ": " + JSON.stringify(e)); }
+        } catch (e) { log.info("AddUserVirtualCurrency falhou para " + playerId + ": " + JSON.stringify(e)); }
     }
 }
 

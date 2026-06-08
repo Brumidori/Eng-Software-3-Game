@@ -35,6 +35,11 @@ namespace BrainDuel.Match.UI
         [SerializeField] private Image    hpBarFillJogador2;
         [SerializeField] private TMP_Text rodadaText;
 
+        [Header("Skins")]
+        [SerializeField] private Image player1SkinImage;
+        [SerializeField] private Image player2SkinImage;
+        [SerializeField] private System.Collections.Generic.List<NamedSprite> avatarSprites = new System.Collections.Generic.List<NamedSprite>();
+
         // ----------------------------------------------------------
         // Panel: Tema e Poderes
         // ----------------------------------------------------------
@@ -216,6 +221,57 @@ namespace BrainDuel.Match.UI
 
             AtualizarBarrasHP(_ctx.LocalHP, _ctx.OpponentHP);
             AtualizarTextoRodada();
+            
+            // Carregar skins
+            AplicarSkin(_ctx.LocalAvatarId, player1SkinImage, false);
+            AplicarSkin(_ctx.OpponentAvatarId, player2SkinImage, true);
+        }
+
+        void AplicarSkin(string avatarId, Image targetImage, bool flipHorizontal)
+        {
+            if (targetImage == null)
+            {
+                Debug.LogWarning($"[MatchScene] targetImage is NULL para avatarId='{avatarId}' flip={flipHorizontal}");
+                return;
+            }
+            
+            string idToLoad = string.IsNullOrWhiteSpace(avatarId) ? "skinDefault" : avatarId;
+            Debug.Log($"[MatchScene] AplicarSkin chamado com avatarId='{avatarId}' -> idToLoad='{idToLoad}' flip={flipHorizontal}");
+
+            Sprite sprite = Resources.Load<Sprite>($"AvatarImages/{idToLoad}");
+            
+            if (sprite == null && avatarSprites != null)
+            {
+                foreach (var namedSprite in avatarSprites)
+                {
+                    if (namedSprite != null && namedSprite.IsMatch(idToLoad))
+                    {
+                        sprite = namedSprite.sprite;
+                        Debug.Log($"[MatchScene] Skin '{idToLoad}' encontrada no avatarSprites.");
+                        break;
+                    }
+                }
+            }
+
+            if (sprite != null)
+            {
+                targetImage.sprite = sprite;
+                targetImage.color = Color.white;
+                Debug.Log($"[MatchScene] Skin '{idToLoad}' aplicada com sucesso!");
+            }
+            else
+            {
+                Debug.LogWarning($"[MatchScene] ALERTA: Skin '{idToLoad}' NÃO FOI ENCONTRADA. A lista avatarSprites tem {avatarSprites?.Count ?? 0} itens.");
+            }
+            
+            if (flipHorizontal)
+            {
+                targetImage.rectTransform.localScale = new Vector3(-1, 1, 1);
+            }
+            else
+            {
+                targetImage.rectTransform.localScale = new Vector3(1, 1, 1);
+            }
         }
 
         void DesativarTodosPanels()

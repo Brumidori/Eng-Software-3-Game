@@ -44,6 +44,9 @@ namespace BrainDuel.Match.Core
 
         public int LocalLevel    { get; set; } = 1;
         public int OpponentLevel => OpponentPlayer?.Level ?? 0;
+        
+        public string LocalAvatarId    => LocalPlayer?.AvatarId;
+        public string OpponentAvatarId => OpponentPlayer?.AvatarId;
 
         // ----------------------------------------------------------
         // Estado autoritativo (sincronizado com servidor)
@@ -53,6 +56,8 @@ namespace BrainDuel.Match.Core
         // Pool completo da partida (20 perguntas), recebido no PlayerReady e cacheado localmente.
         // Elimina chamadas de rede por rodada — cada rodada usa QuestionPool[roundNumber-1].
         public QuestionData[]   QuestionPool    { get; set; }
+
+        public MatchEndPayload  MatchEndPayload { get; set; }
 
         // ----------------------------------------------------------
         // Estado da rodada atual (local — para UI)

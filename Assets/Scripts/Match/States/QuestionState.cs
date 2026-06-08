@@ -99,6 +99,14 @@ namespace BrainDuel.Match.States
                 try
                 {
                     var json        = PlayFab.Json.PlayFabSimpleJson.SerializeObject(result);
+                    var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<System.Collections.Generic.Dictionary<string, object>>(json);
+                    
+                    if (dict != null && dict.ContainsKey("error") && dict["error"].ToString() == "Match inativo")
+                    {
+                        HandleInactiveMatch();
+                        return;
+                    }
+
                     var roundResult = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<
                         RoundResultPayload>(json);
 
