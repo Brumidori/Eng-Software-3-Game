@@ -882,6 +882,8 @@ namespace BrainDuel.Match.UI
             label.text = acertou ? "ACERTOU!" : semResposta ? "TEMPO ESGOTADO!" : "ERROU!";
             label.color = acertou ? Color.green : Color.red;
             label.enableVertexGradient = false;
+            if(acertou) AudioManager.Instance?.TocarAcertou();
+            else  AudioManager.Instance?.TocarErrou();
         }
 
         // Move a imagem-indicador para cima do slot cujo índice é slotIdx.
@@ -1054,6 +1056,11 @@ namespace BrainDuel.Match.UI
             float restante = duracao;
             while (restante > 0f)
             {
+                if(restante == 4f){
+                    if(AudioManager.Instance != null){
+                        AudioManager.Instance?.TocarTicTac();
+                    }
+                }
                 if (label != null)
                 {
                     label.text = Mathf.CeilToInt(restante).ToString();
