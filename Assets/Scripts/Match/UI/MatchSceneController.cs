@@ -20,7 +20,7 @@ namespace BrainDuel.Match.UI
 
         [Header("Sistemas")]
         [SerializeField] private MatchStateMachine stateMachine;
-        [SerializeField] private PowerUpManager    powerUpManager;
+        [SerializeField] private PowerUpManager powerUpManager;
 
         // ----------------------------------------------------------
         // HUD Permanente
@@ -29,10 +29,10 @@ namespace BrainDuel.Match.UI
         [Header("HUD")]
         [SerializeField] private TMP_Text nomeJogador1Text;
         [SerializeField] private TMP_Text nivelJogador1Text;
-        [SerializeField] private Image    hpBarFillJogador1;
+        [SerializeField] private Image hpBarFillJogador1;
         [SerializeField] private TMP_Text nomeJogador2Text;
         [SerializeField] private TMP_Text nivelJogador2Text;
-        [SerializeField] private Image    hpBarFillJogador2;
+        [SerializeField] private Image hpBarFillJogador2;
         [SerializeField] private TMP_Text rodadaText;
 
         // ----------------------------------------------------------
@@ -41,16 +41,16 @@ namespace BrainDuel.Match.UI
 
         [Header("Panel Tema/Poderes")]
         [SerializeField] private GameObject panelTemaPoderes;
-        [SerializeField] private Image      temaIcon;
-        [SerializeField] private Button[]   powerUpButtons;       // 5 botões na ordem: Escudo, EscudoDuplo, Roubo, Aposta, Eliminar2
-        [SerializeField] private string[]   powerUpItemIds;       // IDs no catálogo PlayFab, mesma ordem dos botões
-        [SerializeField] private TMP_Text   powerUpDescricaoText;
-        [SerializeField] private TMP_Text   timerTemaPoderesText;
+        [SerializeField] private Image temaIcon;
+        [SerializeField] private Button[] powerUpButtons;       // 5 botões na ordem: Escudo, EscudoDuplo, Roubo, Aposta, Eliminar2
+        [SerializeField] private string[] powerUpItemIds;       // IDs no catálogo PlayFab, mesma ordem dos botões
+        [SerializeField] private TMP_Text powerUpDescricaoText;
+        [SerializeField] private TMP_Text timerTemaPoderesText;
 
         [Header("Power-up Ativado")]
         // Imagens que exibem o sprite do PU ativado por cada jogador
-        [SerializeField] private Image   powerUpAtivadoJogador1Image;
-        [SerializeField] private Image   powerUpAtivadoJogador2Image;
+        [SerializeField] private Image powerUpAtivadoJogador1Image;
+        [SerializeField] private Image powerUpAtivadoJogador2Image;
 
         // ----------------------------------------------------------
         // Panel: Pergunta
@@ -58,32 +58,32 @@ namespace BrainDuel.Match.UI
 
         [Header("Panel Pergunta")]
         [SerializeField] private GameObject panelPergunta;
-        [SerializeField] private Image      cardTemaPerguntaImage;
-        [SerializeField] private TMP_Text   perguntaText;
-        [SerializeField] private Button[]   opcaoButtons;         // 4 botões de resposta
+        [SerializeField] private Image cardTemaPerguntaImage;
+        [SerializeField] private TMP_Text perguntaText;
+        [SerializeField] private Button[] opcaoButtons;         // 4 botões de resposta
         [SerializeField] private TMP_Text[] opcaoTexts;           // textos dos 4 botões
-        [SerializeField] private TMP_Text   timerPerguntaText;
+        [SerializeField] private TMP_Text timerPerguntaText;
 
         // ----------------------------------------------------------
         // Panel: Reveal
         // ----------------------------------------------------------
 
         [Header("Panel Reveal")]
-        [SerializeField] private GameObject    panelReveal;
+        [SerializeField] private GameObject panelReveal;
         // 4 RectTransforms dos slots de resposta no card do reveal (ordem A-B-C-D)
         [SerializeField] private RectTransform[] revealOpcaoSlots;
         // Deslocamento horizontal para separar J1 (esquerda) e J2 (direita) quando escolhem o mesmo slot
         [SerializeField] private float revealIndicadorOffsetX = 40f;
         // Imagens-indicador que são repositionadas sobre o slot certo
-        [SerializeField] private Image          respostaCorretaImage;   // RespostaCorreta
-        [SerializeField] private Image          escolhaJogador1Image;   // Escolhajogador1
-        [SerializeField] private Image          escolhaJogador2Image;   // Escolhajogador2
-        [SerializeField] private TMP_Text       danoJogador1Text;
-        [SerializeField] private TMP_Text       danoJogador2Text;
-        [SerializeField] private TMP_Text       damagePopupText;         // ComboPop — resultado do jogador local
-        [SerializeField] private TMP_Text       damagePopupJogador2Text; // resultado do oponente
-        [SerializeField] private TMP_Text       comboText;               // combo do jogador local
-        [SerializeField] private TMP_Text       comboJogador2Text;       // combo do oponente
+        [SerializeField] private Image respostaCorretaImage;   // RespostaCorreta
+        [SerializeField] private Image escolhaJogador1Image;   // Escolhajogador1
+        [SerializeField] private Image escolhaJogador2Image;   // Escolhajogador2
+        [SerializeField] private TMP_Text danoJogador1Text;
+        [SerializeField] private TMP_Text danoJogador2Text;
+        [SerializeField] private TMP_Text damagePopupText;         // ComboPop — resultado do jogador local
+        [SerializeField] private TMP_Text damagePopupJogador2Text; // resultado do oponente
+        [SerializeField] private TMP_Text comboText;               // combo do jogador local
+        [SerializeField] private TMP_Text comboJogador2Text;       // combo do oponente
 
         // ----------------------------------------------------------
         // Panel: Fim de Partida
@@ -94,17 +94,17 @@ namespace BrainDuel.Match.UI
 
         [Header("Sub-panel Vitória")]
         [SerializeField] private GameObject panelVitoria;
-        [SerializeField] private TMP_Text   xpGanhoVitoriaText;
-        [SerializeField] private TMP_Text   moedaVitoriaText;
-        [SerializeField] private Button     btnMenuVitoria;
-        [SerializeField] private Button     btnOutraPartidaVitoria;
+        [SerializeField] private TMP_Text xpGanhoVitoriaText;
+        [SerializeField] private TMP_Text moedaVitoriaText;
+        [SerializeField] private Button btnMenuVitoria;
+        [SerializeField] private Button btnOutraPartidaVitoria;
 
         [Header("Sub-panel Derrota")]
         [SerializeField] private GameObject panelDerrota;
-        [SerializeField] private TMP_Text   xpGanhoDerrotaText;
-        [SerializeField] private TMP_Text   moedaDerrotaText;
-        [SerializeField] private Button     btnMenuDerrota;
-        [SerializeField] private Button     btnOutraPartidaDerrota;
+        [SerializeField] private TMP_Text xpGanhoDerrotaText;
+        [SerializeField] private TMP_Text moedaDerrotaText;
+        [SerializeField] private Button btnMenuDerrota;
+        [SerializeField] private Button btnOutraPartidaDerrota;
 
         // ----------------------------------------------------------
         // Estado interno
@@ -120,14 +120,14 @@ namespace BrainDuel.Match.UI
             PowerUpType.EliminateTwo
         };
 
-        private MatchContext              _ctx;
-        private QuestionRevealPayload     _perguntaAtual;
-        private Coroutine                 _timerCoroutine;
-        private bool                      _poderJaUsado;
-        private bool                      _eliminateTwoPendente;   // EliminateTwo ativado aguardando pergunta
+        private MatchContext _ctx;
+        private QuestionRevealPayload _perguntaAtual;
+        private Coroutine _timerCoroutine;
+        private bool _poderJaUsado;
+        private bool _eliminateTwoPendente;   // EliminateTwo ativado aguardando pergunta
         private Dictionary<PowerUpType, int> _poderesNoInventario = new Dictionary<PowerUpType, int>();
         private List<PlayFab.ClientModels.ItemInstance> _inventarioItens = new List<PlayFab.ClientModels.ItemInstance>();
-        private string                    _currentThemeName;
+        private string _currentThemeName;
 
         // ----------------------------------------------------------
         // Unity lifecycle
@@ -140,14 +140,14 @@ namespace BrainDuel.Match.UI
 
             _ctx = stateMachine.Context;
 
-            stateMachine.OnPhaseChanged              += HandlePhaseChanged;
-            stateMachine.OnHPUpdated                 += HandleHPAtualizado;
-            stateMachine.OnRoundResultReceived       += HandleResultadoRodada;
-            stateMachine.OnMatchEnded                += HandleFimPartida;
-            stateMachine.OnRoundStarted              += HandleRodadaIniciada;
-            stateMachine.OnQuestionRevealed          += HandlePerguntaRevelada;
-            stateMachine.OnPowerUpActivatedReceived  += HandlePowerUpOponente;
-            MatchEvents.OnEliminateTwo               += AplicarEliminateDuas;
+            stateMachine.OnPhaseChanged += HandlePhaseChanged;
+            stateMachine.OnHPUpdated += HandleHPAtualizado;
+            stateMachine.OnRoundResultReceived += HandleResultadoRodada;
+            stateMachine.OnMatchEnded += HandleFimPartida;
+            stateMachine.OnRoundStarted += HandleRodadaIniciada;
+            stateMachine.OnQuestionRevealed += HandlePerguntaRevelada;
+            stateMachine.OnPowerUpActivatedReceived += HandlePowerUpOponente;
+            MatchEvents.OnEliminateTwo += AplicarEliminateDuas;
 
             if (powerUpManager != null)
                 powerUpManager.OnPowerUpActivated += HandlePoderAtivado;
@@ -161,8 +161,8 @@ namespace BrainDuel.Match.UI
 
             ConfigurarBotoesPoder();
             ConfigurarBotoesResposta();
-            if (btnMenuVitoria        != null) btnMenuVitoria.onClick.AddListener(IrParaMenu);
-            if (btnMenuDerrota        != null) btnMenuDerrota.onClick.AddListener(IrParaMenu);
+            if (btnMenuVitoria != null) btnMenuVitoria.onClick.AddListener(IrParaMenu);
+            if (btnMenuDerrota != null) btnMenuDerrota.onClick.AddListener(IrParaMenu);
             if (btnOutraPartidaVitoria != null) btnOutraPartidaVitoria.onClick.AddListener(IrParaMatchmaking);
             if (btnOutraPartidaDerrota != null) btnOutraPartidaDerrota.onClick.AddListener(IrParaMatchmaking);
 
@@ -178,14 +178,14 @@ namespace BrainDuel.Match.UI
         {
             if (stateMachine == null) return;
 
-            stateMachine.OnPhaseChanged              -= HandlePhaseChanged;
-            stateMachine.OnHPUpdated                 -= HandleHPAtualizado;
-            stateMachine.OnRoundResultReceived       -= HandleResultadoRodada;
-            stateMachine.OnMatchEnded                -= HandleFimPartida;
-            stateMachine.OnRoundStarted              -= HandleRodadaIniciada;
-            stateMachine.OnQuestionRevealed          -= HandlePerguntaRevelada;
-            stateMachine.OnPowerUpActivatedReceived  -= HandlePowerUpOponente;
-            MatchEvents.OnEliminateTwo               -= AplicarEliminateDuas;
+            stateMachine.OnPhaseChanged -= HandlePhaseChanged;
+            stateMachine.OnHPUpdated -= HandleHPAtualizado;
+            stateMachine.OnRoundResultReceived -= HandleResultadoRodada;
+            stateMachine.OnMatchEnded -= HandleFimPartida;
+            stateMachine.OnRoundStarted -= HandleRodadaIniciada;
+            stateMachine.OnQuestionRevealed -= HandlePerguntaRevelada;
+            stateMachine.OnPowerUpActivatedReceived -= HandlePowerUpOponente;
+            MatchEvents.OnEliminateTwo -= AplicarEliminateDuas;
 
             if (powerUpManager != null)
                 powerUpManager.OnPowerUpActivated -= HandlePoderAtivado;
@@ -206,12 +206,12 @@ namespace BrainDuel.Match.UI
             if (string.IsNullOrEmpty(nomeLocal))
                 nomeLocal = PlayerDataService.Instance?.CurrentProfile?.displayName ?? "Você";
 
-            SetTMPText(nomeJogador1Text,  nomeLocal);
+            SetTMPText(nomeJogador1Text, nomeLocal);
             SetTMPText(nivelJogador1Text, $"Nv. {_ctx.LocalLevel}");
 
             string nomeOponente = _ctx.OpponentDisplayName;
             if (string.IsNullOrEmpty(nomeOponente)) nomeOponente = "Adversário";
-            SetTMPText(nomeJogador2Text,  nomeOponente);
+            SetTMPText(nomeJogador2Text, nomeOponente);
             SetTMPText(nivelJogador2Text, _ctx.OpponentLevel > 0 ? $"Nv. {_ctx.OpponentLevel}" : "Nv. ?");
 
             AtualizarBarrasHP(_ctx.LocalHP, _ctx.OpponentHP);
@@ -296,8 +296,8 @@ namespace BrainDuel.Match.UI
         static void SetTMPText(TMP_Text label, string text)
         {
             if (label == null) return;
-            label.text                = text;
-            label.color               = Color.white;
+            label.text = text;
+            label.color = Color.white;
             label.enableVertexGradient = false;
         }
 
@@ -321,7 +321,7 @@ namespace BrainDuel.Match.UI
         void ExibirSpriteTema(string themeName)
         {
             if (temaIcon == null) return;
-            var key    = themeName?.Replace(" ", "") ?? string.Empty;
+            var key = themeName?.Replace(" ", "") ?? string.Empty;
             Sprite sprite = Resources.Load<Sprite>($"Temas/Tema-{key}");
             if (sprite != null)
                 temaIcon.sprite = sprite;
@@ -332,7 +332,7 @@ namespace BrainDuel.Match.UI
         void ExibirCardTema(string themeName)
         {
             if (cardTemaPerguntaImage == null || string.IsNullOrEmpty(themeName)) return;
-            var key    = themeName.Replace(" ", "");
+            var key = themeName.Replace(" ", "");
             Sprite sprite = Resources.Load<Sprite>($"Temas/Card{key}");
             if (sprite != null)
                 cardTemaPerguntaImage.sprite = sprite;
@@ -462,8 +462,8 @@ namespace BrainDuel.Match.UI
             {
                 if (powerUpButtons[i] == null) continue;
 
-                PowerUpType tipo         = i < OrdemPoderes.Length ? OrdemPoderes[i] : PowerUpType.None;
-                bool        temInventario = _poderesNoInventario.ContainsKey(tipo);
+                PowerUpType tipo = i < OrdemPoderes.Length ? OrdemPoderes[i] : PowerUpType.None;
+                bool temInventario = _poderesNoInventario.ContainsKey(tipo);
 
                 bool habilitado = temInventario && podeUsar;
 
@@ -597,7 +597,7 @@ namespace BrainDuel.Match.UI
                     if (_poderesNoInventario.TryGetValue(tipo, out int qtd))
                     {
                         if (qtd > 1) _poderesNoInventario[tipo] = qtd - 1;
-                        else         _poderesNoInventario.Remove(tipo);
+                        else _poderesNoInventario.Remove(tipo);
                         AtualizarQuantidadesTexto();
                     }
                     // Remove do cache local para não consumir duas vezes se chamado novamente
@@ -638,8 +638,8 @@ namespace BrainDuel.Match.UI
             _perguntaAtual = payload;
             if (perguntaText != null)
             {
-                perguntaText.text               = payload.QuestionText;
-                perguntaText.color              = Color.black;
+                perguntaText.text = payload.QuestionText;
+                perguntaText.color = Color.black;
                 perguntaText.enableVertexGradient = false;
             }
 
@@ -721,8 +721,8 @@ namespace BrainDuel.Match.UI
             PararTimer();
             if (timerPerguntaText != null)
             {
-                timerPerguntaText.text                = "0";
-                timerPerguntaText.color               = Color.red;
+                timerPerguntaText.text = "0";
+                timerPerguntaText.color = Color.red;
                 timerPerguntaText.enableVertexGradient = false;
             }
             if (opcaoButtons != null)
@@ -738,24 +738,24 @@ namespace BrainDuel.Match.UI
         {
             if (_ctx == null) return;
 
-            var localResult    = _ctx.GetLocalResult(payload);
+            var localResult = _ctx.GetLocalResult(payload);
             var oponenteResult = _ctx.GetOpponentResult(payload);
 
             // Posiciona indicadores sobre os slots de resposta
             int correctIdx = AnswerIdToIndex(payload.CorrectAnswerId);
-            int j1Idx      = AnswerIdToIndex(localResult.AnsweredId);
-            int j2Idx      = AnswerIdToIndex(oponenteResult.AnsweredId);
+            int j1Idx = AnswerIdToIndex(localResult.AnsweredId);
+            int j2Idx = AnswerIdToIndex(oponenteResult.AnsweredId);
 
             // Resposta correta: centro do slot
-            MoverIndicador(respostaCorretaImage, correctIdx, ativo: true,  offsetX: 0f);
+            MoverIndicador(respostaCorretaImage, correctIdx, ativo: true, offsetX: 0f);
             // Cérebros: posicionados sobre o slot escolhido, deslocados para não sobrepor
-            MoverIndicador(escolhaJogador1Image, j1Idx, ativo: localResult.Result    != AnswerResult.NotAnswered, offsetX: -revealIndicadorOffsetX);
-            MoverIndicador(escolhaJogador2Image, j2Idx, ativo: oponenteResult.Result != AnswerResult.NotAnswered, offsetX:  revealIndicadorOffsetX);
+            MoverIndicador(escolhaJogador1Image, j1Idx, ativo: localResult.Result != AnswerResult.NotAnswered, offsetX: -revealIndicadorOffsetX);
+            MoverIndicador(escolhaJogador2Image, j2Idx, ativo: oponenteResult.Result != AnswerResult.NotAnswered, offsetX: revealIndicadorOffsetX);
 
             // Dano sofrido por cada jogador (HPBefore − HPAfter do receptor)
             // oponenteResult.WasShielded → escudo do jogador LOCAL bloqueou ataque do oponente
             // localResult.WasShielded    → escudo do OPONENTE bloqueou ataque do jogador local
-            int danoRecebido1 = localResult.HPBefore    - localResult.HPAfter;
+            int danoRecebido1 = localResult.HPBefore - localResult.HPAfter;
             int danoRecebido2 = oponenteResult.HPBefore - oponenteResult.HPAfter;
 
             // Sufixo de power-up: mostrado no lado que RECEBE o dano
@@ -765,15 +765,15 @@ namespace BrainDuel.Match.UI
             string sufixoDano2 = SufixoPowerUp(localResult.Breakdown);    // poder do local    → dano recebido pelo oponente
 
             ExibirTextoDano(danoJogador1Text, danoRecebido1, oponenteResult.WasShielded, sufixoDano1);
-            ExibirTextoDano(danoJogador2Text, danoRecebido2, localResult.WasShielded,    sufixoDano2);
+            ExibirTextoDano(danoJogador2Text, danoRecebido2, localResult.WasShielded, sufixoDano2);
 
             // Popup resultado — jogador local
-            ExibirPopupResultado(damagePopupText,         localResult.Result);
+            ExibirPopupResultado(damagePopupText, localResult.Result);
             // Popup resultado — oponente
             ExibirPopupResultado(damagePopupJogador2Text, oponenteResult.Result);
 
             // Combo de cada jogador
-            ExibirCombo(comboText,         localResult.StreakAfter);
+            ExibirCombo(comboText, localResult.StreakAfter);
             ExibirCombo(comboJogador2Text, oponenteResult.StreakAfter);
         }
 
@@ -781,21 +781,21 @@ namespace BrainDuel.Match.UI
         {
             if (label == null) return;
 
-            int bonus    = DamageConfig.GetStreakBonus(streak);
+            int bonus = DamageConfig.GetStreakBonus(streak);
             bool temCombo = streak >= 2 && bonus > 0;
 
             label.gameObject.SetActive(temCombo);
             if (!temCombo) return;
 
-            label.text                = $"COMBO x{streak}\n+{bonus} Dano";
-            label.color               = Color.yellow;
+            label.text = $"COMBO x{streak}\n+{bonus} Dano";
+            label.color = Color.yellow;
             label.enableVertexGradient = false;
         }
 
         static string SufixoPowerUp(DamageBreakdown bd)
         {
             if (bd == null) return null;
-            if (bd.StolenHP    > 0) return "ROUBO";
+            if (bd.StolenHP > 0) return "ROUBO";
             if (bd.PowerUpBonus > 0) return "APOSTA";
             return null;
         }
@@ -805,26 +805,26 @@ namespace BrainDuel.Match.UI
             if (label == null) return;
             if (bloqueadoPorEscudo)
             {
-                label.text                = "Dano Bloqueado - Escudo";
-                label.color               = new Color(0.4f, 0.7f, 1f); // azul claro
+                label.text = "Dano Bloqueado - Escudo";
+                label.color = new Color(0.4f, 0.7f, 1f); // azul claro
                 label.enableVertexGradient = false;
                 return;
             }
             string texto = dano > 0 ? $"-{dano} HP" : "0 HP";
             if (sufixoPowerUp != null && dano > 0)
                 texto += $" + {sufixoPowerUp}";
-            label.text                = texto;
-            label.color               = dano > 0 ? Color.red : Color.white;
+            label.text = texto;
+            label.color = dano > 0 ? Color.red : Color.white;
             label.enableVertexGradient = false;
         }
 
         static void ExibirPopupResultado(TMP_Text label, AnswerResult resultado)
         {
             if (label == null) return;
-            bool acertou     = resultado == AnswerResult.Correct;
+            bool acertou = resultado == AnswerResult.Correct;
             bool semResposta = resultado == AnswerResult.NotAnswered;
-            label.text                = acertou ? "ACERTOU!" : semResposta ? "TEMPO ESGOTADO!" : "ERROU!";
-            label.color               = acertou ? Color.green : Color.red;
+            label.text = acertou ? "ACERTOU!" : semResposta ? "TEMPO ESGOTADO!" : "ERROU!";
+            label.color = acertou ? Color.green : Color.red;
             label.enableVertexGradient = false;
         }
 
@@ -854,9 +854,9 @@ namespace BrainDuel.Match.UI
             if (indicador == null || !indicador.gameObject.activeSelf) return;
             indicador.color = resultado switch
             {
-                AnswerResult.Correct   => new Color(0.4f, 1f, 0.4f),
+                AnswerResult.Correct => new Color(0.4f, 1f, 0.4f),
                 AnswerResult.Incorrect => new Color(1f, 0.4f, 0.4f),
-                _                      => Color.white
+                _ => Color.white
             };
         }
 
@@ -874,12 +874,12 @@ namespace BrainDuel.Match.UI
 
         void HandleFimPartida(MatchEndPayload payload)
         {
-            bool semVencedor  = string.IsNullOrEmpty(payload.WinnerId);
-            bool porAbandono  = payload.Reason == MatchEndReason.Abandonment;
+            bool semVencedor = string.IsNullOrEmpty(payload.WinnerId);
+            bool porAbandono = payload.Reason == MatchEndReason.Abandonment;
             // Derrota dupla: ninguém ganhou E foi por abandono → ambos perdem
             bool derrotaDupla = semVencedor && porAbandono;
-            bool empate       = semVencedor && !porAbandono;
-            bool venceu       = !semVencedor && payload.WinnerId == _ctx?.LocalPlayerId;
+            bool empate = semVencedor && !porAbandono;
+            bool venceu = !semVencedor && payload.WinnerId == _ctx?.LocalPlayerId;
 
             MostrarResultadoFinal(venceu, porAbandono, empate, derrotaDupla);
         }
@@ -898,27 +898,45 @@ namespace BrainDuel.Match.UI
 
             // Derrota dupla (ambos AFK): ambos veem painel de derrota
             bool mostrarVitoria = (venceu || empate) && !derrotaDupla;
-            if (panelVitoria != null) panelVitoria.SetActive(mostrarVitoria);
-            if (panelDerrota != null) panelDerrota.SetActive(!mostrarVitoria);
+            if (panelVitoria != null)
+            {
+                panelVitoria.SetActive(mostrarVitoria);
+
+            }
+            if (panelDerrota != null)
+            {
+                panelDerrota.SetActive(!mostrarVitoria);
+
+            }
 
             int xpGanho, moedas;
 
             if (mostrarVitoria)
             {
-                xpGanho = empate ? 50 : porAbandono ? 50  : 100;
-                moedas  = empate ? 20 : porAbandono ? 40  : 80;
+                xpGanho = empate ? 50 : porAbandono ? 50 : 100;
+                moedas = empate ? 20 : porAbandono ? 40 : 80;
 
                 SetTMPText(xpGanhoVitoriaText, $"+{xpGanho} XP");
-                SetTMPText(moedaVitoriaText,   $"+{moedas} moedas");
+                SetTMPText(moedaVitoriaText, $"+{moedas} moedas");
+
+                // Chama o AudioManager 
+                if (AudioManager.Instance != null)
+                {
+                    AudioManager.Instance.IniciarMusicaVitoria();
+                }
             }
             else
             {
                 // derrotaDupla → ambos AFK, penalidade máxima
                 xpGanho = derrotaDupla ? -20 : porAbandono ? -10 : 20;
-                moedas  = 0;
+                moedas = 0;
 
                 SetTMPText(xpGanhoDerrotaText, xpGanho >= 0 ? $"+{xpGanho} XP" : $"{xpGanho} XP");
-                SetTMPText(moedaDerrotaText,   moedas > 0 ? $"+{moedas} moedas" : "0 moedas");
+                SetTMPText(moedaDerrotaText, moedas > 0 ? $"+{moedas} moedas" : "0 moedas");
+                if (AudioManager.Instance != null)
+                {
+                    AudioManager.Instance.IniciarMusicaDerrota();
+                }
             }
 
             // Salva resultado no PlayFab — atualiza ranking e estatísticas
@@ -982,7 +1000,7 @@ namespace BrainDuel.Match.UI
             {
                 if (label != null)
                 {
-                    label.text  = Mathf.CeilToInt(restante).ToString();
+                    label.text = Mathf.CeilToInt(restante).ToString();
                     label.color = restante <= 2f ? Color.red : Color.white;
                 }
                 restante -= Time.deltaTime;

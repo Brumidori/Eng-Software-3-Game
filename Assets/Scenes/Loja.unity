@@ -1362,8 +1362,8 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 360799904}
   m_HandleRect: {fileID: 360799903}
   m_Direction: 2
-  m_Value: 0.99999636
-  m_Size: 0.94106096
+  m_Value: 0.9999982
+  m_Size: 0.9410611
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -2913,6 +2913,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: MainMenu
       objectReference: {fileID: 0}
+    - target: {fileID: 4526345913375609940, guid: 77296cb712d214588bfced04aae7e368, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0.000030517578
+      objectReference: {fileID: 0}
     - target: {fileID: 4770218387308379180, guid: 77296cb712d214588bfced04aae7e368, type: 3}
       propertyPath: m_Enabled
       value: 1
@@ -4356,7 +4360,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1059268031}
   m_HandleRect: {fileID: 1059268030}
   m_Direction: 0
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
