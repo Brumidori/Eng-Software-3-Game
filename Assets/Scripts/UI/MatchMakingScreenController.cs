@@ -21,6 +21,8 @@ public class MatchMakingScreenController : MonoBehaviour
     [Header("Visual")]
     [SerializeField] private int    tamanhoFonte = 48;
     [SerializeField] private Button btnCancelar;
+    [SerializeField] private Image  playerSkinImage;
+    [SerializeField] private System.Collections.Generic.List<NamedSprite> avatarSprites = new System.Collections.Generic.List<NamedSprite>();
 
     private const string TextoBuscando   = "BUSCANDO OPONENTE";
     private const string TextoEncontrado = "OPONENTE ENCONTRADO!\nINICIANDO PARTIDA EM {0}...";
@@ -67,6 +69,7 @@ public class MatchMakingScreenController : MonoBehaviour
     private void Start()
     {
         SetBuscando();
+        BindPlayerSkin();
 
         var service = MatchmakingService.Instance;
         if (service == null)
@@ -148,10 +151,73 @@ public class MatchMakingScreenController : MonoBehaviour
 
         // Sombra leve para legibilidade
         var shadow            = go.AddComponent<Shadow>();
-        shadow.effectColor    = new Color(0f, 0f, 0f, 0.6f);
+        shadow.effectColor    = new Color(0f, 0f, 0f, 0.8f);
         shadow.effectDistance = new Vector2(2f, -2f);
-
         container.transform.SetAsLastSibling();
+    }
+
+    private void BindPlayerSkin()
+    {
+        if (playerSkinImage == null)
+        {
+            Debug.LogWarning("[MatchMakingPublic] playerSkinImage is null!");
+            return;
+        }
+
+        var profile = PlayerDataService.Instance?.CurrentProfile;
+        if (profile != null && !string.IsNullOrWhiteSpace(profile.avatarId))
+        {
+            ApplySkin(profile.avatarId);
+        }
+        else
+        {
+            Debug.LogWarning("[MatchMakingPublic] Profile é nulo. Buscando diretamente do PlayFab...");
+            PlayFabClientAPI.GetUserData(
+                new GetUserDataRequest { Keys = new System.Collections.Generic.List<string> { "player_profile" } },
+                result =>
+                {
+                    if (result?.Data != null && result.Data.TryGetValue("player_profile", out var record) && !string.IsNullOrWhiteSpace(record.Value))
+                    {
+                        var profileData = JsonUtility.FromJson<PlayerProfileData>(record.Value);
+                        if (profileData != null && !string.IsNullOrWhiteSpace(profileData.avatarId))
+                        {
+                            ApplySkin(profileData.avatarId);
+                            return;
+                        }
+                    }
+                    ApplySkin("skinDefault");
+                },
+                error =>
+                {
+                    Debug.LogError("[MatchMakingPublic] Erro ao buscar perfil: " + error.ErrorMessage);
+                    ApplySkin("skinDefault");
+                }
+            );
+        }
+    }
+
+    private void ApplySkin(string avatarId)
+    {
+        Debug.Log($"[MatchMakingPublic] Tentando carregar skin: {avatarId}");
+        var sprite = Resources.Load<Sprite>($"AvatarImages/{avatarId}");
+        
+        if (sprite == null && avatarSprites != null)
+        {
+            foreach (var namedSprite in avatarSprites)
+            {
+                if (namedSprite != null && namedSprite.IsMatch(avatarId))
+                {
+                    sprite = namedSprite.sprite;
+                    break;
+                }
+            }
+        }
+
+        if (sprite != null)
+        {
+            playerSkinImage.sprite = sprite;
+            Debug.Log("[MatchMakingPublic] Skin aplicada com sucesso na UI.");
+        }
     }
 
     // ────────────────────────────────────────────────────────

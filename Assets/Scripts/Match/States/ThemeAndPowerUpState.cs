@@ -90,6 +90,13 @@ namespace BrainDuel.Match.States
 
                     if (payload == null || string.IsNullOrEmpty(payload.QuestionText))
                     {
+                        var dict = PlayFab.Json.PlayFabSimpleJson.DeserializeObject<System.Collections.Generic.Dictionary<string, object>>(json);
+                        if (dict != null && dict.ContainsKey("error") && dict["error"].ToString() == "Match inativo")
+                        {
+                            HandleInactiveMatch();
+                            return;
+                        }
+
                         // save_error: servidor não conseguiu salvar a transição de fase —
                         // retry faz com que o próximo jogador a chamar encontre a fase correta.
                         if (json.Contains("save_error"))

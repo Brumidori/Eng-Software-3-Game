@@ -67,7 +67,7 @@ namespace BrainDuel.Match.Core
             AttemptRejoin();
         }
 
-        private void AttemptRejoin()
+        public void AttemptRejoin()
         {
             if (_isReconnecting) return;
             _isReconnecting = true;
