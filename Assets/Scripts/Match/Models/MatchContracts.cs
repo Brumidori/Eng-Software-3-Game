@@ -121,6 +121,7 @@ namespace BrainDuel.Match
         public bool      IsConnected;
         public int       ConsecutiveMissedRounds;
         public long      LastHeartbeatMs;
+        public string    AvatarId;
     }
 
     // ----------------------------------------------------------

@@ -23,7 +23,7 @@ public class DueloScreenController : MonoBehaviour
 
     [Header("Cenas")]
     [SerializeField] private string cenaPublica  = "MatchMaking";
-    [SerializeField] private string cenaPrivada  = "DueloPrivado";
+    [SerializeField] private string cenaPrivada  = "MatchMakingPrivate";
 
     [Header("Visual Selecao")]
     [SerializeField] private Color corSelecionada = new Color(0.204f, 0.596f, 0.859f, 1f); // #3498DB
@@ -100,9 +100,22 @@ public class DueloScreenController : MonoBehaviour
     private void OnCriarSalaPrivadaClick()
     {
         _modo = DuelMode.Private;
-        _codigoSala = string.Empty;
+        _codigoSala = GenerateRandomCode(6);
         AtualizarVisual();
-        // TODO: chamar servico de criacao de sala e popular codigoInput com o codigo gerado
+        
+        // Inicia o matchmaking privado e vai pra cena
+        GetOrCreateMatchmakingService().StartPrivateMatchmaking("BrainDuelPrivateQueue", _codigoSala);
+        SceneManager.LoadScene(cenaPrivada);
+    }
+
+    private MatchmakingService GetOrCreateMatchmakingService()
+    {
+        if (MatchmakingService.Instance == null)
+        {
+            var go = new GameObject("MatchmakingService");
+            go.AddComponent<MatchmakingService>();
+        }
+        return MatchmakingService.Instance;
     }
 
     private void OnEntrarSalaClick()
@@ -110,6 +123,26 @@ public class DueloScreenController : MonoBehaviour
         _codigoSala = codigoInput != null ? codigoInput.text.Trim().ToUpperInvariant() : string.Empty;
         _modo = DuelMode.Private;
         AtualizarVisual();
+
+        if (!string.IsNullOrWhiteSpace(_codigoSala))
+        {
+            GetOrCreateMatchmakingService().StartPrivateMatchmaking("BrainDuelPrivateQueue", _codigoSala);
+            SceneManager.LoadScene(cenaPrivada);
+        }
+    }
+
+    private string GenerateRandomCode(int length)
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        char[] stringChars = new char[length];
+        var random = new System.Random();
+
+        for (int i = 0; i < stringChars.Length; i++)
+        {
+            stringChars[i] = chars[random.Next(chars.Length)];
+        }
+
+        return new string(stringChars);
     }
 
     private void OnCodigoAlterado(string value)
@@ -128,7 +161,7 @@ public class DueloScreenController : MonoBehaviour
 
         if (_modo == DuelMode.Private && !string.IsNullOrWhiteSpace(_codigoSala))
         {
-            // TODO: passar codigo para o servico de sala antes de carregar a cena
+            GetOrCreateMatchmakingService().StartPrivateMatchmaking("BrainDuelPrivateQueue", _codigoSala);
             SceneManager.LoadScene(cenaPrivada);
         }
     }

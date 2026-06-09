@@ -58,6 +58,8 @@ MonoBehaviour:
   somTicTac: {fileID: 8300000, guid: 49f98286d06a5684fbdcd78ff8bae9ae, type: 3}
   somPowerOn: {fileID: 8300000, guid: ed96703447c608dd79b6c2175b440140, type: 3}
   somPowerOff: {fileID: 8300000, guid: e86bd0b1ed4ef316f84602faf2018c53, type: 3}
+  somAcertou: {fileID: 8300000, guid: f2bc76db2407885df8e64c8d5d5b07f2, type: 3}
+  somErrou: {fileID: 8300000, guid: f87871f8e4203438da391a650492318f, type: 3}
   musicaSplash: {fileID: 8300000, guid: 1b4cf97a8b0a8b6a8ad767a4fb9718cc, type: 3}
   musicaBatalha: {fileID: 8300000, guid: 596ff1fa9d318a9b68beb3648bc19172, type: 3}
   musicaVitoria: {fileID: 8300000, guid: 7f4658e700d2706e48aca68ae3a86b39, type: 3}

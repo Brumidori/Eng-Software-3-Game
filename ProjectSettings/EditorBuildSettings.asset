@@ -62,6 +62,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Regras.unity
     guid: 376f9fb2d92f92f48b27ce26856fc8de
+  - enabled: 1
+    path: Assets/Scenes/MatchMakingPrivate.unity
+    guid: 463a740f09bfdea439c82bf6223e7281
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   m_UseUCBPForAssetBundles: 0

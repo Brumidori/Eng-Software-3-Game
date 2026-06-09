@@ -23,6 +23,8 @@ public class AudioManager : MonoBehaviour
     public AudioClip somTicTac;
     public AudioClip somPowerOn;
     public AudioClip somPowerOff;
+    public AudioClip somAcertou;
+    public AudioClip somErrou;
 
 
 
@@ -129,6 +131,10 @@ public class AudioManager : MonoBehaviour
     public void IniciarMusicaVitoria() => MudarMusicaComFade(musicaVitoria, 1.0f, false);
     public void IniciarMusicaDerrota() => MudarMusicaComFade(musicaDerrota, 1.0f, false);
 
+    public void TocarTicTac() => PlaySFX(somTicTac);
+    public void TocarAcertou() => PlaySFX(somAcertou);
+    public void TocarErrou() => PlaySFX(somErrou);
+
     private void OnEnable()
     {
         // Inscreve o AudioManager para ser avisado sempre que uma cena carregar
@@ -153,7 +159,7 @@ public class AudioManager : MonoBehaviour
         {
             MudarMusicaComFade(musicaBatalha);
         }
-        else if (cena.name == "MatchMaking")
+        else if (cena.name == "MatchMaking"|| cena.name == "MatchMakingPrivate")
         {
             MudarMusicaComFade(musicaEspera);
         }

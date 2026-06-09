@@ -372,7 +372,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 8308120493250641852, guid: 152ddcc092fb54e1f92ccf1577da7c6e, type: 3}
+  m_Sprite: {fileID: 0}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -4169,7 +4169,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: -474730985521500173, guid: 31a601504fcdf4c7b90163f6cbae50ea, type: 3}
+  m_Sprite: {fileID: 0}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -5567,6 +5567,19 @@ MonoBehaviour:
   nivelJogador2Text: {fileID: 1864176078}
   hpBarFillJogador2: {fileID: 112055439}
   rodadaText: {fileID: 2054951596}
+  player1SkinImage: {fileID: 95913714}
+  player2SkinImage: {fileID: 1157370632}
+  avatarSprites:
+  - key: skinDefault
+    sprite: {fileID: 21300000, guid: c2e2b41bd5f064d1f9225890da89b6be, type: 3}
+  - key: skinAngel
+    sprite: {fileID: -2573907801106370136, guid: 2c28bbf967e13c84d8cc8191ce8d9a2b, type: 3}
+  - key: skinDemon
+    sprite: {fileID: -4971298508962322525, guid: 32b397fae8a69f84494870e571eb62b6, type: 3}
+  - key: skinHat
+    sprite: {fileID: -2027455640051515771, guid: b45b77c793fa0c74997069dcbb50edbb, type: 3}
+  - key: skinZombie
+    sprite: {fileID: -4558846155265381309, guid: d648fb2328a63a544a25e0cbb68da43b, type: 3}
   panelTemaPoderes: {fileID: 1867501627}
   temaIcon: {fileID: 969419766}
   powerUpButtons:

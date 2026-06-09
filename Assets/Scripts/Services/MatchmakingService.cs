@@ -42,6 +42,7 @@ public class MatchmakingService : MonoBehaviour
     public static event Action<PlayFabError> OnMatchmakingFailed;
 
     public string CurrentMatchId { get; private set; }
+    public string CurrentRoomCode { get; private set; }
 
     public MatchmakingState CurrentState { get; private set; } = MatchmakingState.Idle;
 
@@ -112,6 +113,12 @@ public class MatchmakingService : MonoBehaviour
         matchmakingRoutine = StartCoroutine(RunSinglePlayerMatchmaking());
     }
 
+    public void StartPrivateMatchmaking(string queue, string roomCode, int timeout = 300, float pollInterval = 3f)
+    {
+        CurrentRoomCode = roomCode;
+        StartSinglePlayerMatchmaking(queue, timeout, pollInterval);
+    }
+
     public void StartTwoUserMatchmaking(string queue, string userAId, string userBId, int timeout, float pollInterval, bool allowCreateMissingUsers = false)
     {
         if (!ValidateMatchmakingStart(queue)) return;
@@ -178,7 +185,8 @@ public class MatchmakingService : MonoBehaviour
             matchmakingRoutine = null;
         }
 
-        cancellationRequested = false;
+        cancellationRequested = true;
+        CurrentRoomCode = null;
         SetState(MatchmakingState.Cancelled);
         Debug.Log("[MatchmakingService] Busca cancelada.");
     }
@@ -516,7 +524,11 @@ public class MatchmakingService : MonoBehaviour
                     Attributes = new MatchmakingPlayerAttributes
                     {
                         // Expõe o PlayFabId clássico para que o oponente possa extraí-lo via GetMatch
-                        DataObject = new { PlayFabId = user.authContext?.PlayFabId ?? string.Empty }
+                        // Passa o RoomCode se estivermos em um fluxo de Partida Privada
+                        DataObject = new { 
+                            PlayFabId = user.authContext?.PlayFabId ?? string.Empty,
+                            RoomCode  = string.IsNullOrEmpty(CurrentRoomCode) ? null : CurrentRoomCode
+                        }
                     }
                 }
             },

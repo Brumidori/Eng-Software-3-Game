@@ -2424,7 +2424,7 @@ MonoBehaviour:
   codigoInput: {fileID: 956843289}
   btnEntrar: {fileID: 1128811161}
   cenaPublica: MatchMaking
-  cenaPrivada: DueloPrivado
+  cenaPrivada: MatchMakingPrivate
   corSelecionada: {r: 0.204, g: 0.596, b: 0.859, a: 1}
   corNormal: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1001 &358744608276597389
@@ -2459,6 +2459,14 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3332584876184702642, guid: 77296cb712d214588bfced04aae7e368, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3525209695459435878, guid: 77296cb712d214588bfced04aae7e368, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0.000030517578
+      objectReference: {fileID: 0}
     - target: {fileID: 3578783378972729283, guid: 77296cb712d214588bfced04aae7e368, type: 3}
       propertyPath: m_Name
       value: MainMenu
@@ -2466,6 +2474,10 @@ PrefabInstance:
     - target: {fileID: 3578783378972729283, guid: 77296cb712d214588bfced04aae7e368, type: 3}
       propertyPath: m_IsActive
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4526345913375609940, guid: 77296cb712d214588bfced04aae7e368, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0.000030517578
       objectReference: {fileID: 0}
     - target: {fileID: 4692618125097637091, guid: 77296cb712d214588bfced04aae7e368, type: 3}
       propertyPath: m_Enabled
@@ -2610,6 +2622,10 @@ PrefabInstance:
     - target: {fileID: 6000755406268090206, guid: 77296cb712d214588bfced04aae7e368, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7019869363438348633, guid: 77296cb712d214588bfced04aae7e368, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -0.000030517578
       objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 4785054438424991718, guid: 77296cb712d214588bfced04aae7e368, type: 3}

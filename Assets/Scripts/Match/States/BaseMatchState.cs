@@ -19,5 +19,11 @@ namespace BrainDuel.Match.States
         public abstract void OnEnter();
         public abstract void OnUpdate(float deltaTime);
         public abstract void OnExit();
+
+        protected void HandleInactiveMatch()
+        {
+            UnityEngine.Debug.Log("[State] Match inativo detectado! Solicitando sincronização com servidor para finalizar a partida...");
+            Machine.TriggerReconnectSync();
+        }
     }
 }

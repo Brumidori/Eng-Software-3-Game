@@ -125,6 +125,10 @@ namespace BrainDuel.Match.States
                     if (dict.ContainsKey("error"))
                     {
                         Debug.LogError($"[State] StartNextRound erro: {dict["error"]} | round={nextRound}");
+                        if (dict["error"].ToString() == "Match inativo")
+                        {
+                            HandleInactiveMatch();
+                        }
                         return;
                     }
 
